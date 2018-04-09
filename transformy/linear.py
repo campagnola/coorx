@@ -490,7 +490,7 @@ class AffineTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        return np.dot(self.matrix, coords.T).T
+        return np.dot(self.matrix, coords.T).T + self.offset[None, :]
 
     @arg_to_vec
     def imap(self, coords):
@@ -506,7 +506,8 @@ class AffineTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        return np.dot(self.inv_matrix, coords.T).T
+
+        return np.dot(self.inv_matrix, (coords - self.offset[None, :]).T).T
 
     @property
     def matrix(self):
