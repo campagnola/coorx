@@ -347,7 +347,7 @@ class STTransform(BaseTransform):
     def as_affine(self):
         m = AffineTransform()
         m.scale(self.scale)
-        m.offset(self.offset)
+        m.translate(self.offset)
         return m
 
     @classmethod
@@ -560,6 +560,25 @@ class AffineTransform(BaseTransform):
     def inv_offset(self):
         return -self.offset
 
+    @property
+    def full_matrix(self):
+        """Return a matrix of shape (N+1, N+1) that contains both self.matrix
+        and self.offset::
+
+            [[m11, m21, m31, o1],
+             [m21, m22, m32, o2],
+             [m31, m32, m33, o3],
+             [  0,   0,   0,  1]]
+
+        The full matrix can be multiplied by other similar matrices in order to compose affine 
+        transforms together.
+        """
+        m = np.zeros((self.dims[1]+1, self.dims[0]+1))
+        m[:-1, :-1] = self.matrix
+        m[:-1, -1] = self.offset
+        m[-1, -1] = 1
+        return m
+
     def translate(self, pos):
         """
         Add to the offset.
@@ -633,10 +652,9 @@ class AffineTransform(BaseTransform):
         self.offset = np.zeros(self.dims[1])
 
     def __mul__(self, tr):
-        if (isinstance(tr, AffineTransform) and not
-                any(tr.matrix[:3, 3] != 0)):
-            # don't multiply if the perspective column is used
-            return AffineTransform(matrix=np.dot(tr.matrix, self.matrix))
+        if isinstance(tr, AffineTransform):
+            m = np.dot(self.full_matrix, tr.full_matrix)
+            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1])
         else:
             return tr.__rmul__(self)
 
