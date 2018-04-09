@@ -1,31 +1,32 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
 
 from __future__ import division
 
 import numpy as np
 
-from ...util import transforms
-from ...geometry import Rect
-from ._util import arg_to_vec4, as_vec4
+from ._util import arg_to_vec, as_vec
 from .base_transform import BaseTransform
+from . import transforms
 
 
 class NullTransform(BaseTransform):
     """ Transform having no effect on coordinates (identity transform).
+    
+    The default dimensionality is (3, 3), but this is ignored when mapping;
+    all argments are returned unmodified.
     """
-    glsl_map = "vec4 null_transform_map(vec4 pos) {return pos;}"
-    glsl_imap = "vec4 null_transform_imap(vec4 pos) {return pos;}"
-
     Linear = True
     Orthogonal = True
     NonScaling = True
     Isometric = True
 
-    @arg_to_vec4
+    def __init__(self, dims=(3, 3)):
+        BaseTransform.__init__(self, dims)
+
     def map(self, coords):
-        """Map coordinates
+        """Return the input array unmodified.
 
         Parameters
         ----------
@@ -35,7 +36,7 @@ class NullTransform(BaseTransform):
         return coords
 
     def imap(self, coords):
-        """Inverse map coordinates
+        """Return the input array unmodified.
 
         Parameters
         ----------
@@ -50,6 +51,146 @@ class NullTransform(BaseTransform):
     def __rmul__(self, tr):
         return tr
 
+    def __getstate__(self):
+        return None
+    
+    def __setstate__(self, state):
+        assert state is None
+
+
+class TTransform(BaseTransform):
+    """ Transform performing only 3D translation.
+
+    Parameters
+    ----------
+    offset : array-like
+        Translation distances for X, Y, Z axes.
+    dims : tuple
+        (input, output) dimensions for transform.
+    """
+    Linear = True
+    Orthogonal = True
+    NonScaling = False
+    Isometric = False
+
+    def __init__(self, offset=None, dims=None):
+
+        if offset is not None:
+            offset = np.asarray(offset)
+            if offset.ndim != 1:
+                raise TypeError("Translate must be 1-D array or similar")
+            if dims is not None:
+                raise TypeError("Cannot specify both offset and dims")
+            d = len(offset)
+            dims = (d, d)
+        if dims is None:
+            dims = (3, 3)
+            
+        if dims[0] != dims[1]:
+            raise ValueError("Input and output dimensionality must be equal")
+            
+        super(TTransform, self).__init__(dims)
+        
+        self._offset = np.zeros(dims[0], dtype=np.float)
+        if offset is not None:
+            self.offset = offset
+
+    @arg_to_vec
+    def map(self, coords):
+        """Return translated coordinates.
+
+        Parameters
+        ----------
+        coords : array-like
+            Coordinates to map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
+
+        Returns
+        -------
+        coords : ndarray
+            Mapped coordinates: coords + translation
+        """
+        return coords + self.offset[np.newaxis, :]
+
+    @arg_to_vec
+    def imap(self, coords):
+        """Return inverse-mapped coordinates.
+
+        Parameters
+        ----------
+        coords : array-like
+            Coordinates to inverse map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
+
+        Returns
+        -------
+        coords : ndarray
+            Mapped coordinates: coords - translation
+        """
+        return coords - self.offset[np.newaxis, :]
+        return m
+
+    @property
+    def offset(self):
+        return self._offset.copy()
+
+    @offset.setter
+    def offset(self, t):
+        t = np.asarray(t)
+        if t.shape != (self.dims[0],):
+            raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+        if np.all(t == self._offset):
+            return
+        
+        self._offset[:] = t
+        self.update()   # inform listeners there has been a change
+
+    def translate(self, offset):
+        """Change the translation of this transform by the amount given.
+
+        Parameters
+        ----------
+        offset : array-like
+            The values to be added to the current translation of the transform.
+        """
+        offset = np.asarray(offset)
+        self.offset = self.offset + offset
+
+    def as_affine(self):
+        m = AffineTransform()
+        m.translate(self.offset)
+        return m
+
+    def as_st(self):
+        return STTransform(offset=self.offset, scale=(1,) * self.dims[0])
+
+    def __mul__(self, tr):
+        if isinstance(tr, TTransform):
+            return TTransform(self.offset + tr.offset)
+        elif isinstance(tr, STTransform):
+            return self.as_st() * tr
+        elif isinstance(tr, AffineTransform):
+            return self.as_affine() * tr
+        else:
+            return super(STTransform, self).__mul__(tr)
+
+    def __rmul__(self, tr):
+        if isinstance(tr, STTransform):
+            return tr * self.as_st()
+        if isinstance(tr, AffineTransform):
+            return tr * self.as_affine()
+        return super(TTransform, self).__rmul__(tr)
+
+    def __repr__(self):
+        return ("<TTransform offset=%s at 0x%s>"
+                % (self.offset, id(self)))
+
+    def __getstate__(self):
+        return {'offset': self.offset}
+    
+    def __setstate__(self, state):
+        self.offset = state['offset']
+
 
 class STTransform(BaseTransform):
     """ Transform performing only scale and translate, in that order.
@@ -58,86 +199,70 @@ class STTransform(BaseTransform):
     ----------
     scale : array-like
         Scale factors for X, Y, Z axes.
-    translate : array-like
-        Scale factors for X, Y, Z axes.
+    offset : array-like
+        Translation distances for X, Y, Z axes.
     """
-    glsl_map = """
-        vec4 st_transform_map(vec4 pos) {
-            return vec4(pos.xyz * $scale.xyz + $translate.xyz * pos.w, pos.w);
-        }
-    """
-
-    glsl_imap = """
-        vec4 st_transform_imap(vec4 pos) {
-            return vec4((pos.xyz - $translate.xyz * pos.w) / $scale.xyz,
-                        pos.w);
-        }
-    """
-
     Linear = True
     Orthogonal = True
     NonScaling = False
     Isometric = False
 
-    def __init__(self, scale=None, translate=None):
-        super(STTransform, self).__init__()
+    def __init__(self, scale=None, offset=None, dims=None):
 
-        self._scale = np.ones(4, dtype=np.float32)
-        self._translate = np.zeros(4, dtype=np.float32)
+        if scale is not None or offset is not None:
+            if dims is not None:
+                raise TypeError("Cannot specify both dims and scale/offset")
+        if scale is not None:
+            dims = len(scale), len(scale)
+        elif offset is not None:
+            dims = len(offset), len(offset)
 
-        s = ((1.0, 1.0, 1.0, 1.0) if scale is None else
-             as_vec4(scale, default=(1, 1, 1, 1)))
-        t = ((0.0, 0.0, 0.0, 0.0) if translate is None else
-             as_vec4(translate, default=(0, 0, 0, 0)))
-        self._set_st(s, t)
-        self._update_shaders()
+        if dims is None:
+            dims = (3, 3)
+            
+        if dims[0] != dims[1]:
+            raise ValueError("Input and output dimensionality must be equal")
+            
+        super(STTransform, self).__init__(dims)
+        
+        self._scale = np.ones(dims[0], dtype=np.float)
+        self._offset = np.zeros(dims[0], dtype=np.float)
 
-    @arg_to_vec4
+        self._set_st(scale, offset)
+
+    @arg_to_vec
     def map(self, coords):
-        """Map coordinates
+        """Return coordinates mapped by scale and translation.
 
         Parameters
         ----------
         coords : array-like
-            Coordinates to map.
+            Coordinates to map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
 
         Returns
         -------
         coords : ndarray
-            Coordinates.
+            Mapped coordinates: coords * scale + offset
         """
-        m = np.empty(coords.shape)
-        m[:, :3] = (coords[:, :3] * self.scale[np.newaxis, :3] +
-                    coords[:, 3:] * self.translate[np.newaxis, :3])
-        m[:, 3] = coords[:, 3]
-        return m
+        return coords * self.scale[None, :] + self.offset[None, :]
 
-    @arg_to_vec4
+    @arg_to_vec
     def imap(self, coords):
-        """Invert map coordinates
+        """Return coordinates inverse-mapped by translation and scale.
 
         Parameters
         ----------
         coords : array-like
-            Coordinates to inverse map.
+            Coordinates to inverse map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
 
         Returns
         -------
         coords : ndarray
-            Coordinates.
+            Mapped coordinates: (coords - offset) / scale
         """
-        m = np.empty(coords.shape)
-        m[:, :3] = ((coords[:, :3] -
-                     coords[:, 3:] * self.translate[np.newaxis, :3]) /
-                    self.scale[np.newaxis, :3])
-        m[:, 3] = coords[:, 3]
-        return m
-
-    def shader_map(self):
-        return self._shader_map
-
-    def shader_imap(self):
-        return self._shader_imap
+        return coords - self.offset[None, :] / self.scale[None, :]
 
     @property
     def scale(self):
@@ -145,49 +270,48 @@ class STTransform(BaseTransform):
 
     @scale.setter
     def scale(self, s):
-        s = as_vec4(s, default=(1, 1, 1, 1))
         self._set_st(scale=s)
 
     @property
-    def translate(self):
-        return self._translate.copy()
+    def offset(self):
+        return self._offset.copy()
 
-    @translate.setter
-    def translate(self, t):
-        t = as_vec4(t, default=(0, 0, 0, 0))
-        self._set_st(translate=t)
+    @offset.setter
+    def offset(self, t):
+        self._set_st(offset=t)
 
-    def _set_st(self, scale=None, translate=None, update=True):
+    def _set_st(self, scale=None, offset=None, update=True):
         need_update = False
 
-        if scale is not None and not np.all(scale == self._scale):
-            self._scale[:] = scale
-            need_update = True
+        if scale is not None:
+            scale = np.asarray(scale)
+            if scale.shape != (self.dims[0],):
+                raise TypeError("Scale must have length equal to transform dimensionality (%d)" % self.dims[0])
+            if not np.all(scale == self._scale):
+                self._scale[:] = scale
+                need_update = True
 
-        if translate is not None and not np.all(translate == self._translate):
-            self._translate[:] = translate
-            need_update = True
+        if offset is not None and not np.all(offset == self._offset):
+            offset = np.asarray(offset)
+            if offset.shape != (self.dims[0],):
+                raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+            if not np.all(offset == self._offset):
+                self._offset[:] = offset
+                need_update = True
 
         if update and need_update:
-            self._update_shaders()
             self.update()   # inform listeners there has been a change
 
-    def _update_shaders(self):
-        self._shader_map['scale'] = self.scale
-        self._shader_map['translate'] = self.translate
-        self._shader_imap['scale'] = self.scale
-        self._shader_imap['translate'] = self.translate
-    
-    def move(self, move):
+    def translate(self, offset):
         """Change the translation of this transform by the amount given.
 
         Parameters
         ----------
-        move : array-like
+        offset : array-like
             The values to be added to the current translation of the transform.
         """
-        move = as_vec4(move, default=(0, 0, 0, 0))
-        self.translate = self.translate + move
+        offset = np.asarray(offset)
+        self.offset = self.offset + offset
 
     def zoom(self, zoom, center=(0, 0, 0), mapped=True):
         """Update the transform such that its scale factor is changed, but
@@ -204,19 +328,19 @@ class STTransform(BaseTransform):
             Whether *center* is expressed in mapped coordinates (True) or
             unmapped coordinates (False).
         """
-        zoom = as_vec4(zoom, default=(1, 1, 1, 1))
-        center = as_vec4(center, default=(0, 0, 0, 0))
+        zoom = as_vec(zoom, 3, default=1)
+        center = as_vec(center, 3, default=0)
         scale = self.scale * zoom
         if mapped:
-            trans = center - (center - self.translate) * zoom
+            trans = center - (center - self.offset) * zoom
         else:
-            trans = self.scale * (1 - zoom) * center + self.translate
-        self._set_st(scale=scale, translate=trans)
+            trans = self.scale * (1 - zoom) * center + self.offset
+        self._set_st(scale=scale, offset=trans)
 
-    def as_matrix(self):
-        m = MatrixTransform()
+    def as_affine(self):
+        m = AffineTransform()
         m.scale(self.scale)
-        m.translate(self.translate)
+        m.offset(self.offset)
         return m
 
     @classmethod
@@ -270,12 +394,6 @@ class STTransform(BaseTransform):
             >>> assert tr.map(p1)[:,:2] == p2  # test
 
         """
-        # if args are Rect, convert to array first
-        if isinstance(x0, Rect):
-            x0 = x0._transform_in()[:3]
-        if isinstance(x1, Rect):
-            x1 = x1._transform_in()[:3]
-        
         x0 = np.asarray(x0)
         x1 = np.asarray(x1)
         if (x0.ndim != 2 or x0.shape[0] != 2 or x1.ndim != 2 or 
@@ -289,63 +407,76 @@ class STTransform(BaseTransform):
         s[mask] = 1.0
         s[x0[1] == x0[0]] = 1.0
         t = x1[0] - s * x0[0]
-        s = as_vec4(s, default=(1, 1, 1, 1))
-        t = as_vec4(t, default=(0, 0, 0, 0))
-        self._set_st(scale=s, translate=t, update=update)
+        s = as_vec(s, 3, default=1)
+        t = as_vec(t, 3, default=0)
+        self._set_st(scale=s, offset=t, update=update)
 
     def __mul__(self, tr):
         if isinstance(tr, STTransform):
             s = self.scale * tr.scale
-            t = self.translate + (tr.translate * self.scale)
-            return STTransform(scale=s, translate=t)
-        elif isinstance(tr, MatrixTransform):
-            return self.as_matrix() * tr
+            t = self.offset + (tr.offset * self.scale)
+            return STTransform(scale=s, offset=t)
+        elif isinstance(tr, AffineTransform):
+            return self.as_affine() * tr
         else:
             return super(STTransform, self).__mul__(tr)
 
     def __rmul__(self, tr):
-        if isinstance(tr, MatrixTransform):
-            return tr * self.as_matrix()
+        if isinstance(tr, AffineTransform):
+            return tr * self.as_affine()
         return super(STTransform, self).__rmul__(tr)
 
     def __repr__(self):
-        return ("<STTransform scale=%s translate=%s at 0x%s>"
-                % (self.scale, self.translate, id(self)))
+        return ("<STTransform scale=%s offset=%s at 0x%s>"
+                % (self.scale, self.offset, id(self)))
+
+    def __getstate__(self):
+        return {'offset': self.offset, 'scale': self.scale}
+    
+    def __setstate__(self, state):
+        self.offset = state['offset']
+        self.scale = state['scale']
 
 
-class MatrixTransform(BaseTransform):
+class AffineTransform(BaseTransform):
     """Affine transformation class
 
     Parameters
     ----------
     matrix : array-like | None
-        4x4 array to use for the transform.
+        Array to use for the transform. If None, then an identity transform is
+        assumed. The shape of the matrix determines the (output, input)
+        dimensions of the transform.
+    offset : array-like | None
+        The translation to apply in this affine transform.
+    dims : tuple
+        Optionally specifies the (input, output) dimensions of this transform.
+        
     """
-    glsl_map = """
-        vec4 affine_transform_map(vec4 pos) {
-            return $matrix * pos;
-        }
-    """
-
-    glsl_imap = """
-        vec4 affine_transform_imap(vec4 pos) {
-            return $inv_matrix * pos;
-        }
-    """
-
     Linear = True
     Orthogonal = False
     NonScaling = False
     Isometric = False
 
-    def __init__(self, matrix=None):
-        super(MatrixTransform, self).__init__()
+    def __init__(self, matrix=None, offset=None, dims=None):
+        if matrix is not None:
+            if matrix.ndims != 2:
+                raise TypeError("Matrix must be 2-dimensional")
+            if dims is not None:
+                raise TypeError("Cannot specify both matrix and dims")
+            dims = matrix.shape[::-1]
+        if dims is None:
+            dims = (3, 3)
+        
+        super(AffineTransform, self).__init__(dims)
+        
+        self.reset()
         if matrix is not None:
             self.matrix = matrix
-        else:
-            self.reset()
+        if offset is not None:
+            self.offset = offset
 
-    @arg_to_vec4
+    @arg_to_vec
     def map(self, coords):
         """Map coordinates
 
@@ -359,10 +490,9 @@ class MatrixTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        # looks backwards, but both matrices are transposed.
-        return np.dot(coords, self.matrix)
+        return np.dot(self.matrix, coords.T).T
 
-    @arg_to_vec4
+    @arg_to_vec
     def imap(self, coords):
         """Inverse map coordinates
 
@@ -376,17 +506,7 @@ class MatrixTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        return np.dot(coords, self.inv_matrix)
-
-    def shader_map(self):
-        fn = super(MatrixTransform, self).shader_map()
-        fn['matrix'] = self.matrix  # uniform mat4
-        return fn
-
-    def shader_imap(self):
-        fn = super(MatrixTransform, self).shader_imap()
-        fn['inv_matrix'] = self.inv_matrix  # uniform mat4
-        return fn
+        return np.dot(self.inv_matrix, coords.T).T
 
     @property
     def matrix(self):
@@ -394,10 +514,23 @@ class MatrixTransform(BaseTransform):
 
     @matrix.setter
     def matrix(self, m):
+        m = np.asarray(m)
+        if m.shape[::-1] != self.dims:
+            raise TypeError("Matrix shape must be %r" % self.dims[::-1])
         self._matrix = m
         self._inv_matrix = None
-        self.shader_map()
-        self.shader_imap()
+        self.update()
+
+    @property
+    def offset(self):
+        return self._offset
+    
+    @offset.setter
+    def offset(self, o):
+        o = np.asarray(o)
+        if o.ndim != 1 or len(o) != self.dims[1]:
+            raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
+        self._offset = o
         self.update()
 
     @property
@@ -406,20 +539,23 @@ class MatrixTransform(BaseTransform):
             self._inv_matrix = np.linalg.inv(self.matrix)
         return self._inv_matrix
 
-    @arg_to_vec4
+    @property
+    def inv_offset(self):
+        return -self.offset
+
     def translate(self, pos):
         """
-        Translate the matrix
+        Add to the offset.
 
-        The translation is applied *after* the transformations already present
-        in the matrix.
+        The translation is applied *after* the transformations already present.
 
         Parameters
         ----------
         pos : arrayndarray
             Position to translate by.
         """
-        self.matrix = np.dot(self.matrix, transforms.translate(pos[0, :3]))
+        pos = np.asarray(pos)
+        self.offset = self.offset + pos
 
     def scale(self, scale, center=None):
         """
@@ -436,9 +572,9 @@ class MatrixTransform(BaseTransform):
             The x, y and z coordinates to scale around. If None,
             (0, 0, 0) will be used.
         """
-        scale = transforms.scale(as_vec4(scale, default=(1, 1, 1, 1))[0, :3])
+        scale = transforms.scale(as_vec(scale, 3, default=1)[0, :3])
         if center is not None:
-            center = as_vec4(center)[0, :3]
+            center = as_vec(center, 3)[0, :3]
             scale = np.dot(np.dot(transforms.translate(-center), scale),
                            transforms.translate(center))
         self.matrix = np.dot(self.matrix, scale)
@@ -473,34 +609,15 @@ class MatrixTransform(BaseTransform):
         # of standard linear algebra order.
         self.matrix = transforms.affine_map(points1, points2).T
 
-    def set_ortho(self, l, r, b, t, n, f):
-        """Set ortho transform
-
-        Parameters
-        ----------
-        l : float
-            Left.
-        r : float
-            Right.
-        b : float
-            Bottom.
-        t : float
-            Top.
-        n : float
-            Near.
-        f : float
-            Far.
-        """
-        self.matrix = transforms.ortho(l, r, b, t, n, f)
-
     def reset(self):
-        self.matrix = np.eye(4)
+        self.matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
+        self.offset = np.zeros(self.dims[1])
 
     def __mul__(self, tr):
-        if (isinstance(tr, MatrixTransform) and not
+        if (isinstance(tr, AffineTransform) and not
                 any(tr.matrix[:3, 3] != 0)):
             # don't multiply if the perspective column is used
-            return MatrixTransform(matrix=np.dot(tr.matrix, self.matrix))
+            return AffineTransform(matrix=np.dot(tr.matrix, self.matrix))
         else:
             return tr.__rmul__(self)
 
@@ -513,51 +630,8 @@ class MatrixTransform(BaseTransform):
         s += indent + str(list(self.matrix[3])) + "] at 0x%x)" % id(self)
         return s
 
-    def set_perspective(self, fov, aspect, near, far):
-        """Set the perspective
-
-        Parameters
-        ----------
-        fov : float
-            Field of view.
-        aspect : float
-            Aspect ratio.
-        near : float
-            Near location.
-        far : float
-            Far location.
-        """
-        self.matrix = transforms.perspective(fov, aspect, near, far)
-
-    def set_frustum(self, l, r, b, t, n, f):
-        """Set the frustum
-
-        Parameters
-        ----------
-        l : float
-            Left.
-        r : float
-            Right.
-        b : float
-            Bottom.
-        t : float
-            Top.
-        n : float
-            Near.
-        f : float
-            Far.
-        """
-        self.matrix = transforms.frustum(l, r, b, t, n, f)
-
-        
-#class SRTTransform(BaseTransform):
-#    """ Transform performing scale, rotate, and translate, in that order.
-#
-#    This transformation allows objects to be placed arbitrarily in a scene
-#    much the same way MatrixTransform does. However, an incorrect order of
-#    operations in MatrixTransform may result in shearing the object (if scale
-#    is applied after rotate) or in unpredictable translation (if scale/rotate
-#    is applied after translation). SRTTransform avoids these problems by
-#    enforcing the correct order of operations.
-#    """
-#    # TODO
+    def __getstate__(self):
+        return {'matrix': self.matrix}
+    
+    def __setstate__(self, state):
+        self.matrix = state['matrix']

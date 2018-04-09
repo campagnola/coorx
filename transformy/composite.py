@@ -1,43 +1,33 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
 
 from __future__ import division
 
-from ..shaders import FunctionChain
 from .base_transform import BaseTransform
 from .linear import NullTransform
 
 
-class ChainTransform(BaseTransform):
+class CompositeTransform(BaseTransform):
     """
     BaseTransform subclass that performs a sequence of transformations in
-    order. Internally, this class uses shaders.FunctionChain to generate
-    its glsl_map and glsl_imap functions.
+    order.
 
     Arguments:
 
     transforms : list of BaseTransform instances
         See ``transforms`` property.
     """
-    glsl_map = None
-    glsl_imap = None
-
     Linear = False
     Orthogonal = False
     NonScaling = False
     Isometric = False
 
     def __init__(self, *transforms):
-        super(ChainTransform, self).__init__()
+        super(CompositeTransform, self).__init__()
         self._transforms = []
         self._simplified = None
         self._null_transform = NullTransform()
-        nmap = self._null_transform.shader_map()
-        
-        # ChainTransform does not have shader maps
-        self._shader_map = FunctionChain("transform_map_chain", [nmap])
-        self._shader_imap = FunctionChain("transform_imap_chain", [nmap])
         
         # Set input transforms
         trs = []
@@ -47,6 +37,12 @@ class ChainTransform(BaseTransform):
             else:
                 trs.append(tr)
         self.transforms = trs
+
+    @property
+    def dims(self):
+        if len(self.transforms) == 0:
+            return (None, None)
+        return (self.transforms[-1].dims[0], self.transforms[0].dims[1])
 
     @property
     def transforms(self):
@@ -64,7 +60,7 @@ class ChainTransform(BaseTransform):
             mapped = trans1.map(trans2.map(coords))
             
             # Equivalent mapping through chain:
-            chain = ChainTransform([trans1, trans2])
+            chain = CompositeTransform([trans1, trans2])
             mapped = chain.map(coords)
             
         """
@@ -88,11 +84,10 @@ class ChainTransform(BaseTransform):
                 return
         
         for t in self._transforms:
-            t.changed.disconnect(self._subtr_changed)
+            t.remove_change_callback(self._subtr_changed)
         self._transforms = tr
         for t in self._transforms:
-            t.changed.connect(self._subtr_changed)
-        self._rebuild_shaders()
+            t.add_change_callback(self._subtr_changed)
         self.update()
 
     @property
@@ -100,7 +95,7 @@ class ChainTransform(BaseTransform):
         """A simplified representation of the same transformation.
         """
         if self._simplified is None:
-            self._simplified = SimplifiedChainTransform(self)
+            self._simplified = SimplifiedCompositeTransform(self)
         return self._simplified
 
     @property
@@ -165,19 +160,6 @@ class ChainTransform(BaseTransform):
             coords = tr.imap(coords)
         return coords
 
-    def shader_map(self):
-        return self._shader_map
-
-    def shader_imap(self):
-        return self._shader_imap
-    
-    def _rebuild_shaders(self):
-        trs = self.transforms
-        if len(trs) == 0:
-            trs = [self._null_transform]
-        self._shader_map.functions = [tr.shader_map() for tr in reversed(trs)]
-        self._shader_imap.functions = [tr.shader_imap() for tr in trs]
-
     def append(self, tr):
         """
         Add a new transform to the end of this chain.
@@ -188,8 +170,7 @@ class ChainTransform(BaseTransform):
             The transform to use.
         """
         self.transforms.append(tr)
-        tr.changed.connect(self._subtr_changed)
-        self._rebuild_shaders()
+        tr.add_change_callback(self._subtr_changed)
         self.update()
 
     def prepend(self, tr):
@@ -202,8 +183,7 @@ class ChainTransform(BaseTransform):
             The transform to use.
         """
         self.transforms.insert(0, tr)
-        tr.changed.connect(self._subtr_changed)
-        self._rebuild_shaders()
+        tr.add_change_callback(self._subtr_changed)
         self.update()
 
     def _subtr_changed(self, ev):
@@ -212,40 +192,39 @@ class ChainTransform(BaseTransform):
         self.update(ev)
 
     def __setitem__(self, index, tr):
-        self._transforms[index].changed.disconnect(self._subtr_changed)
+        self._transforms[index].remove_change_callback(self._subtr_changed)
         self._transforms[index] = tr
-        tr.changed.connect(self.subtr_changed)
-        self._rebuild_shaders()
+        tr.add_change_callback(self.subtr_changed)
         self.update()
 
     def __mul__(self, tr):
-        if isinstance(tr, ChainTransform):
+        if isinstance(tr, CompositeTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return ChainTransform(self.transforms+trs)
+        return CompositeTransform(self.transforms+trs)
 
     def __rmul__(self, tr):
-        if isinstance(tr, ChainTransform):
+        if isinstance(tr, CompositeTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return ChainTransform(trs+self.transforms)
+        return CompositeTransform(trs+self.transforms)
 
     def __str__(self):
         names = [tr.__class__.__name__ for tr in self.transforms]
-        return "<ChainTransform [%s] at 0x%x>" % (", ".join(names), id(self))
+        return "<CompositeTransform [%s] at 0x%x>" % (", ".join(names), id(self))
     
     def __repr__(self):
         tr = ",\n                 ".join(map(repr, self.transforms))
-        return "<ChainTransform [%s] at 0x%x>" % (tr, id(self))
+        return "<CompositeTransform [%s] at 0x%x>" % (tr, id(self))
 
 
-class SimplifiedChainTransform(ChainTransform):
+class SimplifiedCompositeTransform(CompositeTransform):
     def __init__(self, chain):
-        ChainTransform.__init__(self)
+        CompositeTransform.__init__(self)
         self._chain = chain
-        chain.changed.connect(self.source_changed)
+        chain.add_change_callback(self.source_changed)
         self.source_changed(None)
 
     def source_changed(self, event):
@@ -269,7 +248,7 @@ class SimplifiedChainTransform(ChainTransform):
         new_chain = []
         while len(transforms) > 0:
             tr = transforms.pop(0)
-            if isinstance(tr, ChainTransform) and not tr.dynamic:
+            if isinstance(tr, CompositeTransform) and not tr.dynamic:
                 transforms = tr.transforms[:] + transforms
             else:
                 new_chain.append(tr)
@@ -284,7 +263,7 @@ class SimplifiedChainTransform(ChainTransform):
                 t1 = new_tr[-1]
                 pr = t1 * t2
                 if (not t1.dynamic and not t2.dynamic and not 
-                   isinstance(pr, ChainTransform)):
+                   isinstance(pr, CompositeTransform)):
                     cont = True
                     new_tr.pop()
                     new_tr.append(pr)

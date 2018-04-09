@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
 
 from __future__ import division
 
 import numpy as np
-from ...ext.decorator import decorator
-from ...util import logger
 
 
 def arg_to_array(func):
@@ -44,82 +42,85 @@ def arg_to_array(func):
     return fn
 
 
-def as_vec4(obj, default=(0, 0, 0, 1)):
+def as_vec(obj, n, default=0):
     """
-    Convert `obj` to 4-element vector (numpy array with shape[-1] == 4)
+    Convert `obj` to N-element vector (numpy array with shape[-1] == N)
 
     Parameters
     ----------
     obj : array-like
         Original object.
     default : array-like
-        The defaults to use if the object does not have 4 entries.
+        The defaults to use if the object does not have N entries.
 
     Returns
     -------
     obj : array-like
-        The object promoted to have 4 elements.
+        The object promoted to have N elements.
 
     Notes
     -----
     `obj` will have at least two dimensions.
 
-    If `obj` has < 4 elements, then new elements are added from `default`.
-    For inputs intended as a position or translation, use default=(0,0,0,1).
-    For inputs intended as scale factors, use default=(1,1,1,1).
-
+    If `obj` has < N elements, then new elements are added from `default`.
     """
     obj = np.atleast_2d(obj)
-    # For multiple vectors, reshape to (..., 4)
-    if obj.shape[-1] < 4:
-        new = np.empty(obj.shape[:-1] + (4,), dtype=obj.dtype)
-        new[:] = default
+    # For multiple vectors, reshape to (..., N)
+    if obj.shape[-1] < n:
+        new = np.empty(obj.shape[:-1] + (n,), dtype=obj.dtype)
+        if np.isscalar(default):
+            new[..., obj.shape[-1]:] = default
+        else:
+            new[..., obj.shape[-1]:] = default[obj.shape[-1]:]
         new[..., :obj.shape[-1]] = obj
         obj = new
-    elif obj.shape[-1] > 4:
-        raise TypeError("Array shape %s cannot be converted to vec4"
-                        % obj.shape)
+    elif obj.shape[-1] > n:
+        raise TypeError("Array shape %s cannot be converted to vec size %d"
+                        % (n, obj.shape))
     return obj
 
 
-@decorator
-def arg_to_vec4(func, self_, arg, *args, **kwargs):
+def arg_to_vec(func):
     """
-    Decorator for converting argument to vec4 format suitable for 4x4 matrix
-    multiplication.
+    Decorator for converting argument to vec-N format suitable for NxN matrix
+    multiplication. If N=3, for example::
 
-    [x, y]      =>  [[x, y, 0, 1]]
+        [x, y]      =>  [[x, y, 0]]
 
-    [x, y, z]   =>  [[x, y, z, 1]]
+        [x, y, z]   =>  [[x, y, z]]
 
-    [[x1, y1],      [[x1, y1, 0, 1],
-     [x2, y2],  =>   [x2, y2, 0, 1],
-     [x3, y3]]       [x3, y3, 0, 1]]
+        [[x1, y1],      [[x1, y1, 0],
+        [x2, y2],  =>   [x2, y2, 0],
+        [x3, y3]]       [x3, y3, 0]]
 
     If 1D input is provided, then the return value will be flattened.
-    Accepts input of any dimension, as long as shape[-1] <= 4
+    Accepts input of any dimension.
 
     Alternatively, any class may define its own transform conversion interface
     by defining a _transform_in() method that returns an array with shape
-    (.., 4), and a _transform_out() method that accepts the same array shape
+    (.., N), and a _transform_out() method that accepts the same array shape
     and returns a new (mapped) object.
 
     """
-    if isinstance(arg, (tuple, list, np.ndarray)):
-        arg = np.array(arg)
-        flatten = arg.ndim == 1
-        arg = as_vec4(arg)
+    def arg_to_vec(self_, arg, *args, **kwargs):
+        if isinstance(arg, (tuple, list, np.ndarray)):
+            arg = np.asarray(arg)
+            flatten = arg.ndim == 1
+            arg = np.atleast_2d(arg)
 
-        ret = func(self_, arg, *args, **kwargs)
-        if flatten and ret is not None:
-            return ret.flatten()
-        return ret
-    elif hasattr(arg, '_transform_in'):
-        arr = arg._transform_in()
-        ret = func(self_, arr, *args, **kwargs)
-        return arg._transform_out(ret)
-    else:
-        raise TypeError("Cannot convert argument to 4D vector: %s" % arg)
+            ret = func(self_, arg, *args, **kwargs)
+            if flatten and ret is not None:
+                return ret.flatten()
+            return ret
+        elif hasattr(arg, '_transform_in'):
+            arr = arg._transform_in()
+            ret = func(self_, arr, *args, **kwargs)
+            return arg._transform_out(ret)
+        else:
+            raise TypeError("Cannot convert argument to vector: %s" % arg)
+    arg_to_vec.__name__ = func.__name__ + '_arg_to_vec'
+    arg_to_vec.__doc__ = func.__doc__
+    return arg_to_vec
 
 
 class TransformCache(object):
@@ -150,7 +151,6 @@ class TransformCache(object):
         key = tuple(map(id, path))
         item = self._cache.get(key, None)
         if item is None:
-            logger.debug("Transform cache miss: %s", key)
             item = [0, self._create(path)]
             self._cache[key] = item
         item[0] = 0  # reset age for this item
@@ -179,5 +179,4 @@ class TransformCache(object):
             item[0] += 1
 
         for key in rem:
-            logger.debug("TransformCache remove: %s", key)
             del self._cache[key]
