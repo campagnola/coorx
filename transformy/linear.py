@@ -513,12 +513,7 @@ class AffineTransform(BaseTransform):
 
     @matrix.setter
     def matrix(self, m):
-        m = np.asarray(m)
-        if m.shape[::-1] != self.dims:
-            raise TypeError("Matrix shape must be %s" % (self.dims[::-1],))
-        self._matrix = m
-        self._inv_matrix = None
-        self.update()
+        self._set(matrix=m)
 
     @property
     def offset(self):
@@ -526,10 +521,22 @@ class AffineTransform(BaseTransform):
     
     @offset.setter
     def offset(self, o):
-        o = np.asarray(o)
-        if o.ndim != 1 or len(o) != self.dims[1]:
-            raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
-        self._offset = o
+        self._set(offset=o)
+
+    def _set(self, matrix=None, offset=None):
+        if matrix is not None:
+            m = np.asarray(matrix)
+            if m.shape[::-1] != self.dims:
+                raise TypeError("Matrix shape must be %s" % (self.dims[::-1],))
+            self._matrix = m
+            self._inv_matrix = None
+
+        if offset is not None:
+            o = np.asarray(offset)
+            if o.ndim != 1 or len(o) != self.dims[1]:
+                raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
+            self._offset = o
+
         self.update()
 
     @property
@@ -607,7 +614,8 @@ class AffineTransform(BaseTransform):
         """
         # note: need to transpose because util.functions uses opposite
         # of standard linear algebra order.
-        self.matrix = transforms.affine_map(points1, points2).T
+        m = transforms.affine_map(points1, points2)
+        self._set(matrix=m[:,:-1], offset=m[:, -1])
 
     def reset(self):
         self.matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
