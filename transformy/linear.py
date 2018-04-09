@@ -78,7 +78,7 @@ class TTransform(BaseTransform):
         if offset is not None:
             offset = np.asarray(offset)
             if offset.ndim != 1:
-                raise TypeError("Translate must be 1-D array or similar")
+                raise TypeError("offset must be 1-D array or similar")
             if dims is not None:
                 raise TypeError("Cannot specify both offset and dims")
             d = len(offset)
@@ -86,6 +86,12 @@ class TTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
             
+        try:
+            dims = tuple(dims)
+            assert len(dims) == 2
+        except (TypeError, AssertionError):
+            raise TypeError("dims must be length-2 tuple")
+        
         if dims[0] != dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
             

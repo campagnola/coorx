@@ -149,6 +149,27 @@ class CompositeTransform(unittest.TestCase):
 
 
 class TTransform(unittest.TestCase):
+    def setUp(self):
+        self.transforms = [
+            TT(),
+            TT(dims=(3, 3)),
+            TT([1]),
+            TT([0, 0]),
+            TT(np.array([1, 1e16])),
+            TT((-100e-6, 12e8, 0)),
+            TT(np.random.normal(size=10)),
+        ]
+        self.points = [
+            np.random.normal(size=(10, 3)),
+            10**np.random.normal(size=(10, 3)),
+            -10**np.random.normal(size=(10, 3)),
+            [2,3,4],
+            [10],
+            (5,6),
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+            [(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+        ]            
+
     def test_t_transform(self):
         # Check that TTransform maps exactly like AffineTransform
         pts = np.random.normal(size=(10, 3))
@@ -166,6 +187,19 @@ class TTransform(unittest.TestCase):
         tt2.__setstate__(tt.__getstate__())
         assert np.all(tt.map(pts) == tt2.map(pts))
         
+    def test_inverse(self):
+        for tr in self.transforms:
+            for pts in self.points:
+                arr = np.array(pts)
+                if arr.shape[-1] == tr.dims[0]:
+                    pts2 = tr.map(pts)
+                    assert pts2.shape[-1] == tr.dims[1]
+                    pts3 = tr.imap(pts2)
+                    assert np.allclose(arr, pts3)
+                else:
+                    with self.assertRaises(TypeError):
+                        tr.map(pts)
+
 
 class STTransform(unittest.TestCase):
     def test_st_transform(self):
