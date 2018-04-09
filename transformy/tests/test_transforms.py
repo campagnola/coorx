@@ -187,7 +187,7 @@ class STTransform(unittest.TestCase):
         p1 = [[5., 7.], [23., 8.]]
         p2 = [[-1.3, -1.4], [1.1, 1.2]]
 
-        t = tr.STTransform()
+        t = tr.STTransform(dims=(2, 2))
         t.set_mapping(p1, p2)
 
         assert np.allclose(t.map(p1)[:, :len(p2)], p2)

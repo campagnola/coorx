@@ -366,14 +366,14 @@ class STTransform(BaseTransform):
         return t
 
     def set_mapping(self, x0, x1, update=True):
-        """Configure this transform such that it maps points x0 => x1
+        """Configure this transform such that it maps points x0 onto x1
 
         Parameters
         ----------
-        x0 : array-like, shape (2, 2) or (2, 3)
-            Start location.
-        x1 : array-like, shape (2, 2) or (2, 3)
-            End location.
+        x0 : array-like, shape (2, N)
+            Two source points
+        x1 : array-like, shape (2, N)
+            Two destination points
         update : bool
             If False, then the update event is not emitted.
 
@@ -405,10 +405,7 @@ class STTransform(BaseTransform):
         denom[mask] = 1.0
         s = (x1[1] - x1[0]) / denom
         s[mask] = 1.0
-        s[x0[1] == x0[0]] = 1.0
         t = x1[0] - s * x0[0]
-        s = as_vec(s, 3, default=1)
-        t = as_vec(t, 3, default=0)
         self._set_st(scale=s, offset=t, update=update)
 
     def __mul__(self, tr):
@@ -483,12 +480,13 @@ class AffineTransform(BaseTransform):
         Parameters
         ----------
         coords : array-like
-            Coordinates to map.
+            Coordinates to map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
 
         Returns
         -------
         coords : ndarray
-            Coordinates.
+            Mapped coordinates: (M * coords) + offset
         """
         return np.dot(self.matrix, coords.T).T + self.offset[None, :]
 
@@ -499,14 +497,14 @@ class AffineTransform(BaseTransform):
         Parameters
         ----------
         coords : array-like
-            Coordinates to inverse map.
+            Coordinates to inverse map. The length of the last array dimenstion
+            must be equal to the input dimensionality of the transform.
 
         Returns
         -------
         coords : ndarray
-            Coordinates.
+            Mapped coordinates: M_inv * (coords - offset)
         """
-
         return np.dot(self.inv_matrix, (coords - self.offset[None, :]).T).T
 
     @property
