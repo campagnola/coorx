@@ -227,10 +227,10 @@ class AffineTransform(unittest.TestCase):
 
 class TransformInverse(unittest.TestCase):
     def test_inverse(self):
-        m = np.random.normal(size=(4, 4))
+        m = np.random.normal(size=(3, 3))
         transforms = [
             NT(),
-            ST(scale=(1e-4, 2e5), translate=(10, -6e9)),
+            ST(scale=(1e-4, 2e5, 1), offset=(10, -6e9, 0)),
             AT(m),
             RT(m),
         ]

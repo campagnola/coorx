@@ -110,6 +110,8 @@ class TTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords + translation
         """
+        if coords.shape[-1] != self.dims[0]:
+            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return coords + self.offset[np.newaxis, :]
 
     @arg_to_vec
@@ -127,8 +129,9 @@ class TTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords - translation
         """
+        if coords.shape[-1] != self.dims[1]:
+            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
         return coords - self.offset[np.newaxis, :]
-        return m
 
     @property
     def offset(self):
@@ -245,6 +248,8 @@ class STTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords * scale + offset
         """
+        if coords.shape[-1] != self.dims[0]:
+            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return coords * self.scale[None, :] + self.offset[None, :]
 
     @arg_to_vec
@@ -262,6 +267,8 @@ class STTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: (coords - offset) / scale
         """
+        if coords.shape[-1] != self.dims[1]:
+            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
         return (coords - self.offset[None, :]) / self.scale[None, :]
 
     @property
@@ -457,7 +464,7 @@ class AffineTransform(BaseTransform):
 
     def __init__(self, matrix=None, offset=None, dims=None):
         if matrix is not None:
-            if matrix.ndims != 2:
+            if matrix.ndim != 2:
                 raise TypeError("Matrix must be 2-dimensional")
             if dims is not None:
                 raise TypeError("Cannot specify both matrix and dims")
@@ -488,6 +495,8 @@ class AffineTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: (M * coords) + offset
         """
+        if coords.shape[-1] != self.dims[0]:
+            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return np.dot(self.matrix, coords.T).T + self.offset[None, :]
 
     @arg_to_vec
@@ -505,6 +514,8 @@ class AffineTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: M_inv * (coords - offset)
         """
+        if coords.shape[-1] != self.dims[1]:
+            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
         return np.dot(self.inv_matrix, (coords + self.inv_offset[None, :]).T).T
 
     @property
