@@ -262,7 +262,7 @@ class STTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: (coords - offset) / scale
         """
-        return coords - self.offset[None, :] / self.scale[None, :]
+        return (coords - self.offset[None, :]) / self.scale[None, :]
 
     @property
     def scale(self):
@@ -505,7 +505,7 @@ class AffineTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: M_inv * (coords - offset)
         """
-        return np.dot(self.inv_matrix, (coords - self.offset[None, :]).T).T
+        return np.dot(self.inv_matrix, (coords + self.inv_offset[None, :]).T).T
 
     @property
     def matrix(self):
@@ -515,7 +515,7 @@ class AffineTransform(BaseTransform):
     def matrix(self, m):
         m = np.asarray(m)
         if m.shape[::-1] != self.dims:
-            raise TypeError("Matrix shape must be %r" % self.dims[::-1])
+            raise TypeError("Matrix shape must be %s" % (self.dims[::-1],))
         self._matrix = m
         self._inv_matrix = None
         self.update()
@@ -571,12 +571,13 @@ class AffineTransform(BaseTransform):
             The x, y and z coordinates to scale around. If None,
             (0, 0, 0) will be used.
         """
-        scale = transforms.scale(as_vec(scale, 3, default=1)[0, :3])
+        scale_matrix = np.zeros(self.dims[::-1])
+        for i in range(min(self.dims)):
+            scale_matrix[i,i] = scale[i]
+
         if center is not None:
-            center = as_vec(center, 3)[0, :3]
-            scale = np.dot(np.dot(transforms.translate(-center), scale),
-                           transforms.translate(center))
-        self.matrix = np.dot(self.matrix, scale)
+            raise NotImplementedError()
+        self.matrix = np.dot(scale_matrix, self.matrix)
 
     def rotate(self, angle, axis):
         """
