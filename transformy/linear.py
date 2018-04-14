@@ -51,11 +51,12 @@ class NullTransform(BaseTransform):
     def __rmul__(self, tr):
         return tr
 
-    def __getstate__(self):
-        return None
+    @property
+    def params(self):
+        return {}
     
-    def __setstate__(self, state):
-        assert state is None
+    def set_params(self):
+        return
 
 
 class TTransform(BaseTransform):
@@ -188,11 +189,13 @@ class TTransform(BaseTransform):
         return ("<TTransform offset=%s at 0x%s>"
                 % (self.offset, id(self)))
 
-    def __getstate__(self):
+    @property
+    def params(self):
         return {'offset': self.offset}
     
-    def __setstate__(self, state):
-        self.offset = state['offset']
+    def set_params(self, offset=None):
+        if offset is not None:
+            self.offset = offset
 
 
 class STTransform(BaseTransform):
@@ -231,7 +234,7 @@ class STTransform(BaseTransform):
         self._scale = np.ones(self.dims[0], dtype=np.float)
         self._offset = np.zeros(self.dims[0], dtype=np.float)
 
-        self._set_st(scale, offset)
+        self.set_params(scale, offset)
 
     @arg_to_vec
     def map(self, coords):
@@ -277,7 +280,7 @@ class STTransform(BaseTransform):
 
     @scale.setter
     def scale(self, s):
-        self._set_st(scale=s)
+        self.set_params(scale=s)
 
     @property
     def offset(self):
@@ -285,9 +288,13 @@ class STTransform(BaseTransform):
 
     @offset.setter
     def offset(self, t):
-        self._set_st(offset=t)
+        self.set_params(offset=t)
 
-    def _set_st(self, scale=None, offset=None, update=True):
+    @property
+    def params(self):
+        return {'scale': self.scale, 'offset': self.offset}
+
+    def set_params(self, scale=None, offset=None):
         need_update = False
 
         if scale is not None:
@@ -306,7 +313,7 @@ class STTransform(BaseTransform):
                 self._offset[:] = offset
                 need_update = True
 
-        if update and need_update:
+        if need_update:
             self.update()   # inform listeners there has been a change
 
     def translate(self, offset):
@@ -342,7 +349,7 @@ class STTransform(BaseTransform):
             trans = center - (center - self.offset) * zoom
         else:
             trans = self.scale * (1 - zoom) * center + self.offset
-        self._set_st(scale=scale, offset=trans)
+        self.set_params(scale=scale, offset=trans)
 
     def as_affine(self):
         m = AffineTransform()
@@ -372,7 +379,7 @@ class STTransform(BaseTransform):
         t.set_mapping(x0, x1)
         return t
 
-    def set_mapping(self, x0, x1, update=True):
+    def set_mapping(self, x0, x1):
         """Configure this transform such that it maps points x0 onto x1
 
         Parameters
@@ -381,8 +388,6 @@ class STTransform(BaseTransform):
             Two source points
         x1 : array-like, shape (2, N)
             Two destination points
-        update : bool
-            If False, then the update event is not emitted.
 
         Examples
         --------
@@ -413,7 +418,7 @@ class STTransform(BaseTransform):
         s = (x1[1] - x1[0]) / denom
         s[mask] = 1.0
         t = x1[0] - s * x0[0]
-        self._set_st(scale=s, offset=t, update=update)
+        self.set_params(scale=s, offset=t)
 
     def __mul__(self, tr):
         if isinstance(tr, STTransform):
@@ -433,13 +438,6 @@ class STTransform(BaseTransform):
     def __repr__(self):
         return ("<STTransform scale=%s offset=%s at 0x%s>"
                 % (self.scale, self.offset, id(self)))
-
-    def __getstate__(self):
-        return {'offset': self.offset, 'scale': self.scale}
-    
-    def __setstate__(self, state):
-        self.offset = state['offset']
-        self.scale = state['scale']
 
 
 class AffineTransform(BaseTransform):
@@ -524,7 +522,7 @@ class AffineTransform(BaseTransform):
 
     @matrix.setter
     def matrix(self, m):
-        self._set(matrix=m)
+        self.set_params(matrix=m)
 
     @property
     def offset(self):
@@ -532,23 +530,35 @@ class AffineTransform(BaseTransform):
     
     @offset.setter
     def offset(self, o):
-        self._set(offset=o)
+        self.set_params(offset=o)
 
-    def _set(self, matrix=None, offset=None):
+    @property
+    def params(self):
+        return {'matrix': self.matrix, 'offset': self.offset}
+
+    def set_params(self, matrix=None, offset=None):
+        need_update = False
+        
         if matrix is not None:
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
                 raise TypeError("Matrix shape must be %s" % (self.dims[::-1],))
-            self._matrix = m
-            self._inv_matrix = None
+            if np.any(m != self._matrix):
+                self._matrix = m
+                self._inv_matrix = None
+                need_update = True
 
         if offset is not None:
             o = np.asarray(offset)
             if o.ndim != 1 or len(o) != self.dims[1]:
                 raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
-            self._offset = o
+            if np.any(o != self._offset):
+                self._offset = o
+                self._inv_matrix = None
+                need_update = True
 
-        self.update()
+        if need_update:
+            self.update()
 
     @property
     def inv_matrix(self):
@@ -607,8 +617,8 @@ class AffineTransform(BaseTransform):
         Parameters
         ----------
         angle : float
-            The angle of rotation, in degrees.
-        axis : array-like
+            The angle of rotation in degrees.
+        axis : array-like or None
             The x, y and z coordinates of the axis vector to rotate around.
         """
         self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis))
@@ -623,14 +633,15 @@ class AffineTransform(BaseTransform):
         points2 : array-like, shape (4, 3)
             Four ending 3D coordinates.
         """
-        # note: need to transpose because util.functions uses opposite
-        # of standard linear algebra order.
         m = matrices.affine_map(points1, points2)
-        self._set(matrix=m[:,:-1], offset=m[:, -1])
+        self.set_params(matrix=m[:,:-1], offset=m[:, -1])
 
     def reset(self):
-        self.matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
-        self.offset = np.zeros(self.dims[1])
+        """Reset this transform to have an identity matrix and no offset.
+        """
+        self._matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
+        self._offset = np.zeros(self.dims[1])
+        self.update()
 
     def __mul__(self, tr):
         if (isinstance(tr, AffineTransform) and not
@@ -648,9 +659,3 @@ class AffineTransform(BaseTransform):
         s += indent + str(list(self.matrix[2])) + ",\n"
         s += indent + str(list(self.matrix[3])) + "] at 0x%x)" % id(self)
         return s
-
-    def __getstate__(self):
-        return {'matrix': self.matrix}
-    
-    def __setstate__(self, state):
-        self.matrix = state['matrix']

@@ -7,6 +7,12 @@ import unittest
 
 import numpy as np
 
+try:
+    import itk
+    HAVE_ITK = True
+except ImportError:
+    HAVE_ITK = False
+
 import transformy as tr
 
 NT = tr.NullTransform
@@ -165,6 +171,26 @@ class TTransform(unittest.TestCase):
         tt2 = tr.TTransform()
         tt2.__setstate__(tt.__getstate__())
         assert np.all(tt.map(pts) == tt2.map(pts))
+
+    def test_itk_compat(self):
+        if not HAVE_ITK:
+            self.skipTest("itk could not be imported")
+        
+        itk_tr = itk.TranslationTransform[itk.D, 3].New()
+        ttr = TT()
+        
+        pts = 10**np.random.normal(size=(20, 3), scale=16)
+        offsets = 10**np.random.normal(size=(20, 3), scale=16)
+        
+        for offset in offsets:
+            ttr_pts = ttr.map(pts)
+            for i in range(len(pts)):
+                itk_tr_pt = np.array(itk_tr.TransformPoint(itk.Point[itk.D, 3](pts[i])))
+                assert np.allclose(itk_tr_pt, ttr_pts[i])
+            ttr.translate(offset)
+            itk_tr.Translate(itk.Point[itk.D, 3](offset))
+            assert np.allclose(ttr.offset, np.array(itk_tr.GetOffset()))
+                
         
 
 class STTransform(unittest.TestCase):

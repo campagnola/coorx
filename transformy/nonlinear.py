@@ -77,8 +77,17 @@ class LogTransform(BaseTransform):
     def imap(self, coords):
         return self.map(coords, -self.base)
 
+    @property
+    def params(self):
+        return {'base': self.base}
+    
+    def set_params(self, base):
+        self.base = base
+
     def __repr__(self):
         return "<LogTransform base=%s>" % (self.base)
+
+
 
 
 class PolarTransform(BaseTransform):
@@ -114,6 +123,13 @@ class PolarTransform(BaseTransform):
         for i in range(2, coords.shape[-1]):  # copy any further axes
             ret[..., i] = coords[..., i]
         return ret
+
+    @property
+    def params(self):
+        return {}
+    
+    def set_params(self):
+        return
 
 
 #class BilinearTransform(BaseTransform):
