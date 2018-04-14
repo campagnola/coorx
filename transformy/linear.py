@@ -8,7 +8,7 @@ import numpy as np
 
 from ._util import arg_to_vec, as_vec
 from .base_transform import BaseTransform
-from . import transforms
+from . import matrices
 
 
 class NullTransform(BaseTransform):
@@ -22,7 +22,7 @@ class NullTransform(BaseTransform):
     NonScaling = True
     Isometric = True
 
-    def __init__(self, dims=(3, 3)):
+    def __init__(self, dims=3):
         BaseTransform.__init__(self, dims)
 
     def map(self, coords):
@@ -86,12 +86,12 @@ class TTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
             
-        if dims[0] != dims[1]:
-            raise ValueError("Input and output dimensionality must be equal")
-            
         super(TTransform, self).__init__(dims)
         
-        self._offset = np.zeros(dims[0], dtype=np.float)
+        if self.dims[0] != self.dims[1]:
+            raise ValueError("Input and output dimensionality must be equal")
+            
+        self._offset = np.zeros(self.dims[0], dtype=np.float)
         if offset is not None:
             self.offset = offset
 
@@ -223,13 +223,13 @@ class STTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
             
-        if dims[0] != dims[1]:
-            raise ValueError("Input and output dimensionality must be equal")
-            
         super(STTransform, self).__init__(dims)
         
-        self._scale = np.ones(dims[0], dtype=np.float)
-        self._offset = np.zeros(dims[0], dtype=np.float)
+        if self.dims[0] != self.dims[1]:
+            raise ValueError("Input and output dimensionality must be equal")
+            
+        self._scale = np.ones(self.dims[0], dtype=np.float)
+        self._offset = np.zeros(self.dims[0], dtype=np.float)
 
         self._set_st(scale, offset)
 
@@ -611,7 +611,7 @@ class AffineTransform(BaseTransform):
         axis : array-like
             The x, y and z coordinates of the axis vector to rotate around.
         """
-        self.matrix = np.dot(self.matrix, transforms.rotate(angle, axis))
+        self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis))
 
     def set_mapping(self, points1, points2):
         """ Set to a 3D transformation matrix that maps points1 onto points2.
@@ -625,7 +625,7 @@ class AffineTransform(BaseTransform):
         """
         # note: need to transpose because util.functions uses opposite
         # of standard linear algebra order.
-        m = transforms.affine_map(points1, points2)
+        m = matrices.affine_map(points1, points2)
         self._set(matrix=m[:,:-1], offset=m[:, -1])
 
     def reset(self):

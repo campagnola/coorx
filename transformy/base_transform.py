@@ -17,6 +17,7 @@ API Issues to work out:
 """
 
 from __future__ import division
+import numpy as np
 
 
 class BaseTransform(object):
@@ -54,7 +55,9 @@ class BaseTransform(object):
     # Scale factors are applied equally to all axes.
     Isometric = None
 
-    def __init__(self, dims=(0, 0)):
+    def __init__(self, dims=0):
+        if np.isscalar(dims):
+            dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
         self._dims = dims
