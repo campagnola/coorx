@@ -3,12 +3,14 @@ Transformy
 
 Object-oriented linear and nonlinear coordinate system transforms.
 
-* A collection of different types of coordinate system transform classes
+** This project is in early development; the list below is at least 50% wishful planning **
+
+* A collection of different types of coordinate system transform classes with full unit test coverage
 * Easy methods for mapping coordinate data through these transforms
 * Transform composition and simplification
 * Automatic generation of composite transforms from a coordinate system graph
 * Coordinate arrays that know which coordinate system they live in to handle automatic mapping
- 
+* Conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
 
 Examples
 ========
