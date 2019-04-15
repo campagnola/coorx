@@ -648,15 +648,37 @@ class AffineTransform(BaseTransform):
         """
         self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis))
 
-    def set_mapping(self, points1, points2):
-        """ Set to a 3D transformation matrix that maps points1 onto points2.
+    @classmethod
+    def from_mapping(cls, x0, x1):
+        """ Create an AffineTransform from the given mapping
+
+        See `set_mapping` for details.
 
         Parameters
         ----------
-        points1 : array-like, shape (4, 3)
-            Four starting 3D coordinates.
-        points2 : array-like, shape (4, 3)
-            Four ending 3D coordinates.
+        x0 : array-like
+            Unmapped points.
+        x1 : array-like
+            Mapped points.
+
+        Returns
+        -------
+        t : instance of STTransform
+            The transform.
+        """
+        t = cls()
+        t.set_mapping(x0, x1)
+        return t
+
+    def set_mapping(self, points1, points2):
+        """Set this transform such that it maps points1 onto points2.
+
+        Parameters
+        ----------
+        points1 : array-like, shape (4, N)
+            Four starting (unmapped) coordinates.
+        points2 : array-like, shape (4, N)
+            Four ending (mapped) coordinates.
         """
         m = matrices.affine_map(points1, points2)
         self.set_params(matrix=m[:,:-1], offset=m[:, -1])
