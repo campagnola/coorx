@@ -146,6 +146,31 @@ class BaseTransform(object):
         for cb in self._change_callbacks:
             cb(*args)
 
+    def convert_to(self, lib):
+        """Generate and return an equivalent transform for another library.
+        
+        Parameters
+        ----------
+        lib : str
+            Name of the library to convert to. See transformy.converters.all_converters().
+        """
+        conv = make_converter(lib)
+        return conv.convert_to(self)
+        
+    @classmethod
+    def convert_from(cls, tr, lib):
+        """Generate and return an equivalent transform converted from another library.
+        
+        Parameters
+        ----------
+        tr : object
+            The transform to convert.
+        lib : str
+            Name of the library to convert from. See transformy.converters.all_converters().
+        """
+        conv = make_converter(lib)
+        return conv.convert_from(tr)
+
     def __mul__(self, tr):
         """
         Transform multiplication returns a new transform that is equivalent to
@@ -232,3 +257,5 @@ class InverseTransform(BaseTransform):
 
 # import here to avoid import cycle; needed for BaseTransform.__mul__.
 from .composite import CompositeTransform
+from .conversion import make_converter
+

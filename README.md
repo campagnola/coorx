@@ -5,12 +5,16 @@ Object-oriented linear and nonlinear coordinate system transforms.
 
 ** This project is in early development; the list below is at least 50% wishful planning **
 
-* A collection of different types of coordinate system transform classes with full unit test coverage
+* A collection of different types of coordinate system transform classes
 * Easy methods for mapping coordinate data through these transforms
 * Transform composition and simplification
+* Transform serialization (annotate your data, please!)
+* Full unit test coverage, especially focusing on floating-point precision
 * Automatic generation of composite transforms from a coordinate system graph
 * Coordinate arrays that know which coordinate system they live in to handle automatic mapping
 * Conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
+* Mechanisms to extend with new transforms, mappable data types, and converters
+
 
 Examples
 ========
@@ -55,8 +59,7 @@ Todo
 ====
 
 * import bilinear, SRT transforms from pyqtgraph
-* import coordinate system graph handling from vispy
-* make coordinate system dimensionality explicit
+* import coordinate system graph handling, homogeneous/perspective transforms from vispy
 * unit tests against ITK output
 
 
