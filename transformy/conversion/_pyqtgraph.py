@@ -16,12 +16,13 @@ class PyqtgraphTransformConverter(TransformConverter):
             
         self._to_classes = {
             linear.STTransform: self._STTransform_to_pg,
+            linear.AffineTransform: self._AffineTransform_to_pg,
         }
         self._from_classes = {
             # pyqtgraph.SRTTransform: self._from_SRTTransform,
             # pyqtgraph.SRTTransform3D: self._from_SRTTransform,
-            pyqtgraph.Qt.QTransform: self._from_QTransform,
-            pyqtgraph.Qt.QMatrix4x4: self._from_QMatrix4x4,
+            pyqtgraph.QtGui.QTransform: self._from_QTransform,
+            pyqtgraph.QtGui.QMatrix4x4: self._from_QMatrix4x4,
             pyqtgraph.Transform3D: self._from_QMatrix4x4,
         }
     
@@ -38,7 +39,23 @@ class PyqtgraphTransformConverter(TransformConverter):
             ptr.setTranslate(tr.offset)
             return ptr
         else:
-            raise TypeError("Converting transform of dimension %r to pyqtgraph is not supported." % tr.dims)
+            raise TypeError("Converting STTransform of dimension %r to pyqtgraph is not supported." % tr.dims)
+    
+    def _AffineTransform_to_pg(self, tr):
+        import pyqtgraph
+        if tr.dims == (2, 2):
+            m = tr.matrix
+            o = tr.offset
+            ptr = pyqtgraph.QtGui.QTransform(m[0,0], m[1,0], 0.0, m[0,1], m[1,1], 0.0, o[0], o[1], 1.0)
+            return ptr
+        elif tr.dims == (3, 3):
+            m = np.eye(4)
+            m[:3, :3] = tr.matrix
+            m[:3, 3] = tr.offset
+            ptr = pyqtgraph.Transform3D(m)
+            return ptr
+        else:
+            raise TypeError("Converting AffineTransform of dimension %r to pyqtgraph is not supported." % tr.dims)
     
     def _from_SRTTransform(self, tr):
         return linear.STTransform(offset=tr.getTranslation(), scale=tr.getScale())
@@ -52,5 +69,5 @@ class PyqtgraphTransformConverter(TransformConverter):
         return linear.AffineTransform(matrix=m, offset=o)
         
     def _from_QMatrix4x4(self, tr):
-        m = np.array(tr.copyDataTo()).reshape(4,4).T
+        m = np.array(tr.copyDataTo()).reshape(4,4)
         return linear.AffineTransform(matrix=m[:3, :3], offset=m[:3, 3])

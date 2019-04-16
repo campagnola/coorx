@@ -468,8 +468,8 @@ class AffineTransform(BaseTransform):
 
     def __init__(self, matrix=None, offset=None, dims=None):
         if matrix is not None:
-            if matrix.ndim != 2:
-                raise TypeError("Matrix must be 2-dimensional")
+            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+                raise TypeError("Matrix must be 2-dimensional and square; got %r" % matrix.shape)
             if dims is not None:
                 raise TypeError("Cannot specify both matrix and dims")
             dims = matrix.shape[::-1]
@@ -698,10 +698,15 @@ class AffineTransform(BaseTransform):
             return tr.__rmul__(self)
 
     def __repr__(self):
-        s = "%s(matrix=[" % self.__class__.__name__
+        s = "%s(offset=%r matrix=[" % (self.__class__.__name__, list(self.offset))
         indent = " "*len(s)
-        s += str(list(self.matrix[0])) + ",\n"
-        s += indent + str(list(self.matrix[1])) + ",\n"
-        s += indent + str(list(self.matrix[2])) + ",\n"
-        s += indent + str(list(self.matrix[3])) + "] at 0x%x)" % id(self)
+        for i in range(self.dims[0]):
+            if i > 0:
+                s += indent
+            s += str(list(self.matrix[i]))
+            if i == self.dims[0]-1:
+                s += "]"
+            else:
+                s += ",\n"
+        s +=  "at 0x%x)" % id(self)
         return s
