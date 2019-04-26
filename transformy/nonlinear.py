@@ -142,3 +142,42 @@ class PolarTransform(BaseTransform):
 #    """
 #    # TODO
 
+
+class Nonuniform1D(BaseTransform):
+    """Map from integer indices to non-uniformly sampled positions.
+    
+    Say you have a sequence of monotonically-increasing position measurements::
+    
+        samples = [1.3, 1.4, 1.7, 2.5, 2.6, 2.8]
+        
+    The forward mapping for this transform maps from the indices of the list [0..5] to the position values::
+    
+        tr = Nonuniform1D(samples)
+        tr.map(2)   # 1.7
+        tr.imap(1.7)   # 2.0
+        
+    Parameters
+    ----------
+    samples : array-like
+        The sampled values that are mapped-to.
+    axis : int
+        The vector axis over which this transform operates (default=0).
+    interpolation : str
+        'nearest' or 'linear' interpolation mode to use when mapping between samples.
+    edge_mode : str | float
+        'linear', 'nearest', or float default value to use for points that are outside
+        the sample range.
+    """
+    Linear = False
+    Orthogonal = True
+    NonScaling = False
+    Isometric = False
+    def __init__(self, samples, axis=0, interpolation='linear', edge_mode='linear'):
+        self.samples = np.array(samples)
+        self.axis = axis
+        
+    @arg_to_array
+    def map(self, coords):
+        coords = np.asarray(coords)
+        
+        
