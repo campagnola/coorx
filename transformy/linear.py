@@ -646,7 +646,7 @@ class AffineTransform(BaseTransform):
         axis : array-like or None
             The x, y and z coordinates of the axis vector to rotate around.
         """
-        self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis))
+        self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis)[:3, :3])
 
     @classmethod
     def from_mapping(cls, x0, x1):
