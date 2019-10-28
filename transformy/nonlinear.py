@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
 
 from __future__ import division
 
@@ -11,9 +11,9 @@ from .base_transform import BaseTransform
 
 
 class LogTransform(BaseTransform):
-    """ Transform perfoming logarithmic transformation on three axes.
+    """ND transform perfoming logarithmic transformation.
 
-    Maps (x, y, z) => (log(base.x, x), log(base.y, y), log(base.z, z))
+    Maps (x, y, z) => (log(base_x, x), log(base_y, y), log(base_z, z))
 
     No transformation is applied for axes with base == 0.
 
@@ -22,7 +22,8 @@ class LogTransform(BaseTransform):
     Parameters
     ----------
     base : array-like
-        Base for the X, Y, Z axes.
+        Base values for each axis; length must be the same as the dimensionality of the transform. 
+        A base value of 0 disables the transform for that axis.
     """
     Linear = False
     Orthogonal = True
@@ -49,7 +50,7 @@ class LogTransform(BaseTransform):
     @property
     def base(self):
         """
-        *base* is a tuple (x, y, z) containing the log base that should be
+        *base* is a tuple containing the log base values that should be
         applied to each axis of the input vector. If any axis has a base == 0,
         then that axis is not affected.
         """
@@ -86,8 +87,6 @@ class LogTransform(BaseTransform):
 
     def __repr__(self):
         return "<LogTransform base=%s>" % (self.base)
-
-
 
 
 class PolarTransform(BaseTransform):

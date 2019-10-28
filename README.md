@@ -12,6 +12,7 @@ Object-oriented linear and nonlinear coordinate system transforms.
 * Coordinate arrays that know which coordinate system they live in to handle automatic mapping
 * Conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
 
+
 Examples
 ========
 
@@ -48,7 +49,6 @@ tr3 = CompositeTransform([tr2, tr1])
 
 tr3.map(coords)
 ```
-
 
 
 Todo
