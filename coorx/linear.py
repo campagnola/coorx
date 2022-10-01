@@ -98,7 +98,7 @@ class TTransform(BaseTransform):
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
             
-        self._offset = np.zeros(self.dims[0], dtype=np.float)
+        self._offset = np.zeros(self.dims[0], dtype=float)
         if offset is not None:
             self.offset = offset
 
@@ -237,8 +237,8 @@ class STTransform(BaseTransform):
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
             
-        self._scale = np.ones(self.dims[0], dtype=np.float)
-        self._offset = np.zeros(self.dims[0], dtype=np.float)
+        self._scale = np.ones(self.dims[0], dtype=float)
+        self._offset = np.zeros(self.dims[0], dtype=float)
 
         self.set_params(scale, offset)
 
