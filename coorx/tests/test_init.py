@@ -1,7 +1,7 @@
 import unittest
 import inspect
 import numpy as np
-import transformy as tr
+import coorx as tr
 
 
 def assert_eq(a, b):

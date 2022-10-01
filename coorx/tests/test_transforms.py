@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAVE_ITK = False
 
-import transformy as tr
+import coorx as tr
 
 NT = tr.NullTransform
 TT = tr.TTransform

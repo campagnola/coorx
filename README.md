@@ -1,4 +1,4 @@
-Transformy
+Coorx
 ==========
 
 Object-oriented linear and nonlinear coordinate system transforms.
@@ -20,7 +20,7 @@ Scale and translate 2D coordinates:
 
 ```
 import numpy as np
-from transformy import *
+from coorx import *
 
 coords = np.array([
     [ 0,  0],
@@ -63,6 +63,6 @@ Todo
 Credit
 ======
 
-Transformy is adapted from code originally written for VisPy (vispy.org),
+Coorx is adapted from code originally written for VisPy (vispy.org),
 inspired by the nice transform classes in ITK, and
 maintained by the Allen Institute for Brain Science.

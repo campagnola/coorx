@@ -1,7 +1,7 @@
-Transformy licensing terms
+Coorx licensing terms
 --------------------------
 
-Transformy is licensed under the terms of the (new) BSD license:
+Coorx is licensed under the terms of the (new) BSD license:
 
 Copyright (c) 2017, Vispy Development Team and Allen Institute for Brain
 Science. All rights reserved.
