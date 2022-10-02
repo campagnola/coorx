@@ -40,7 +40,7 @@ class BaseTransform(object):
     # as True or False.
     # (usually used for making optimization decisions)
 
-    # If True, then for any 3 colinear points, the
+    # If True, then for any set of colinear points, the
     # transformed points will also be colinear.
     Linear = None
 
@@ -48,12 +48,20 @@ class BaseTransform(object):
     # of the input position along any other axis.
     Orthogonal = None
 
-    # If True, then the distance between two points is the
+    # If True, then the distance between two input points is the
     # same as the distance between the transformed points.
     NonScaling = None
 
     # Scale factors are applied equally to all axes.
     Isometric = None
+
+    # Multiplying the input by a scale factor causes the output to be multiplied by
+    # the same factor:  Tr(s * x) = s * Tr(x)
+    Homogeneous = None
+
+    # The transform of two added vectors is the same as the sum of the individually
+    # transformed vectors:  T(a + b) = T(a) + T(b)
+    Additive = None
 
     def __init__(self, dims=0):
         if np.isscalar(dims):

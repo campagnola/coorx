@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
 from __future__ import division
 
 import numpy as np
@@ -624,6 +620,8 @@ class AffineTransform(BaseTransform):
             The x, y and z coordinates to scale around. If None,
             (0, 0, 0) will be used.
         """
+        if np.isscalar(scale):
+            scale = (scale,) * self.dims[0]
         scale_matrix = np.zeros(self.dims[::-1])
         for i in range(min(self.dims)):
             scale_matrix[i,i] = scale[i]
@@ -631,8 +629,9 @@ class AffineTransform(BaseTransform):
         if center is not None:
             raise NotImplementedError()
         self.matrix = np.dot(scale_matrix, self.matrix)
+        self.offset = np.dot(scale_matrix, self.offset)
 
-    def rotate(self, angle, axis):
+    def rotate(self, angle, axis=None):
         """
         Rotate the matrix by some angle about a given axis.
 
@@ -644,9 +643,16 @@ class AffineTransform(BaseTransform):
         angle : float
             The angle of rotation in degrees.
         axis : array-like or None
-            The x, y and z coordinates of the axis vector to rotate around.
+            The x, y and z coordinates of the axis vector to rotate around (only for 3D).
         """
-        self.matrix = np.dot(self.matrix, matrices.rotate(angle, axis))
+        if self.dims == (2, 2):
+            rm = matrices.rotate2d(angle)
+        elif self.dims == (3, 3):
+            rm = matrices.rotate3d(angle, axis)
+        else:
+            raise TypeError("Rotation only supported for 2D and 3D affine transforms")
+        self.matrix = np.dot(rm, self.matrix)
+        self.offset = np.dot(rm, self.offset)
 
     def set_mapping(self, points1, points2):
         """ Set to a 3D transformation matrix that maps points1 onto points2.
@@ -675,6 +681,12 @@ class AffineTransform(BaseTransform):
         else:
             return tr.__rmul__(self)
 
+    def __eq__(self, tr):
+        if not isinstance(tr, AffineTransform):
+            # todo: we can assess equality for some others like TTransform and STTransform
+            return False
+        return np.all(self.full_matrix == tr.full_matrix)
+    
     def __repr__(self):
         s = "%s(matrix=[" % self.__class__.__name__
         indent = " "*len(s)

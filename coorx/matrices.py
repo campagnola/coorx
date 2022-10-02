@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Library of matrix transformation functions adapted from vispy.
 """
@@ -9,53 +8,72 @@ from __future__ import division
 
 import math
 import numpy as np
+import numpy.linalg
 
 
 def translate(offset, dtype=None):
-    """Translate by an offset (x, y, z) .
+    """Return an N-dimensional translation matrix (of shape N+1,N+1)
 
     Parameters
     ----------
-    offset : array-like, shape (3,)
-        Translation in x, y, z.
+    offset : array-like
+        Amount to translate each axis
     dtype : dtype | None
-        Output type (if None, don't cast).
+        Output type (if None, then same as *offset*).
 
     Returns
     -------
     M : ndarray
         Transformation matrix describing the translation.
     """
-    assert len(offset) == 3
-    x, y, z = offset
-    M = np.array([[1., 0., 0., 0.],
-                 [0., 1., 0., 0.],
-                 [0., 0., 1., 0.],
-                 [x, y, z, 1.0]], dtype)
+    if dtype is None:
+        dtype = offset.dtype
+    M = np.eye(len(offset) + 1, dtype=dtype)
+    M[-1, :len(offset)] = offset
     return M
 
 
 def scale(s, dtype=None):
-    """Non-uniform scaling along the x, y, and z axes
+    """Return an N-dimensional scaling matrix (of shape N+1,N+1)
 
     Parameters
     ----------
-    s : array-like, shape (3,)
-        Scaling in x, y, z.
+    scale : array-like, shape (3,)
+        Scale factors for each axis
     dtype : dtype | None
-        Output type (if None, don't cast).
+        Output type (if None, then same as *scale*).
 
     Returns
     -------
     M : ndarray
         Transformation matrix describing the scaling.
     """
-    assert len(s) == 3
+    if dtype is None:
+        dtype = scale.dtype
     return np.array(np.diag(np.concatenate([s, (1.,)])), dtype)
 
 
-def rotate(angle, axis, dtype=None):
-    """The 3x3 rotation matrix for rotation about a vector.
+def rotate2d(angle, dtype=None):
+    """Return a 2D rotation matrix (shape 2,2)
+
+    Parameters
+    ----------
+    angle : float
+        The angle of rotation, in degrees.
+    dtype : dtype | None
+        Output dtype
+    """
+    rad = np.radians(angle)
+    c, s = math.cos(rad), math.sin(rad)
+    M = np.array([
+        [c,  s],
+        [-s, c],
+    ], dtype=dtype)
+    return M
+
+
+def rotate3d(angle, axis, dtype=None):
+    """Return a 3D rotation matrix (shape 3,3) for rotation about a vector.
 
     Parameters
     ----------
@@ -63,16 +81,19 @@ def rotate(angle, axis, dtype=None):
         The angle of rotation, in degrees.
     axis : ndarray
         The x, y, z coordinates of the axis direction vector.
+    dtype : dtype | None
+        Output dtype
     """
     angle = np.radians(angle)
     assert len(axis) == 3
     x, y, z = axis / np.linalg.norm(axis)
     c, s = math.cos(angle), math.sin(angle)
     cx, cy, cz = (1 - c) * x, (1 - c) * y, (1 - c) * z
-    M = np.array([[cx * x + c, cy * x - z * s, cz * x + y * s, .0],
-                  [cx * y + z * s, cy * y + c, cz * y - x * s, 0.],
-                  [cx * z - y * s, cy * z + x * s, cz * z + c, 0.],
-                  [0., 0., 0., 1.]], dtype).T
+    M = np.array([
+        [cx * x + c, cy * x - z * s, cz * x + y * s],
+        [cx * y + z * s, cy * y + c, cz * y - x * s],
+        [cx * z - y * s, cy * z + x * s, cz * z + c],
+    ], dtype).T
     return M
 
 
@@ -98,3 +119,32 @@ def affine_map(points1, points2):
         matrix[i] = np.linalg.solve(A, B[:, i])
 
     return matrix[:N]
+
+
+def bilinear_map2d(points1, points2):
+    """
+    Find a bilinear transformation matrix (shape 2x4) that maps 2D points1 onto 2D points2.
+
+    Parameters
+    ----------
+    points1 :  array-like (N, 2)
+        Array of N+1 2D points
+    points2 :  array-like (N, 2)
+        Array of N+1 2D points
+    
+    To use this matrix to map a point [x,y]::
+    
+        mapped = np.dot(matrix, [x*y, x, y, 1])
+    """
+    ## A is 4 rows (points) x 4 columns (xy, x, y, 1)
+    ## B is 4 rows (points) x 2 columns (x, y)
+    A = np.array([[points1[i,0]*points1[i,1], points1[i,0], points1[i,1], 1] for i in range(4)])
+    B = np.array([[points2[i,0], points2[i,1]] for i in range(4)])
+    
+    ## solve 2 sets of linear equations to determine transformation matrix elements
+    matrix = np.zeros((2,4))
+    for i in range(2):
+        matrix[i] = numpy.linalg.solve(A, B[:,i])  ## solve Ax = B; x is one row of the desired transformation matrix
+    
+    return matrix
+
