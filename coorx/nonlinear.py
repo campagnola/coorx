@@ -4,6 +4,8 @@
 
 from __future__ import division
 
+import warnings
+
 import numpy as np
 
 from ._util import arg_to_array, arg_to_vec, as_vec
@@ -65,13 +67,16 @@ class LogTransform(BaseTransform):
         ret = np.empty(coords.shape, coords.dtype)
         if base is None:
             base = self.base
-        for i in range(min(ret.shape[-1], 3)):
-            if base[i] > 1.0:
-                ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
-            elif base[i] < -1.0:
-                ret[..., i] = -base[i] ** coords[..., i]
-            else:
-                ret[..., i] = coords[..., i]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # divide-by-zeros and invalid values
+            for i in range(min(ret.shape[-1], 3)):
+                if base[i] > 1.0:
+                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
+                elif base[i] < -1.0:
+                    ret[..., i] = -base[i] ** coords[..., i]
+                else:
+                    ret[..., i] = coords[..., i]
+        ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
     @arg_to_array

@@ -6,6 +6,7 @@
 import unittest
 
 import numpy as np
+from coorx import LogTransform
 
 try:
     import itk
@@ -283,6 +284,16 @@ class AffineTransform(unittest.TestCase):
                     [10, 5, 3.5]])
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, :p2.shape[1]], p2)
+
+
+class LogTransformTest(unittest.TestCase):
+    def test_log(self):
+        lt = LogTransform((12, 0))
+        data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
+        outPut = lt.map(data)
+        self.assertAlmostEqual(outPut[0][0], 1)
+        self.assertAlmostEqual(outPut[1][0], 2)
+        self.assertAlmostEqual(outPut[1][1], 13.2)
 
 
 class TransformInverse(unittest.TestCase):
