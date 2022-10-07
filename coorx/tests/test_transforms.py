@@ -2,10 +2,11 @@
 # Adapted from vispy
 # Copyright (c) Vispy Development Team. All Rights Reserved.
 # Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
+import math
 import unittest
 
 import numpy as np
+from coorx import LogTransform
 
 try:
     import itk
@@ -334,6 +335,20 @@ class AffineTransform(unittest.TestCase):
         t2.rotate(90)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
+
+
+class LogTransformTest(unittest.TestCase):
+    def test_log(self):
+        lt = LogTransform((12, 0))
+        data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
+        output = lt.map(data)
+        self.assertAlmostEqual(output[0][0], 1)
+        self.assertAlmostEqual(output[1][0], 2)
+        self.assertAlmostEqual(output[1][1], 13.2)
+        self.assertTrue(math.isnan(output[2][0]))
+        self.assertTrue(math.isnan(output[3][0]))
+        self.assertTrue(math.isnan(output[4][0]))
+        self.assertAlmostEqual(output[4][1], 0)
 
 
 class TransformInverse(unittest.TestCase):
