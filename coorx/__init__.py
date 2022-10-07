@@ -1,18 +1,11 @@
-# -*- coding: utf-8 -*-
-"""
-Provides classes representing different transform types suitable for
-use with visuals and scenes.
-
-Adapted from vispy.visuals.transforms
-Copyright (c) Vispy Development Team. All Rights Reserved.
-Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-"""
-
 from .base_transform import BaseTransform, InverseTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform
 from .nonlinear import LogTransform, PolarTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform
 from ._util import arg_to_array, arg_to_vec, as_vec, TransformCache
+
+
+__version__ = '1.0.0'
 
 
 def transform_types():

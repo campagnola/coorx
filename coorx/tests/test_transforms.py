@@ -157,6 +157,7 @@ class CompositeTransform(unittest.TestCase):
 
 class TTransform(unittest.TestCase):
     def setUp(self):
+        np.random.seed(0)
         self.transforms = [
             TT(),
             TT(dims=(3, 3)),
@@ -255,7 +256,42 @@ class STTransform(unittest.TestCase):
 
 
 class AffineTransform(unittest.TestCase):
-    def test_affine_mapping(self):
+    def test_modifiers(self):
+        def check_matrix(t, m):
+            assert np.allclose(t.full_matrix, m)
+            assert np.allclose(t.matrix, m[:3, :3])
+            assert np.allclose(t.offset, m[:3, 3])
+
+        t = tr.AffineTransform(dims=(3, 3))
+        m = np.eye(4)
+        check_matrix(t, m)
+        
+        t.translate(1)
+        m[:3, 3] += 1
+        check_matrix(t, m)
+
+        t.scale(2)
+        m[:3] *= 2
+        check_matrix(t, m)
+
+        t.translate(3)
+        m[:3, 3] += 3
+        check_matrix(t, m)
+
+        t.rotate(90, (0, 0, 1))
+        m[:2] = [
+            [0, 2, 0, 5], 
+            [-2, 0, 0, -5]
+        ]
+        check_matrix(t, m)
+
+        rm = tr.AffineTransform(dims=(3, 3))
+        rm.rotate(90, (0, 0, 1))
+        t2 = rm * tr.TTransform([3, 3, 3]) * tr.STTransform(scale=[2, 2, 2]) * tr.TTransform([1, 1, 1])
+        assert t2 == t
+
+
+    def x_test_affine_mapping(self):
         t = tr.AffineTransform()
         p1 = np.array([[0, 0, 0],
                        [1, 0, 0],
@@ -266,24 +302,39 @@ class AffineTransform(unittest.TestCase):
         p2 = p1 + 5.5
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, :p2.shape[1]], p2)
+        t2 = tr.AffineTransform()
+        t2.translate(5.5)
+        assert np.allclose(t.full_matrix, t2.full_matrix)
 
         # test pure scaling
         p2 = p1 * 5.5
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, :p2.shape[1]], p2)
+        t2 = tr.AffineTransform()
+        t2.scale(5.5)
+        assert np.allclose(t.full_matrix, t2.full_matrix)
 
         # test scale + translate
         p2 = (p1 * 5.5) + 3.5
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, :p2.shape[1]], p2)
+        t2 = tr.AffineTransform()
+        t2.scale(3.5)
+        t2.translate(5.5)
+        assert np.allclose(t.full_matrix, t2.full_matrix)
 
-        # test SRT
+        # test scale + translate + rotate
         p2 = np.array([[10, 5, 3],
                     [10, 15, 3],
                     [30, 5, 3],
                     [10, 5, 3.5]])
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, :p2.shape[1]], p2)
+        t2 = tr.AffineTransform()
+        t2.scale(3.5)
+        t2.rotate(90)
+        t2.translate(5.5)
+        assert np.allclose(t.full_matrix, t2.full_matrix)
 
 
 class LogTransformTest(unittest.TestCase):
