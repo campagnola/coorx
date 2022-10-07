@@ -2,7 +2,7 @@
 # Adapted from vispy
 # Copyright (c) Vispy Development Team. All Rights Reserved.
 # Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
+import math
 import unittest
 
 import numpy as np
@@ -341,10 +341,14 @@ class LogTransformTest(unittest.TestCase):
     def test_log(self):
         lt = LogTransform((12, 0))
         data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
-        outPut = lt.map(data)
-        self.assertAlmostEqual(outPut[0][0], 1)
-        self.assertAlmostEqual(outPut[1][0], 2)
-        self.assertAlmostEqual(outPut[1][1], 13.2)
+        output = lt.map(data)
+        self.assertAlmostEqual(output[0][0], 1)
+        self.assertAlmostEqual(output[1][0], 2)
+        self.assertAlmostEqual(output[1][1], 13.2)
+        self.assertTrue(math.isnan(output[2][0]))
+        self.assertTrue(math.isnan(output[3][0]))
+        self.assertTrue(math.isnan(output[4][0]))
+        self.assertAlmostEqual(output[4][1], 0)
 
 
 class TransformInverse(unittest.TestCase):
