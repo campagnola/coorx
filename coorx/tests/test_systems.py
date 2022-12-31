@@ -10,6 +10,7 @@ missing_cs = "No coordinate system named"
 wrong_ndim = r"is \dD \(expected \dD\)"
 wrong_system = "maps from system"
 
+
 def test_coordinate_systems():
     default_graph = CoordinateSystemGraph.get_graph(None)
     pt_cs1 = Point([0, 0], "cs1")
@@ -28,9 +29,8 @@ def test_coordinate_systems():
  
     cs1_to_cs2 = STTransform(scale=[3, 2], offset=[10, 20], from_cs='cs1', to_cs='cs2')
 
-    graph = CoordinateSystemGraph.get_graph()
-    assert graph.transform('cs1', 'cs2') is cs1_to_cs2
-    assert graph.transform('cs2', 'cs1') is cs1_to_cs2.inverse
+    assert default_graph.transform('cs1', 'cs2') is cs1_to_cs2
+    assert default_graph.transform('cs2', 'cs1') is cs1_to_cs2.inverse
 
     pt_cs2 = cs1_to_cs2.map(pt_cs1)
 

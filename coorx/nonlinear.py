@@ -131,4 +131,3 @@ class PolarTransform(BaseTransform):
 #    """ Multiple bilinear transforms in a grid arrangement.
 #    """
 #    # TODO
-

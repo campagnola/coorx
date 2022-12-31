@@ -38,7 +38,3 @@ class Point(PointArray):
     """Represents a single point in space; one may request the coordinates of this point 
     in any coordinate system.
     """
-
-    def __init__(self, coordinate, system, graph:StrOrNone=None):
-        PointArray.__init__(self, [coordinate], system=system, graph=graph)
-
