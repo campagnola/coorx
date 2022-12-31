@@ -212,7 +212,6 @@ class TTransform(unittest.TestCase):
             ttr.translate(offset)
             itk_tr.Translate(itk.Point[itk.D, 3](offset))
             assert np.allclose(ttr.offset, np.array(itk_tr.GetOffset()))
-                
         
     def test_inverse(self):
         for tr in self.transforms:

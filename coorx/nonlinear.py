@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Vispy Development Team. All Rights Reserved.
 # Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
-from __future__ import division
-
 import numpy as np
-
-from ._util import arg_to_array, arg_to_vec, as_vec
 from .base_transform import BaseTransform
 
 
@@ -30,7 +25,7 @@ class LogTransform(BaseTransform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, base=None, dims=None):
+    def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
             if dims is not None:
                 raise TypeError("Cannot specify both base and dims")
@@ -41,7 +36,7 @@ class LogTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
         
-        super(LogTransform, self).__init__(dims)
+        super().__init__(dims, **kwargs)
         
         self._base = np.zeros(self.dims[0], dtype=np.float32)
         if base is not None:
@@ -60,8 +55,7 @@ class LogTransform(BaseTransform):
     def base(self, s):
         self._base[:] = s
 
-    @arg_to_array
-    def map(self, coords, base=None):
+    def _map(self, coords, base=None):
         ret = np.empty(coords.shape, coords.dtype)
         if base is None:
             base = self.base
@@ -74,8 +68,7 @@ class LogTransform(BaseTransform):
                 ret[..., i] = coords[..., i]
         return ret
 
-    @arg_to_array
-    def imap(self, coords):
+    def _imap(self, coords):
         return self.map(coords, -self.base)
 
     @property
@@ -100,13 +93,12 @@ class PolarTransform(BaseTransform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, dims=None):
+    def __init__(self, dims=None, **kwargs):
         if dims is None:
             dims = (3, 3)
-        super(PolarTransform, self).__init__(dims)
+        super().__init__(dims, **kwargs)
 
-    @arg_to_array
-    def map(self, coords):
+    def _map(self, coords):
         ret = np.empty(coords.shape, coords.dtype)
         ret[..., 0] = coords[..., 1] * np.cos(coords[..., 0])
         ret[..., 1] = coords[..., 1] * np.sin(coords[..., 0])
@@ -114,8 +106,7 @@ class PolarTransform(BaseTransform):
             ret[..., i] = coords[..., i]
         return ret
 
-    @arg_to_array
-    def imap(self, coords):
+    def _imap(self, coords):
         ret = np.empty(coords.shape, coords.dtype)
         ret[..., 0] = np.arctan2(coords[..., 0], coords[..., 1])
         ret[..., 1] = (coords[..., 0]**2 + coords[..., 1]**2) ** 0.5

@@ -16,8 +16,9 @@ API Issues to work out:
     rect.
 """
 
-from __future__ import division
 import numpy as np
+from .systems import CoordinateSystemGraph
+from .types import Dims, StrOrNone, Mappable
 
 
 class BaseTransform(object):
@@ -63,8 +64,8 @@ class BaseTransform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    def __init__(self, dims=0):
-        if np.isscalar(dims):
+    def __init__(self, dims:Dims=None, from_cs:StrOrNone=None, to_cs:StrOrNone=None, cs_graph:StrOrNone=None):
+        if dims is None or np.isscalar(dims):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
@@ -72,6 +73,14 @@ class BaseTransform(object):
         self._inverse = None
         self._dynamic = False
         self._change_callbacks = []
+        self._systems = (None, None)
+
+        # optional coordinate system tracking
+        self._cs_graph = None
+        assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be str"
+        if from_cs is not None:
+            self._cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
+            self._cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
 
     @property
     def dims(self):
@@ -79,7 +88,13 @@ class BaseTransform(object):
         """
         return self._dims
 
-    def map(self, obj):
+    @property
+    def systems(self):
+        """The CoordinateSystem instances mapped from and to by this transform.
+        """
+        return self._systems
+
+    def map(self, obj:Mappable):
         """
         Return *obj* mapped through the forward transformation.
 
@@ -88,9 +103,16 @@ class BaseTransform(object):
             obj : tuple (x,y) or (x,y,z)
                   array with shape (..., 2) or (..., 3)
         """
-        raise NotImplementedError()
+        return self._prepare_and_map(obj)
 
-    def imap(self, obj):
+    def _map(self, arr):
+        """Map a 2D array (n_pts, n_dims) through this transform.
+
+        This method must be redefined in sublcasses.
+        """
+        raise NotImplementedError
+
+    def imap(self, obj:Mappable):
         """
         Return *obj* mapped through the inverse transformation.
 
@@ -99,7 +121,65 @@ class BaseTransform(object):
             obj : tuple (x,y) or (x,y,z)
                   array with shape (..., 2) or (..., 3)
         """
-        raise NotImplementedError()
+        return self.inverse.map(obj)
+
+    def _imap(self, arr):
+        """Map a 2D array (n_pts, n_dims) through the inverse of this transform.
+
+        This method may be redefined in sublcasses.
+        """
+        raise NotImplementedError
+
+    def _prepare_and_map(self, obj:Mappable):
+        """
+        Convert a mappable object to a 2D numpy array, pass it through this Transform's _map method, 
+        then convert and return the result. 
+        
+        The Transform's _map method will be called with a 2D array
+        of shape (N, M), where N is the number of points and M is the number of dimensions. 
+        Accepts lists, tuples, and arrays of any dimensionality and flattens extra dimensions into N.
+        After mapping, any flattened axes are re-expanded to match the original input shape.
+
+        For list, tuple, and array inputs, the return value is a numpy array of the same shape as 
+        the input, with the exception that the last dimension is determined only by the return value.
+
+        Alternatively, any class may determine how to map itself by defining a _coorx_transform() 
+        method that accepts this transform as an argument.
+        """
+        if hasattr(obj, '_coorx_transform'):
+            # let the object decide how to apply this transform
+            return obj._coorx_transform(tr=self)
+        elif isinstance(obj, (tuple, list, np.ndarray)):
+            arr_2d, original_shape = self._prepare_arg_for_mapping(obj)
+            if self.dims[0] not in (None, arr_2d.shape[1]):
+                raise TypeError(f"Transform maps from {self.dims[0]}D, but data to be mapped is {arr_2d.shape[1]}D")
+            ret = self._map(arr_2d)
+            assert ret.ndim == 2
+            assert self.dims[1] in (None, ret.shape[1]), f"Transform maps to {self.dims[1]}D, but mapping generated {ret.shape[1]}D"
+            return self._restore_shape(ret, original_shape)
+        else:
+            raise TypeError(f"Cannot use argument for mapping: {obj}")
+
+    @staticmethod
+    def _prepare_arg_for_mapping(arg):
+        """Convert arg to a 2D numpy array.
+
+        If the argument ndim is > 2, then all dimensions except the last are flattened.
+
+        Return the reshaped array and a tuple containing the original shape. 
+        """
+        arg = np.asarray(arg)
+        original_shape = arg.shape
+        arg = arg.reshape(int(np.product(arg.shape[:-1])), arg.shape[-1])
+        return arg, original_shape
+
+    @staticmethod
+    def _restore_shape(arg, shape):
+        """Return an array with shape determined by shape[:-1] + (arg.shape[-1],)
+        """
+        if arg is None:
+            return arg
+        return arg.reshape(shape[:-1] + (arg.shape[-1],))
 
     @property
     def inverse(self):
@@ -215,9 +295,17 @@ class InverseTransform(BaseTransform):
     def __init__(self, transform):
         BaseTransform.__init__(self)
         self._inverse = transform
-        self.map = transform.imap
-        self.imap = transform.map
+        self._map = transform._imap
+        self._imap = transform._map
     
+    @property
+    def dims(self):
+        return self._inverse.dims[::-1]
+
+    @property
+    def systems(self):
+        return self._inverse.systems[::-1]
+
     @property
     def Linear(self):
         return self._inverse.Linear

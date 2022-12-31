@@ -2,7 +2,6 @@ from .base_transform import BaseTransform, InverseTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform
 from .nonlinear import LogTransform, PolarTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform
-from ._util import arg_to_array, arg_to_vec, as_vec, TransformCache
 
 
 __version__ = '1.0.0'

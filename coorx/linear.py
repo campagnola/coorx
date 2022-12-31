@@ -2,26 +2,22 @@ from __future__ import division
 
 import numpy as np
 
-from ._util import arg_to_vec, as_vec
 from .base_transform import BaseTransform
 from . import matrices
 
 
 class NullTransform(BaseTransform):
     """ Transform having no effect on coordinates (identity transform).
-    
-    The default dimensionality is (3, 3), but this is ignored when mapping;
-    all argments are returned unmodified.
     """
     Linear = True
     Orthogonal = True
     NonScaling = True
     Isometric = True
 
-    def __init__(self, dims=3):
-        BaseTransform.__init__(self, dims)
+    def __init__(self, dims=None, **kwargs):
+        super().__init__(dims, **kwargs)
 
-    def map(self, coords):
+    def _map(self, coords):
         """Return the input array unmodified.
 
         Parameters
@@ -31,7 +27,7 @@ class NullTransform(BaseTransform):
         """
         return coords
 
-    def imap(self, coords):
+    def _imap(self, coords):
         """Return the input array unmodified.
 
         Parameters
@@ -70,7 +66,7 @@ class TTransform(BaseTransform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, offset=None, dims=None):
+    def __init__(self, offset=None, dims=None, **kwargs):
 
         if offset is not None:
             offset = np.asarray(offset)
@@ -89,7 +85,7 @@ class TTransform(BaseTransform):
         except (TypeError, AssertionError):
             raise TypeError("dims must be length-2 tuple")
 
-        super(TTransform, self).__init__(dims)
+        super().__init__(dims, **kwargs)
         
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
@@ -98,8 +94,7 @@ class TTransform(BaseTransform):
         if offset is not None:
             self.offset = offset
 
-    @arg_to_vec
-    def map(self, coords):
+    def _map(self, coords):
         """Return translated coordinates.
 
         Parameters
@@ -113,12 +108,9 @@ class TTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords + translation
         """
-        if coords.shape[-1] != self.dims[0]:
-            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return coords + self.offset[np.newaxis, :]
 
-    @arg_to_vec
-    def imap(self, coords):
+    def _imap(self, coords):
         """Return inverse-mapped coordinates.
 
         Parameters
@@ -132,8 +124,6 @@ class TTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords - translation
         """
-        if coords.shape[-1] != self.dims[1]:
-            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
         return coords - self.offset[np.newaxis, :]
 
     @property
@@ -215,7 +205,7 @@ class STTransform(BaseTransform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, scale=None, offset=None, dims=None):
+    def __init__(self, scale=None, offset=None, dims=None, **kwargs):
 
         if scale is not None or offset is not None:
             if dims is not None:
@@ -228,7 +218,7 @@ class STTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
             
-        super(STTransform, self).__init__(dims)
+        super().__init__(dims, **kwargs)
         
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
@@ -238,8 +228,7 @@ class STTransform(BaseTransform):
 
         self.set_params(scale, offset)
 
-    @arg_to_vec
-    def map(self, coords):
+    def _map(self, coords):
         """Return coordinates mapped by scale and translation.
 
         Parameters
@@ -253,12 +242,9 @@ class STTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: coords * scale + offset
         """
-        if coords.shape[-1] != self.dims[0]:
-            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return coords * self.scale[None, :] + self.offset[None, :]
 
-    @arg_to_vec
-    def imap(self, coords):
+    def _imap(self, coords):
         """Return coordinates inverse-mapped by translation and scale.
 
         Parameters
@@ -272,8 +258,6 @@ class STTransform(BaseTransform):
         coords : ndarray
             Mapped coordinates: (coords - offset) / scale
         """
-        if coords.shape[-1] != self.dims[1]:
-            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
         return (coords - self.offset[None, :]) / self.scale[None, :]
 
     @property
@@ -329,7 +313,7 @@ class STTransform(BaseTransform):
         offset = np.asarray(offset)
         self.offset = self.offset + offset
 
-    def zoom(self, zoom, center=(0, 0, 0), mapped=True):
+    def zoom(self, zoom, center, mapped=True):
         """Update the transform such that its scale factor is changed, but
         the specified center point is left unchanged.
 
@@ -344,8 +328,9 @@ class STTransform(BaseTransform):
             Whether *center* is expressed in mapped coordinates (True) or
             unmapped coordinates (False).
         """
-        zoom = as_vec(zoom, 3, default=1)
-        center = as_vec(center, 3, default=0)
+        zoom = np.asarray(zoom)
+        center = np.asarray(center)
+        assert zoom.shape == center.shape == (self.ndim[0],)
         scale = self.scale * zoom
         if mapped:
             trans = center - (center - self.offset) * zoom
@@ -462,7 +447,7 @@ class AffineTransform(BaseTransform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, matrix=None, offset=None, dims=None):
+    def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
             if matrix.ndim != 2:
                 raise TypeError("Matrix must be 2-dimensional")
@@ -472,7 +457,7 @@ class AffineTransform(BaseTransform):
         if dims is None:
             dims = (3, 3)
         
-        super(AffineTransform, self).__init__(dims)
+        super().__init__(dims, **kwargs)
         
         self.reset()
         if matrix is not None:
@@ -480,8 +465,7 @@ class AffineTransform(BaseTransform):
         if offset is not None:
             self.offset = offset
 
-    @arg_to_vec
-    def map(self, coords):
+    def _map(self, coords):
         """Map coordinates
 
         Parameters
@@ -499,8 +483,7 @@ class AffineTransform(BaseTransform):
             raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
         return np.dot(self.matrix, coords.T).T + self.offset[None, :]
 
-    @arg_to_vec
-    def imap(self, coords):
+    def _imap(self, coords):
         """Inverse map coordinates
 
         Parameters
