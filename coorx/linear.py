@@ -916,7 +916,6 @@ class SRT3DTransform(BaseTransform):
             mapped = tr.map(points1)
             err = (mapped - points2).flatten()
             err = (err**2).sum()**0.5
-            print(err, params)
             return err
 
         # result = scipy.optimize.leastsq(err_func, x0, args=(points1, points2))
