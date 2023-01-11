@@ -227,7 +227,7 @@ class BaseTransform(object):
     def remove_change_callback(self, cb):
         self._change_callbacks.remove(cb)
 
-    def update(self, *args):
+    def _update(self, *args):
         """
         Called to inform any listeners that this transform has changed.
         """

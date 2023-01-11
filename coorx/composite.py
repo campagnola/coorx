@@ -88,7 +88,7 @@ class CompositeTransform(BaseTransform):
         self._transforms = tr
         for t in self._transforms:
             t.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
     @property
     def simplified(self):
@@ -171,7 +171,7 @@ class CompositeTransform(BaseTransform):
         """
         self.transforms.append(tr)
         tr.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
     def prepend(self, tr):
         """
@@ -184,18 +184,18 @@ class CompositeTransform(BaseTransform):
         """
         self.transforms.insert(0, tr)
         tr.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
     def _subtr_changed(self, ev):
         """One of the internal transforms changed; propagate the signal. 
         """
-        self.update(ev)
+        self._update(ev)
 
     def __setitem__(self, index, tr):
         self._transforms[index].remove_change_callback(self._subtr_changed)
         self._transforms[index] = tr
         tr.add_change_callback(self.subtr_changed)
-        self.update()
+        self._update()
 
     def __mul__(self, tr):
         if isinstance(tr, CompositeTransform):
@@ -241,7 +241,7 @@ class SimplifiedCompositeTransform(CompositeTransform):
         if event is not None:
             for source in event.sources[::-1]:
                 if source in self.transforms:
-                    self.update(event)
+                    self._update(event)
                     return
         
         # First flatten the chain by expanding all nested chains

@@ -1,6 +1,8 @@
 from __future__ import division
 
 import numpy as np
+import numpy.linalg
+import scipy.optimize
 
 from .base_transform import BaseTransform
 from . import matrices
@@ -139,7 +141,7 @@ class TTransform(BaseTransform):
             return
         
         self._offset[:] = t
-        self.update()   # inform listeners there has been a change
+        self._update()   # inform listeners there has been a change
 
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
@@ -300,7 +302,7 @@ class STTransform(BaseTransform):
                 need_update = True
 
         if need_update:
-            self.update()   # inform listeners there has been a change
+            self._update()   # inform listeners there has been a change
 
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
@@ -543,7 +545,7 @@ class AffineTransform(BaseTransform):
                 need_update = True
 
         if need_update:
-            self.update()
+            self._update()
 
     @property
     def inv_matrix(self):
@@ -638,14 +640,14 @@ class AffineTransform(BaseTransform):
         self.offset = np.dot(rm, self.offset)
 
     def set_mapping(self, points1, points2):
-        """ Set to a 3D transformation matrix that maps points1 onto points2.
+        """Set to a transformation matrix that maps points1 onto points2.
 
         Parameters
         ----------
         points1 : array-like, shape (4, 3)
-            Four starting 3D coordinates.
+            Four starting coordinates.
         points2 : array-like, shape (4, 3)
-            Four ending 3D coordinates.
+            Four ending coordinates.
         """
         m = matrices.affine_map(points1, points2)
         self.set_params(matrix=m[:,:-1], offset=m[:, -1])
@@ -655,7 +657,7 @@ class AffineTransform(BaseTransform):
         """
         self._matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
         self._offset = np.zeros(self.dims[1])
-        self.update()
+        self._update()
 
     def __mul__(self, tr):
         if isinstance(tr, AffineTransform):
@@ -678,3 +680,276 @@ class AffineTransform(BaseTransform):
         s += indent + str(list(self.matrix[2])) + ",\n"
         s += indent + str(list(self.matrix[3])) + "] at 0x%x)" % id(self)
         return s
+
+
+class SRT2DTransform:
+    def __init__(self, **kwds):
+        raise NotImplementedError()
+
+
+class SRT3DTransform(BaseTransform):
+    """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
+    This transform has no shear; angles are always preserved.
+    """
+    def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
+        kwds.setdefault('dims', (3, 3))
+        super().__init__(**kwds)
+        assert self.dims == (3, 3), "SRT3DTransform can only map 3D coordinates"
+        self._state = {
+            'offset': np.zeros(3),
+            'scale': np.ones(3),
+            'angle': 0,
+            'axis': np.array([0., 0., 1.])
+        }
+        self._affine = None
+        if all([p is None for p in (offset, scale, angle, axis)]):
+            if init is not None:
+                if isinstance(init, SRT3DTransform):
+                    self.set_state(**init._state)
+                elif isinstance(init, SRT2DTransform):
+                    self.set_state(
+                        offset=tuple(init._state['offset']) + (0,),
+                        scale=tuple(init._state['scale']) + (1,),
+                        angle=init._state['angle'],
+                        axis=(0, 0, 1),
+                    )
+                elif isinstance(init, AffineTransform):
+                    self.set_from_affine(init)
+                else:
+                    raise Exception("Cannot build SRTTransform3D from argument type:", type(init))
+        else:
+            assert init is None
+            self.set_params(offset, scale, angle, axis)
+
+    def get_scale(self):
+        return np.array(self._state['scale'])
+        
+    def get_rotation(self):
+        """Return (angle, axis) of rotation"""
+        return self._state['angle'], np.array([self._state['axis']])
+        
+    def get_translation(self):
+        return np.array(self._state['offset'])
+    
+    def reset(self):
+        self._state = {
+            'offset': np.array([0,0,0]),
+            'scale': np.array([1,1,1]),
+            'angle': 0.0,  ## in degrees
+            'axis': (0, 0, 1)
+        }
+        self._update_affine()
+        
+    def translate(self, *args):
+        """Adjust the translation of this transform"""
+        t = np.array(args)
+        self.set_offset(self._state['offset']+t)
+        
+    def set_offset(self, offset):
+        """Set the translation of this transform"""
+        self.set_params(offset=offset)
+        
+    def scale(self, *args):
+        """adjust the scale of this transform"""
+        ## try to prevent accidentally setting 0 scale on z axis
+        if len(args) == 1 and hasattr(args[0], '__len__'):
+            args = args[0]
+        if len(args) == 2:
+            args = args + (1,)
+            
+        s = np.array(args)
+        self.set_scale(self._state['scale'] * s)
+        
+    def set_scale(self, scale):
+        """Set the scale of this transform"""
+        self.set_params(scale=scale)
+        
+    def rotate(self, angle, axis=(0,0,1)):
+        """Adjust the rotation of this transform"""
+        origAxis = self._state['axis']
+        if axis[0] == origAxis[0] and axis[1] == origAxis[1] and axis[2] == origAxis[2]:
+            self.set_rotation(self._state['angle'] + angle)
+        else:
+            m = AffineTransform()
+            m.translate(self._state['offset'])
+            m.rotate(self._state['angle'], self._state['axis'])
+            m.rotate(angle, axis)
+            m.scale(self._state['scale'])
+            self.set_from_affine(m)
+        
+    def set_rotation(self, angle, axis=(0,0,1)):
+        """Set the transformation rotation to angle (in degrees)"""
+        self.set_params(angle=angle, axis=axis)
+    
+    def set_from_affine(self, tr):
+        """
+        Set this transform based on the elements of *m*
+        The input matrix must be affine AND have no shear,
+        otherwise the conversion will most likely fail.
+        """
+        assert tr.dims == (3, 3)
+
+        # scale is vector-length of first three matrix columns
+        m = tr.matrix
+        scale = (m**2).sum(axis=0)**0.5
+
+        # see whether there is an inversion
+        z = np.cross(m[0], m[1])
+        if np.dot(z, m[2]) < 0:
+            scale[1] *= -1  ## doesn't really matter which axis we invert
+        
+        ## rotation axis is the eigenvector with eigenvalue=1
+        r = m / scale[np.newaxis, :]
+        try:
+            evals, evecs = numpy.linalg.eig(r)
+        except Exception:
+            print("Rotation matrix: %s" % str(r))
+            print("Scale: %s" % str(scale))
+            print("Original matrix: %s" % str(m))
+            raise
+        eigIndex = np.argwhere(np.abs(evals-1) < 1e-6)
+        if len(eigIndex) < 1:
+            print("eigenvalues: %s" % str(evals))
+            print("eigenvectors: %s" % str(evecs))
+            print("index: %s, %s" % (str(eigIndex), str(evals-1)))
+            raise Exception("Could not determine rotation axis.")
+        axis = evecs[:,eigIndex[0,0]].real
+        axis /= ((axis**2).sum())**0.5
+        
+        # trace(r) == 2 cos(angle) + 1, so:
+        cos = (r.trace()-1)*0.5  # this only gets us abs(angle)
+        
+        # The off-diagonal values can be used to correct the angle ambiguity, 
+        # but we need to figure out which element to use:
+        axisInd = np.argmax(np.abs(axis))
+        rInd,sign = [((1,2), -1), ((0,2), 1), ((0,1), -1)][axisInd]
+        
+        # Then we have r-r.T = sin(angle) * 2 * sign * axis[axisInd];
+        # solve for sin(angle)
+        sin = (r-r.T)[rInd] / (2. * sign * axis[axisInd])
+        
+        # finally, we get the complete angle from arctan(sin/cos)
+        angle = np.arctan2(sin, cos) * 180 / np.pi
+        if angle == 0:
+            axis = (0,0,1)
+
+        self.set_params(
+            offset=tr.offset,
+            scale=scale,
+            angle=angle,
+            axis=axis
+        )
+        
+    def as2D(self):
+        """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
+        return SRT2DTransform(self)
+
+    @property
+    def params(self):
+        return {
+            'offset': tuple(self._state['offset']), 
+            'scale': tuple(self._state['scale']), 
+            'angle': self._state['angle'], 
+            'axis': tuple(self._state['axis']),
+        }
+
+    def _map(self, arr):
+        return self._get_affine()._map(arr)
+
+    def _imap(self, arr):
+        return self._get_affine()._imap(arr)
+
+    def set_params(self, offset=None, scale=None, angle=None, axis=None):
+        need_update = False
+        need_update |= self._set_param('offset', offset)
+        need_update |= self._set_param('scale', scale)
+        need_update |= self._set_param('angle', angle)
+        need_update |= self._set_param('axis', axis)
+
+        if need_update:
+            self._update_affine()
+
+    def set_mapping(self, points1, points2):
+        """Set to a transformation that maps points1 onto points2.
+
+        Parameters
+        ----------
+        points1 : ndarray, shape (N, 3)
+            Input coordinates.
+        points2 : ndarray, shape (N, 3)
+            Output coordinates.
+        """
+        # aff = AffineTransform(dims=(3, 3))
+        # aff.set_mapping(points1, points2)
+        # self.set_from_affine(aff)
+        params = self.params
+        # params_flat = []
+        # param_len = {}
+        # for k,v in params.items():
+        #     if np.isscalar(v):
+        #         params_flat.append(v)
+        #         param_len[k] = 0
+        #     else:
+        #         params_flat.extend(v)
+        #         param_len[k] = len(v)
+        params_flat = list(params['offset']) + [params['scale'][0]] + list(params['axis']) + [params['angle']]
+        params_flat = list(params['offset']) + list(params['scale']) + list(params['axis']) + [params['angle']]
+        x0 = np.array(params_flat)
+
+        def unflatten_params(x):
+            # return {'offset': x[:3], 'scale': (x[3], x[3], x[3]), 'axis': x[4:7], 'angle': x[7]}
+            return {'offset': x[:3], 'scale': x[3:6], 'axis': x[6:9], 'angle': x[9]}
+            # params = {}
+            # i = 0
+            # for k,l in param_len.items():
+            #     if l == 0:
+            #         params[k] = x[i]
+            #         i += 1
+            #     else:
+            #         params[k] = x[i:i+l]
+            #         i += l
+            # return params
+
+        def err_func(x, points1, points2):
+            params = unflatten_params(x)
+            tr = SRT3DTransform(**params)
+            mapped = tr.map(points1)
+            err = (mapped - points2).flatten()
+            err = (err**2).sum()**0.5
+            print(err, params)
+            return err
+
+        # result = scipy.optimize.leastsq(err_func, x0, args=(points1, points2))
+        # params = unflatten_params(result[0])
+        result = scipy.optimize.minimize(err_func, x0, args=(points1, points2), method=None)
+        params = unflatten_params(result.x)
+
+        self.set_params(**params)
+
+    def _set_param(self, param, value):
+        if value is None:
+            return False
+        current_value = self._state[param]
+        if np.isscalar(current_value):
+            assert np.isscalar(value)
+            if value == current_value:
+                return False
+        else:
+            value = np.asarray(value)
+            assert len(value) == len(current_value)
+            if np.all(current_value == value):
+                return False
+        self._state[param] = value
+        return True
+
+    def _update_affine(self):
+        self._affine = None
+        self._update()
+
+    def _get_affine(self):
+        if self._affine is None:
+            self._affine = AffineTransform(dims=(3, 3))
+            self._affine.scale(self._state['scale'])
+            self._affine.rotate(self._state['angle'], self._state['axis'])
+            self._affine.translate(self._state['offset'])
+        return self._affine
