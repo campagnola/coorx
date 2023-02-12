@@ -53,7 +53,7 @@ class InitTests(unittest.TestCase):
         for typ in coorx.transform_types():
             if typ in [coorx.InverseTransform, coorx.CompositeTransform, coorx.SimplifiedCompositeTransform]:
                 continue
-            transform1 = typ()
+            transform1 = typ(dims=(3, 3))
             state = transform1.save_state()
             transform2 = coorx.create_transform(**state)
             assert type(transform1) is type(transform2)

@@ -76,7 +76,6 @@ class BaseTransform(object):
         self._systems = (None, None)
 
         # optional coordinate system tracking
-        self._cs_graph = None
         self.set_systems(from_cs, to_cs, cs_graph)
 
     @property
@@ -84,6 +83,34 @@ class BaseTransform(object):
         """Tuple holding the (input, output) dimensions for this transform.
         """
         return self._dims
+
+    def _dims_from_params(self, params:dict, dims=None):
+        """Determine dimensionality from parameters.
+
+        If *dims* is provided, then it must be a tuple (in, out) and it must agree with the length of all provided parameters.
+        If *dims* is not provided, then it is determined from length of parameters, which must be in agreement.
+        """
+        assert len(params) > 0
+        inferred_dims = {k:(len(v), len(v)) for k,v in params.items() if v is not None}
+        if dims is not None:
+            for k,v in inferred_dims.items():
+                assert v == dims, f"Length of {k} ({len(dims[k])}) does not match dims {dims}"
+            return dims
+        
+        if len(inferred_dims) == 0:
+            msg = f"Could not determine dimensionality of transform. "
+            param_names = ' '.join(list(params.keys()))
+            if len(params) == 1:
+                msg += f"Specify dims or {param_names}."
+            else:
+                msg += f"Specify dims or at least one of {param_names}."
+            raise Exception(msg)
+        
+        keys = list(inferred_dims.keys())
+        dims = inferred_dims[keys[0]]
+        for k in keys[1:]:
+            assert inferred_dims[k] == dims, f"Length of {k} ({len(params[k])}) does not match length of {keys[0]} ({len(params[keys[0]])})"
+        return dims
 
     @property
     def systems(self):
@@ -94,8 +121,8 @@ class BaseTransform(object):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be str"
         if from_cs is not None:
-            self._cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
-            self._cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
+            cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
+            cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
 
     def map(self, obj:Mappable):
         """
@@ -237,12 +264,17 @@ class BaseTransform(object):
     def remove_change_callback(self, cb):
         self._change_callbacks.remove(cb)
 
-    def _update(self, *args):
+    def _update(self, source_event=None):
         """
         Called to inform any listeners that this transform has changed.
         """
+        event = ChangeEvent(transform=self, source_event=source_event)
         for cb in self._change_callbacks:
-            cb(*args)
+            try:
+                cb(event)
+            except Exception as exc:
+                print(f"Error invoking callback {cb}")
+                raise
 
     def __mul__(self, tr):
         """
@@ -288,18 +320,35 @@ class BaseTransform(object):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['systems'] = [None if sys is None else sys.name for sys in self.systems]
-        state['_cs_graph'] = None if self._cs_graph is None else self._cs_graph.name
+        state['_change_callbacks'] = []
+        state['_inverse'] = None
+        if self.systems[0] is None:
+            state['_systems'] = (None, None, None)
+        else:
+            state['_systems'] = (self.systems[0].name, self.systems[1].name, self.systems[0].graph.name)
         return state
 
     def __setstate__(self, state):
-        systems = state.pop('systems', (None, None))
-        graph = state.pop('_cs_graph', None)
-        self.__dict__.update(state)        
-        self.set_systems(systems[0], systems[1], graph)
+        from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
+        self.__dict__.update(state)
+        self._systems = (None, None)
+        self.set_systems(from_cs, to_cs, graph)
 
     def __eq__(self, tr):
-        return self.params == tr.params
+        if type(self) is not type(tr):
+            return False
+        if self.params.keys() != tr.params.keys():
+            return False
+        for k in self.params:
+            v1 = self.params[k]
+            v2 = tr.params[k]
+            if np.isscalar(v1):
+                if not (np.isscalar(v2) and v1 == v2):
+                    return False
+            else:
+                if not np.all(np.asarray(v1) == np.asarray(v2)):
+                    return False
+        return True
 
 
 class InverseTransform(BaseTransform):
@@ -336,6 +385,21 @@ class InverseTransform(BaseTransform):
     def __repr__(self):
         return ("<Inverse of %r>" % repr(self._inverse))
         
+
+class ChangeEvent:
+    def __init__(self, transform, source_event=None):
+        self.transform = transform
+        self.source_event = source_event
+
+    @property
+    def sources(self):
+        """A list of all transforms that changed leading to this event
+        """
+        s = [self]
+        if self.source_event is not None:
+            s += self.source_event.sources
+        return  s
+
 
 # import here to avoid import cycle; needed for BaseTransform.__mul__.
 from .composite import CompositeTransform

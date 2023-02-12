@@ -1,10 +1,5 @@
-# -*- coding: utf-8 -*-
-# Adapted from vispy
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
 import unittest
-
+import pickle
 import numpy as np
 
 try:
@@ -35,12 +30,12 @@ def assert_composite_objects(composite1, composite2):
 
 class TransformMultiplication(unittest.TestCase):
     def test_multiplication(self):
-        n = NT()
-        t = TT()
-        s = ST()
-        a = AT()
-        p = PT()
-        log_trans = LT()
+        n = NT(dims=(3, 3))
+        t = TT(dims=(3, 3))
+        s = ST(dims=(3, 3))
+        a = AT(dims=(3, 3))
+        p = PT(dims=(3, 3))
+        log_trans = LT(dims=(3, 3))
         c1 = CT([s, a, p])
         assert c1
         c2 = CT([s, a, s])
@@ -143,8 +138,8 @@ class CompositeTransform(unittest.TestCase):
         assert composite1.transforms == [t1, t2]  # or the test is useless
         assert composite2.transforms == [t2, t1]  # or the test is useless
         #
-        m12 = (t1*t2).map((1, 1)).tolist()
-        m21 = (t2*t1).map((1, 1)).tolist()
+        m12 = (t2*t1).map((1, 1)).tolist()
+        m21 = (t1*t2).map((1, 1)).tolist()
         m12_ = composite1.map((1, 1)).tolist()
         m21_ = composite2.map((1, 1)).tolist()
         #
@@ -153,12 +148,15 @@ class CompositeTransform(unittest.TestCase):
         assert m12 == m12_
         assert m21 == m21_
 
+        # test pickle
+        s = pickle.dumps(composite1)
+        assert pickle.loads(s) == composite1
+
 
 class TTransform(unittest.TestCase):
     def setUp(self):
         np.random.seed(0)
         self.transforms = [
-            TT(),
             TT(dims=(3, 3)),
             TT([1]),
             TT([0, 0]),
@@ -183,14 +181,14 @@ class TTransform(unittest.TestCase):
         
         translate = (1e6, 0.2, 0)
         tt = coorx.TTransform(offset=translate)
-        at = coorx.AffineTransform()
+        at = coorx.AffineTransform(dims=(3, 3))
         at.translate(translate)
         
         assert np.allclose(tt.map(pts), at.map(pts))
         assert np.allclose(tt.inverse.map(pts), at.inverse.map(pts))    
 
         # test save/restore
-        tt2 = coorx.TTransform()
+        tt2 = coorx.TTransform(dims=(3, 3))
         tt2.__setstate__(tt.__getstate__())
         assert np.all(tt.map(pts) == tt2.map(pts))
 
@@ -199,7 +197,7 @@ class TTransform(unittest.TestCase):
             self.skipTest("itk could not be imported")
         
         itk_tr = itk.TranslationTransform[itk.D, 3].New()
-        ttr = TT()
+        ttr = TT(dims=(3, 3))
         
         pts = 10**np.random.normal(size=(20, 3), scale=16)
         offsets = 10**np.random.normal(size=(20, 3), scale=16)
@@ -235,7 +233,7 @@ class STTransform(unittest.TestCase):
         scale = (1, 7.5, -4e-8)
         translate = (1e6, 0.2, 0)
         st = coorx.STTransform(scale=scale, offset=translate)
-        at = coorx.AffineTransform()
+        at = coorx.AffineTransform(dims=(3, 3))
         at.scale(scale)
         at.translate(translate)
         
@@ -340,7 +338,7 @@ class SRT3DTransformTest(unittest.TestCase):
         pts = np.random.normal(size=(10, 3))
 
         tr = coorx.SRT3DTransform()
-        aff = coorx.AffineTransform()
+        aff = coorx.AffineTransform(dims=(3, 3))
         assert np.allclose(pts, tr.map(pts))
 
         scale = [10, 1, 0.1]
@@ -349,7 +347,7 @@ class SRT3DTransformTest(unittest.TestCase):
         assert np.allclose(aff.map(pts), tr.map(pts))
 
         angle = 30
-        axis = (1, 0.5, 0.3)
+        axis = np.array([1, 0.5, 0.3])
         tr.set_rotation(angle, axis)
         aff.rotate(angle, axis)
         assert np.allclose(aff.map(pts), tr.map(pts))
@@ -364,7 +362,12 @@ class SRT3DTransformTest(unittest.TestCase):
         assert np.allclose(tr.params['scale'], tr2.params['scale'])
         assert np.allclose(tr2.map(pts), tr.map(pts))
 
-        
+    def test_save(self):
+        tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
+        s = tr.save_state()
+        assert s['type'] == 'SRT3DTransform'
+        assert s['dims'] == (3, 3)
+
 
 
 class TransformInverse(unittest.TestCase):

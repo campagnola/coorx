@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 from pytest import raises
 from coorx.coordinates import Point, PointArray
@@ -44,4 +45,10 @@ def test_coordinate_systems():
     assert np.all(pt_cs2.coordinates == np.array([10, 20]))
     assert np.all(pt_cs1.coordinates == cs1_to_cs2.inverse.map(pt_cs2).coordinates)
 
+    # pickle point with CS
+    assert pickle.loads(pickle.dumps(pt_cs1)) == pt_cs1
 
+    # pickle transform with CS
+    cs1_to_cs2_p = pickle.loads(pickle.dumps(cs1_to_cs2))
+    assert cs1_to_cs2_p == cs1_to_cs2
+    assert cs1_to_cs2_p.systems == cs1_to_cs2.systems

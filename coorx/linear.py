@@ -71,14 +71,15 @@ class TTransform(BaseTransform):
     Isometric = False
 
     def __init__(self, offset=None, dims=None, **kwargs):
+        dims = self._dims_from_params(dims=dims, params={'offset': offset})
 
         if offset is not None:
             offset = np.asarray(offset)
             if offset.ndim != 1:
                 raise TypeError("offset must be 1-D array or similar")
-            if dims is not None:
-                raise TypeError("Cannot specify both offset and dims")
             d = len(offset)
+            if dims is not None:
+                assert dims == (d, d), f"Dims {dims} do not match offset length {len(offset)}"
             dims = (d, d)
         if dims is None:
             dims = (3, 3)
@@ -157,7 +158,7 @@ class TTransform(BaseTransform):
         self.offset = self.offset + offset
 
     def as_affine(self):
-        m = AffineTransform()
+        m = AffineTransform(dims=self.dims)
         m.translate(self.offset)
         return m
 
@@ -197,12 +198,14 @@ class TTransform(BaseTransform):
 class STTransform(BaseTransform):
     """ Transform performing only scale and translate, in that order.
 
+    Input/output dimensionality of this transform may be set by the length of the scale or offset parameters.
+
     Parameters
     ----------
     scale : array-like
-        Scale factors for X, Y, Z axes.
+        Scale factors.
     offset : array-like
-        Translation distances for X, Y, Z axes.
+        Translation distances.
     """
     Linear = True
     Orthogonal = True
@@ -211,17 +214,8 @@ class STTransform(BaseTransform):
 
     def __init__(self, scale=None, offset=None, dims=None, **kwargs):
 
-        if scale is not None or offset is not None:
-            if dims is not None:
-                raise TypeError("Cannot specify both dims and scale/offset")
-        if scale is not None:
-            dims = len(scale), len(scale)
-        elif offset is not None:
-            dims = len(offset), len(offset)
-
-        if dims is None:
-            dims = (3, 3)
-            
+        dims = self._dims_from_params(dims=dims, params={'offset': offset, 'scale': scale})
+        
         super().__init__(dims, **kwargs)
         
         if self.dims[0] != self.dims[1]:
@@ -343,7 +337,7 @@ class STTransform(BaseTransform):
         self.set_params(scale=scale, offset=trans)
 
     def as_affine(self):
-        m = AffineTransform()
+        m = AffineTransform(dims=self.dims)
         m.scale(self.scale)
         m.translate(self.offset)
         return m
@@ -453,13 +447,10 @@ class AffineTransform(BaseTransform):
 
     def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
-            if matrix.ndim != 2:
-                raise TypeError("Matrix must be 2-dimensional")
-            if dims is not None:
-                raise TypeError("Cannot specify both matrix and dims")
-            dims = matrix.shape[::-1]
-        if dims is None:
-            dims = (3, 3)
+            matrix = np.asarray(matrix)
+            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+                raise TypeError("Matrix must be 2-dimensional and square")
+        dims = self._dims_from_params(dims=dims, params={'matrix': matrix, 'offset': offset})
         
         super().__init__(dims, **kwargs)
         
@@ -674,14 +665,8 @@ class AffineTransform(BaseTransform):
             return False
         return np.all(self.full_matrix == tr.full_matrix)
     
-    def __repr__(self):
-        s = "%s(matrix=[" % self.__class__.__name__
-        indent = " "*len(s)
-        s += str(list(self.matrix[0])) + ",\n"
-        s += indent + str(list(self.matrix[1])) + ",\n"
-        s += indent + str(list(self.matrix[2])) + ",\n"
-        s += indent + str(list(self.matrix[3])) + "] at 0x%x)" % id(self)
-        return s
+    def copy(self):
+        return AffineTransform(matrix=self.matrix, offset=self.offset)
 
 
 class SRT2DTransform:
@@ -742,37 +727,33 @@ class SRT3DTransform(BaseTransform):
         }
         self._update_affine()
         
-    def translate(self, *args):
+    def translate(self, offset):
         """Adjust the translation of this transform"""
-        t = np.array(args)
-        self.set_offset(self._state['offset']+t)
-        
+        self.set_offset(self._state['offset'] + offset)
+
     def set_offset(self, offset):
         """Set the translation of this transform"""
         self.set_params(offset=offset)
         
-    def scale(self, *args):
+    def scale(self, scale):
         """adjust the scale of this transform"""
         ## try to prevent accidentally setting 0 scale on z axis
-        if len(args) == 1 and hasattr(args[0], '__len__'):
-            args = args[0]
-        if len(args) == 2:
-            args = args + (1,)
-            
-        s = np.array(args)
-        self.set_scale(self._state['scale'] * s)
+        if np.isscalar(scale):
+            scale = (scale,) * 3
+        self.set_scale(self._state['scale'] * scale)
         
     def set_scale(self, scale):
         """Set the scale of this transform"""
         self.set_params(scale=scale)
         
-    def rotate(self, angle, axis=(0,0,1)):
+    def rotate(self, angle, axis):
         """Adjust the rotation of this transform"""
+        axis = np.asarray(axis)
         origAxis = self._state['axis']
-        if axis[0] == origAxis[0] and axis[1] == origAxis[1] and axis[2] == origAxis[2]:
+        if np.all(axis == origAxis):
             self.set_rotation(self._state['angle'] + angle)
         else:
-            m = AffineTransform()
+            m = AffineTransform(dims=self.dims)
             m.translate(self._state['offset'])
             m.rotate(self._state['angle'], self._state['axis'])
             m.rotate(angle, axis)
@@ -792,7 +773,7 @@ class SRT3DTransform(BaseTransform):
         assert tr.dims == (3, 3)
 
         # scale is vector-length of first three matrix columns
-        m = tr.matrix
+        m = tr.matrix.T
         scale = (m**2).sum(axis=0)**0.5
 
         # see whether there is an inversion
@@ -881,9 +862,11 @@ class SRT3DTransform(BaseTransform):
         points2 : ndarray, shape (N, 3)
             Output coordinates.
         """
-        # aff = AffineTransform(dims=(3, 3))
-        # aff.set_mapping(points1, points2)
-        # self.set_from_affine(aff)
+        aff = AffineTransform(dims=(3, 3))
+        aff.set_mapping(points1, points2)
+        self.set_from_affine(aff)
+        return
+
         params = self.params
         # params_flat = []
         # param_len = {}
@@ -912,20 +895,30 @@ class SRT3DTransform(BaseTransform):
             #         i += l
             # return params
 
-        def err_func(x, points1, points2):
-            params = unflatten_params(x)
-            tr = SRT3DTransform(**params)
+        def err_func(tr, points1, points2):
             mapped = tr.map(points1)
             err = (mapped - points2).flatten()
-            err = (err**2).sum()**0.5
+            err = (err**2).mean()**0.5
             return err
+
+        def flat_err_func(x, points1, points2):
+            params = unflatten_params(x)
+            tr = SRT3DTransform(**params)
+            return err_func(tr, points1, points2)
 
         # result = scipy.optimize.leastsq(err_func, x0, args=(points1, points2))
         # params = unflatten_params(result[0])
-        result = scipy.optimize.minimize(err_func, x0, args=(points1, points2), method=None)
+        result = scipy.optimize.minimize(
+            flat_err_func, x0, args=(points1, points2),
+            #method=None,
+            #method='CG',
+            #method=None,
+            #method=None,
+        )
         params = unflatten_params(result.x)
 
         self.set_params(**params)
+        return err_func(self, points1, points2)
 
     def _set_param(self, param, value):
         if value is None:
@@ -937,7 +930,7 @@ class SRT3DTransform(BaseTransform):
                 return False
         else:
             value = np.asarray(value)
-            assert len(value) == len(current_value)
+            assert len(value) == len(current_value), f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
             if np.all(current_value == value):
                 return False
         self._state[param] = value

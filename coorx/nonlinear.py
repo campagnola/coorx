@@ -27,14 +27,10 @@ class LogTransform(BaseTransform):
 
     def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
-            if dims is not None:
-                raise TypeError("Cannot specify both base and dims")
             base = np.asarray(base)
             if base.ndim != 1:
                 raise TypeError("Base must be 1-D array-like")
-            dims = (len(base), len(base))
-        if dims is None:
-            dims = (3, 3)
+        dims = self._dims_from_params(dims=dims, params={'base': base})
         
         super().__init__(dims, **kwargs)
         

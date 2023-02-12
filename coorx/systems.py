@@ -9,6 +9,19 @@ def get_coordinate_system(system:CoordSysOrStr, graph:StrOrNone=None, ndim=None,
 
 
 class CoordinateSystemGraph:
+    """Multiple coordinate systems connected by transforms.
+
+    A CoordinateSystemGraph keeps track of the relationships between many coordinate systems.
+    This makes it possible to automatically determine a chain of transforms that map
+    between any two coordinate systems (as long as they are indirectly connected within
+    the graph). 
+
+    CoordinateSystemGraph also provides basic sanity checking:
+    - Only one coordinate system of each name, and that it has the expected properties
+      (such as dimensionality)
+    - Only one transform connecting any pair of coordinate systems
+      (requires unique_transforms=True; the default graph ignores this constraint)
+    """
 
     all_graphs = {}
 
@@ -16,10 +29,11 @@ class CoordinateSystemGraph:
     def get_graph(cls, graph_name=None):
         return cls.all_graphs[graph_name]
 
-    def __init__(self, name:str):
+    def __init__(self, name:str, unique_transforms=False):
         assert name not in self.all_graphs, f"A coordinate system graph named {name} already exists."
         self.all_graphs[name] = self
         self.name = name
+        self.unique_transforms = unique_transforms
         self.systems = {}  # maps {system_name: CoordinateSystem}
         self.transforms = {}  # maps {cs1: {cs2: transform, ...}, ...}
 
@@ -41,10 +55,11 @@ class CoordinateSystemGraph:
         )
 
         # make sure no transform exists linking these systems
-        have_transform_already = cs[0] in self.transforms and cs[1] in self.transforms[cs[0]]
-        have_inverse_already = cs[1] in self.transforms and cs[0] in self.transforms[cs[1]]
-        assert not have_transform_already, f"A transform is already added connecting '{from_cs}' to '{to_cs}'"
-        assert not have_inverse_already, f"A transform is already added connecting '{to_cs}' to '{from_cs}'"
+        if self.unique_transforms:
+            have_transform_already = cs[0] in self.transforms and cs[1] in self.transforms[cs[0]]
+            have_inverse_already = cs[1] in self.transforms and cs[0] in self.transforms[cs[1]]
+            assert not have_transform_already, f"A transform is already added connecting '{from_cs}' to '{to_cs}'"
+            assert not have_inverse_already, f"A transform is already added connecting '{to_cs}' to '{from_cs}'"
 
         # make sure this transform has not been assigned elsewhere
         assert transform._systems == (None, None), "This transform already connects a different set of coordinate systems"
@@ -126,4 +141,4 @@ class CoordinateSystem:
         return {'type': type(self).__name__, 'name': self.name, 'ndim': self.ndim, 'graph': self.graph.name}
 
 
-default_cs_graph = CoordinateSystemGraph(name=None)
+default_cs_graph = CoordinateSystemGraph(name=None, unique_transforms=False)
