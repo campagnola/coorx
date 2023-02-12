@@ -54,12 +54,14 @@ class NullTransform(BaseTransform):
 
 
 class TTransform(BaseTransform):
-    """ Transform performing only 3D translation.
+    """Transform performing only translation.
+
+    Input/output dimensionality of this transform may be set by the length of the offset parameter.
 
     Parameters
     ----------
     offset : array-like
-        Translation distances for X, Y, Z axes.
+        Translation distances.
     dims : tuple
         (input, output) dimensions for transform.
     """
@@ -952,3 +954,65 @@ class SRT3DTransform(BaseTransform):
             self._affine.rotate(self._state['angle'], self._state['axis'])
             self._affine.translate(self._state['offset'])
         return self._affine
+
+
+class PerspectiveTransform(BaseTransform):
+    """3D perspective or orthographic matrix transform using homogeneous coordinates.
+
+    Assumes a camera at the origin, looking toward the -Z axis.
+    The camera's top points toward +Y, and right points toward +X.
+
+    Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
+    """
+    def __init__(self):
+        super().__init__(dims=(3, 3))
+        self.affine = AffineTransform(dims=(4, 4))
+
+    def _map(self, arr):
+        arr4 = np.empty((arr.shape[0], 4), dtype=arr.dtype)
+        arr4[:, :3] = arr
+        arr4[:, 3] = 1
+        out = self.affine._map(arr4)
+        return out[:, :3] / out[:, 3:4]
+
+    def set_ortho(self, left, right, bottom, top, znear, zfar):
+        """Set orthographic transform.
+        """
+        assert(right != left)
+        assert(bottom != top)
+        assert(znear != zfar)
+
+        M = np.zeros((4, 4), dtype=np.float32)
+        M[0, 0] = +2.0 / (right - left)
+        M[3, 0] = -(right + left) / float(right - left)
+        M[1, 1] = +2.0 / (top - bottom)
+        M[3, 1] = -(top + bottom) / float(top - bottom)
+        M[2, 2] = -2.0 / (zfar - znear)
+        M[3, 2] = -(zfar + znear) / float(zfar - znear)
+        M[3, 3] = 1.0
+        self.affine.matrix = M.T
+
+    def set_perspective(self, fovy, aspect, znear, zfar):
+        """Set the perspective
+
+        Parameters
+        ----------
+        fov : float
+            Field of view.
+        aspect : float
+            Aspect ratio.
+        near : float
+            Near location.
+        far : float
+            Far location.
+        """
+        assert(znear != zfar)
+        h = np.tan(fovy * np.pi / 360.0) * znear
+        w = h * aspect
+        self.set_frustum(-w, w, -h, h, znear, zfar)
+
+    def set_frustum(self, left, right, bottom, top, near, far):  # noqa
+        """Set the frustum
+        """
+        M = matrices.frustum(left, right, bottom, top, near, far)
+        self.affine.matrix = M.T

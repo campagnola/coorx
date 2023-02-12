@@ -131,3 +131,35 @@ class PolarTransform(BaseTransform):
 #    """ Multiple bilinear transforms in a grid arrangement.
 #    """
 #    # TODO
+
+
+
+
+class LensDistortionTransform(BaseTransform):
+    """https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
+    """
+    def __init__(self, coeff=(0, 0, 0, 0, 0)):
+        super().__init__(dims=(2, 2))
+        self.coeff = coeff
+
+    def set_coeff(self, coeff):
+        self.coeff = coeff
+        self._update()
+
+    def _map(self, arr):
+        k1, k2, p1, p2, k3 = self.coeff
+
+        # radial distortion
+        r = np.linalg.norm(arr, axis=1)
+        dist = (1 + k1 * r**2 + k2 * r**4 + k3 * r**6)
+        out = arr * dist[:, None]
+
+        # tangential distortion
+        x = out[:, 0]
+        y = out[:, 1]
+        xy = x * y
+        r2 = r**2
+        out[:, 0] += 2 * p1 * xy + p2 * (r2 + 2 * x**2)
+        out[:, 1] += 2 * p2 * xy + p1 * (r2 + 2 * y**2)
+
+        return out
