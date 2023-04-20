@@ -862,10 +862,6 @@ class SRT3DTransform(BaseTransform):
         points2 : ndarray, shape (N, 3)
             Output coordinates.
         """
-        aff = AffineTransform(dims=(3, 3))
-        aff.set_mapping(points1, points2)
-        self.set_from_affine(aff)
-        return
 
         params = self.params
         # params_flat = []
