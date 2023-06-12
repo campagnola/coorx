@@ -123,6 +123,8 @@ class BaseTransform(object):
         if from_cs is not None:
             cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
             cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
+        self.from_cs = from_cs
+        self.to_cs = to_cs 
 
     def map(self, obj:Mappable):
         """
