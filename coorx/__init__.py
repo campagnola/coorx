@@ -1,5 +1,5 @@
 from .base_transform import BaseTransform, InverseTransform
-from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform
+from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform, RT3DTransform
 from .nonlinear import LogTransform, PolarTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform
 from .coordinates import Point, PointArray
