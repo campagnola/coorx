@@ -133,6 +133,10 @@ class PolarTransform(BaseTransform):
 
 class LensDistortionTransform(BaseTransform):
     """https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
+
+    Coefficients are (k1, k2, p1, p2, k3)
+    Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
+    and p1, p2 are tangential distortion coefficients.
     """
     def __init__(self, coeff=(0, 0, 0, 0, 0)):
         super().__init__(dims=(2, 2))

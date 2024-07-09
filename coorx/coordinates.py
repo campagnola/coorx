@@ -60,6 +60,10 @@ class PointArray:
     def __getitem__(self, index):
         return self.coordinates[index]
     
+    def __iter__(self):
+        for x in self.coordinates:
+            yield x
+
     def _check_operand(self, a):
         assert isinstance(a, PointArray)
         assert a.system is self.system
