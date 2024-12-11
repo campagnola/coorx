@@ -165,6 +165,11 @@ class CompositeTransform(BaseTransform):
             coords = tr.imap(coords)
         return coords
 
+    def to_vispy(self):
+        from vispy.visuals.transforms import ChainTransform
+
+        return ChainTransform([tr.to_vispy() for tr in reversed(self.transforms)])
+
     def append(self, tr):
         """
         Add a new transform to the end of this chain.

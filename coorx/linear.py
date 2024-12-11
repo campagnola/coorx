@@ -342,6 +342,10 @@ class STTransform(BaseTransform):
         m.translate(self.offset)
         return m
 
+    def to_vispy(self):
+        from vispy.visuals.transforms import STTransform as VispySTTransform
+        return VispySTTransform(scale=self.scale, translate=self.offset)
+
     @classmethod
     def from_mapping(cls, x0, x1):
         """ Create an STTransform from the given mapping
@@ -451,7 +455,8 @@ class AffineTransform(BaseTransform):
             if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
                 raise TypeError("Matrix must be 2-dimensional and square")
         dims = self._dims_from_params(dims=dims, params={'matrix': matrix, 'offset': offset})
-        
+        self._inv_matrix = None
+
         super().__init__(dims, **kwargs)
         
         self.reset()
@@ -822,7 +827,11 @@ class SRT3DTransform(BaseTransform):
             angle=angle,
             axis=axis
         )
-        
+
+    def to_vispy(self):
+        from vispy.visuals.transforms import MatrixTransform
+        return MatrixTransform(self._get_affine().full_matrix.T)
+
     def as2D(self):
         """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
         return SRT2DTransform(self)
