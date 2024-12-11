@@ -4,6 +4,8 @@
 
 from __future__ import division
 
+from coorx.types import Mappable
+
 from .base_transform import BaseTransform
 from .linear import NullTransform
 
@@ -126,7 +128,10 @@ class CompositeTransform(BaseTransform):
             b &= tr.Isometric
         return b
 
-    def map(self, coords):
+    def map(self, obj:Mappable):
+        return self._map(obj)
+
+    def _map(self, coords):
         """Map coordinates
 
         Parameters
@@ -143,7 +148,7 @@ class CompositeTransform(BaseTransform):
             coords = tr.map(coords)
         return coords
 
-    def imap(self, coords):
+    def _imap(self, coords):
         """Inverse map coordinates
 
         Parameters
