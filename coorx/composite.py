@@ -48,7 +48,7 @@ class CompositeTransform(BaseTransform):
     def transforms(self):
         """ The list of transform that make up the transform chain.
         
-        The order of transforms is given such that the last transform in the 
+        The order of transforms is given such that the first transform in the
         list is the first to be invoked when mapping coordinates through 
         the chain. 
         
@@ -57,7 +57,7 @@ class CompositeTransform(BaseTransform):
             # Map coordinates through individual transforms:
             trans1 = STTransform(scale=(2, 3), translate=(0, 1))
             trans2 = PolarTransform()
-            mapped = trans1.map(trans2.map(coords))
+            mapped = trans2.map(trans1.map(coords))
             
             # Equivalent mapping through chain:
             chain = CompositeTransform([trans1, trans2])
@@ -88,7 +88,7 @@ class CompositeTransform(BaseTransform):
         self._transforms = tr
         for t in self._transforms:
             t.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
     @property
     def simplified(self):
@@ -139,7 +139,7 @@ class CompositeTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        for tr in reversed(self.transforms):
+        for tr in self.transforms:
             coords = tr.map(coords)
         return coords
 
@@ -156,7 +156,7 @@ class CompositeTransform(BaseTransform):
         coords : ndarray
             Coordinates.
         """
-        for tr in self.transforms:
+        for tr in reversed(self.transforms):
             coords = tr.imap(coords)
         return coords
 
@@ -171,7 +171,7 @@ class CompositeTransform(BaseTransform):
         """
         self.transforms.append(tr)
         tr.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
     def prepend(self, tr):
         """
@@ -184,18 +184,18 @@ class CompositeTransform(BaseTransform):
         """
         self.transforms.insert(0, tr)
         tr.add_change_callback(self._subtr_changed)
-        self.update()
+        self._update()
 
-    def _subtr_changed(self, ev):
+    def _subtr_changed(self, event):
         """One of the internal transforms changed; propagate the signal. 
         """
-        self.update(ev)
+        self._update(event)
 
     def __setitem__(self, index, tr):
         self._transforms[index].remove_change_callback(self._subtr_changed)
         self._transforms[index] = tr
         tr.add_change_callback(self.subtr_changed)
-        self.update()
+        self._update()
 
     def __mul__(self, tr):
         if isinstance(tr, CompositeTransform):
@@ -210,6 +210,11 @@ class CompositeTransform(BaseTransform):
         else:
             trs = [tr]
         return CompositeTransform(trs+self.transforms)
+
+    def __eq__(self, b):
+        if not isinstance(b, CompositeTransform):
+            return False
+        return all([t1==t2 for t1,t2 in zip(self.transforms, b.transforms)])
 
     def __str__(self):
         names = [tr.__class__.__name__ for tr in self.transforms]
@@ -241,7 +246,7 @@ class SimplifiedCompositeTransform(CompositeTransform):
         if event is not None:
             for source in event.sources[::-1]:
                 if source in self.transforms:
-                    self.update(event)
+                    self._update(event)
                     return
         
         # First flatten the chain by expanding all nested chains

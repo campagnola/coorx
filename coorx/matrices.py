@@ -148,3 +148,40 @@ def bilinear_map2d(points1, points2):
     
     return matrix
 
+
+def frustum(left, right, bottom, top, znear, zfar):
+    """Create view frustum
+
+    Parameters
+    ----------
+    left : float
+        Left coordinate of the field of view.
+    right : float
+        Right coordinate of the field of view.
+    bottom : float
+        Bottom coordinate of the field of view.
+    top : float
+        Top coordinate of the field of view.
+    znear : float
+        Near coordinate of the field of view.
+    zfar : float
+        Far coordinate of the field of view.
+
+    Returns
+    -------
+    M : ndarray
+        View frustum matrix (4x4).
+    """
+    assert(right != left)
+    assert(bottom != top)
+    assert(znear != zfar)
+
+    M = np.zeros((4, 4))
+    M[0, 0] = +2.0 * znear / float(right - left)
+    M[2, 0] = (right + left) / float(right - left)
+    M[1, 1] = +2.0 * znear / float(top - bottom)
+    M[2, 1] = (top + bottom) / float(top - bottom)
+    M[2, 2] = -(zfar + znear) / float(zfar - znear)
+    M[3, 2] = -2.0 * znear * zfar / float(zfar - znear)
+    M[2, 3] = -1.0
+    return M
