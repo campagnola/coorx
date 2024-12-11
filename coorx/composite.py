@@ -266,7 +266,7 @@ class SimplifiedCompositeTransform(CompositeTransform):
             cont = False
             for t2 in tr[1:]:
                 t1 = new_tr[-1]
-                pr = t1 * t2
+                pr = t2 * t1
                 if (not t1.dynamic and not t2.dynamic and not 
                    isinstance(pr, CompositeTransform)):
                     cont = True

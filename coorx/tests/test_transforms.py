@@ -368,6 +368,24 @@ class SRT3DTransformTest(unittest.TestCase):
         assert s['type'] == 'SRT3DTransform'
         assert s['dims'] == (3, 3)
 
+    def test_composite(self):
+        tr1 = coorx.SRT3DTransform(offset=(1, 2, 3))
+        tr2 = coorx.SRT3DTransform(scale=(10, 10, 1))
+
+        # test multiplication
+        tr3 = tr1 * tr2  # scale, then offset
+        assert isinstance(tr3, coorx.AffineTransform)
+        assert np.allclose(tr3.map([0, 0, 0]), [1, 2, 3])
+        assert np.allclose(tr3.map([1, 1, 1]), [11, 12, 4])
+
+        # test composite
+        tr4 = coorx.CompositeTransform(tr2, tr1)
+        assert len(tr4.simplified.transforms) == 1
+        assert isinstance(tr4.simplified.transforms[0], coorx.AffineTransform)
+        assert np.all(tr3.matrix == tr4.simplified.transforms[0].matrix)
+        assert np.all(tr3.offset == tr4.simplified.transforms[0].offset)
+        assert np.all(tr3.full_matrix == tr4.simplified.transforms[0].full_matrix)
+        assert np.allclose(tr4.map([2, -26.7, 0]), tr3.map([2, -26.7, 0]))
 
 
 class TransformInverse(unittest.TestCase):
