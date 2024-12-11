@@ -152,6 +152,15 @@ class CompositeTransform(unittest.TestCase):
         s = pickle.dumps(composite1)
         assert pickle.loads(s) == composite1
 
+    def test_inverse_composite(self):
+        # Test inverse of composite
+        t1 = coorx.STTransform(scale=(2, 3))
+        t2 = coorx.STTransform(offset=(3, 4))
+        composite = coorx.CompositeTransform(t1, t2)
+        composite_inv = composite.inverse
+
+        assert composite_inv.map(composite.map((1, 1))).tolist() == [1, 1]
+
 
 class TTransform(unittest.TestCase):
     def setUp(self):
@@ -367,7 +376,6 @@ class SRT3DTransformTest(unittest.TestCase):
         s = tr.save_state()
         assert s['type'] == 'SRT3DTransform'
         assert s['dims'] == (3, 3)
-
 
 
 class TransformInverse(unittest.TestCase):
