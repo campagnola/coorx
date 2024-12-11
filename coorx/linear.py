@@ -957,6 +957,14 @@ class SRT3DTransform(BaseTransform):
             self._affine.translate(self._state['offset'])
         return self._affine
 
+    def __mul__(self, tr):
+        if isinstance(tr, SRT3DTransform):
+            return self._get_affine() * tr._get_affine()
+        elif isinstance(tr, AffineTransform):
+            return self._get_affine() * tr
+        else:
+            return tr.__rmul__(self)
+
 
 class PerspectiveTransform(BaseTransform):
     """3D perspective or orthographic matrix transform using homogeneous coordinates.

@@ -200,7 +200,7 @@ class BaseTransform(object):
         """
         arg = np.asarray(arg)
         original_shape = arg.shape
-        arg = arg.reshape(int(np.product(arg.shape[:-1])), arg.shape[-1])
+        arg = arg.reshape(int(np.prod(arg.shape[:-1])), arg.shape[-1])
         return arg, original_shape
 
     @staticmethod

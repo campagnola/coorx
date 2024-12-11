@@ -228,11 +228,11 @@ class CompositeTransform(BaseTransform):
 
     def __str__(self):
         names = [tr.__class__.__name__ for tr in self.transforms]
-        return "<CompositeTransform [%s] at 0x%x>" % (", ".join(names), id(self))
+        return f"<{self.__class__.__name__} [{', '.join(names)}] at 0x{id(self):x}>"
     
     def __repr__(self):
         tr = ",\n                 ".join(map(repr, self.transforms))
-        return "<CompositeTransform [%s] at 0x%x>" % (tr, id(self))
+        return f"<{self.__class__.__name__} [{tr}] at 0x{id(self):x}>"
 
 
 class SimplifiedCompositeTransform(CompositeTransform):
@@ -276,7 +276,7 @@ class SimplifiedCompositeTransform(CompositeTransform):
             cont = False
             for t2 in tr[1:]:
                 t1 = new_tr[-1]
-                pr = t1 * t2
+                pr = t2 * t1
                 if (not t1.dynamic and not t2.dynamic and not 
                    isinstance(pr, CompositeTransform)):
                     cont = True
