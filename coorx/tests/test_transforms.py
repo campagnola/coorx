@@ -169,7 +169,7 @@ class CompositeTransform(unittest.TestCase):
         composite = coorx.CompositeTransform(t1, t2)
         as_vispy = composite.to_vispy()
         assert isinstance(as_vispy, ChainTransform)
-        assert np.allclose(as_vispy.map((1, 1, 1))[:3], composite.map((1, 1, 1)))  # [ 8., 15.,  5.]), array([5., 7., 5.]
+        assert np.allclose(as_vispy.map((1, 1, 1))[:3], composite.map((1, 1, 1)))
 
 
 class TTransform(unittest.TestCase):
