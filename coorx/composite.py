@@ -218,11 +218,11 @@ class CompositeTransform(BaseTransform):
 
     def __str__(self):
         names = [tr.__class__.__name__ for tr in self.transforms]
-        return "<CompositeTransform [%s] at 0x%x>" % (", ".join(names), id(self))
+        return f"<{self.__class__.__name__} [{', '.join(names)}] at 0x{id(self):x}>"
     
     def __repr__(self):
         tr = ",\n                 ".join(map(repr, self.transforms))
-        return "<CompositeTransform [%s] at 0x%x>" % (tr, id(self))
+        return f"<{self.__class__.__name__} [{tr}] at 0x{id(self):x}>"
 
 
 class SimplifiedCompositeTransform(CompositeTransform):
