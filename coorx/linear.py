@@ -39,6 +39,10 @@ class NullTransform(BaseTransform):
         """
         return coords
 
+    @property
+    def full_matrix(self):
+        return np.eye(self.dims[0]+1)
+
     def __mul__(self, tr):
         return tr
 
@@ -161,6 +165,10 @@ class TTransform(BaseTransform):
         m = AffineTransform(dims=self.dims)
         m.translate(self.offset)
         return m
+
+    @property
+    def full_matrix(self):
+        return self.as_affine().full_matrix
 
     def as_st(self):
         return STTransform(offset=self.offset, scale=(1,) * self.dims[0])
@@ -341,6 +349,10 @@ class STTransform(BaseTransform):
         m.scale(self.scale)
         m.translate(self.offset)
         return m
+
+    @property
+    def full_matrix(self):
+        return self.as_affine().full_matrix
 
     def to_vispy(self):
         from vispy.visuals.transforms import STTransform as VispySTTransform
@@ -828,9 +840,13 @@ class SRT3DTransform(BaseTransform):
             axis=axis
         )
 
+    @property
+    def full_matrix(self):
+        return self._get_affine().full_matrix
+
     def to_vispy(self):
         from vispy.visuals.transforms import MatrixTransform
-        return MatrixTransform(self._get_affine().full_matrix.T)
+        return MatrixTransform(self.full_matrix.T)
 
     def as2D(self):
         """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
@@ -984,6 +1000,10 @@ class PerspectiveTransform(BaseTransform):
         arr4[:, 3] = 1
         out = self.affine._map(arr4)
         return out[:, :3] / out[:, 3:4]
+
+    @property
+    def full_matrix(self):
+        return self.affine.full_matrix
 
     def set_ortho(self, left, right, bottom, top, znear, zfar):
         """Set orthographic transform.

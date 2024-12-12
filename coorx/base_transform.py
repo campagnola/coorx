@@ -258,6 +258,12 @@ class BaseTransform(object):
             'params': self.params,
         }
 
+    @property
+    def full_matrix(self):
+        """Return the full transformation matrix for this transform.
+        """
+        raise NotImplementedError()
+
     def to_vispy(self):
         """Return a VisPy transform that is equivalent to this transform."""
         raise NotImplementedError()
@@ -361,7 +367,14 @@ class InverseTransform(BaseTransform):
         self._inverse = transform
         self._map = transform._imap
         self._imap = transform._map
-    
+
+    @property
+    def full_matrix(self):
+        try:
+            return np.linalg.inv(self._inverse.full_matrix)
+        except np.linalg.LinAlgError:
+            raise NotImplementedError("Cannot compute inverse matrix")
+
     @property
     def dims(self):
         return self._inverse.dims[::-1]

@@ -161,6 +161,12 @@ class CompositeTransform(unittest.TestCase):
 
         assert composite_inv.map(composite.map((1, 1))).tolist() == [1, 1]
 
+    def test_full_matrix(self):
+        t1 = coorx.STTransform(scale=(2, 3, 5))
+        t2 = coorx.STTransform(offset=(3, 4, 2))
+        composite = coorx.CompositeTransform(t1, t2.inverse)
+        assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
+
     def test_to_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 

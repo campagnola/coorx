@@ -165,6 +165,18 @@ class CompositeTransform(BaseTransform):
             coords = tr.imap(coords)
         return coords
 
+    @property
+    def full_matrix(self):
+        """Return the full transformation matrix for this transform.
+        """
+        mat = None
+        for tr in self.transforms:
+            if mat is None:
+                mat = tr.full_matrix
+            else:
+                mat = tr.full_matrix.dot(mat)
+        return mat
+
     def to_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 
