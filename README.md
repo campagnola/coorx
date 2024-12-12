@@ -53,6 +53,38 @@ tr3 = CompositeTransform([tr2, tr1])
 tr3.map(coords)
 ```
 
+Installation
+============
+
+To install the package from PyPI, use the following command:
+
+```
+pip install coorx
+```
+
+Usage
+=====
+
+After installation, you can use the package as follows:
+
+```
+import numpy as np
+from coorx import STTransform, AffineTransform, CompositeTransform
+
+coords = np.array([
+    [0, 0, 0],
+    [1, 2, 3],
+    [4, 5, 6],
+])
+
+tr1 = STTransform(scale=(1, 10, 100))
+tr2 = AffineTransform(dims=3)
+tr2.rotate(90, axis=(0, 0, 1))
+
+tr3 = CompositeTransform([tr2, tr1])
+transformed_coords = tr3.map(coords)
+print(transformed_coords)
+```
 
 Todo
 ====
