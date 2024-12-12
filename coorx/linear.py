@@ -844,10 +844,6 @@ class SRT3DTransform(BaseTransform):
     def full_matrix(self):
         return self._get_affine().full_matrix
 
-    def to_vispy(self):
-        from vispy.visuals.transforms import MatrixTransform
-        return MatrixTransform(self.full_matrix.T)
-
     def as2D(self):
         """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
         return SRT2DTransform(self)

@@ -266,7 +266,8 @@ class BaseTransform(object):
 
     def to_vispy(self):
         """Return a VisPy transform that is equivalent to this transform."""
-        raise NotImplementedError()
+        from vispy.visuals.transforms import MatrixTransform
+        return MatrixTransform(self.full_matrix.T)
 
     def add_change_callback(self, cb):
         self._change_callbacks.append(cb)
