@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
 """
 API Issues to work out:
 
@@ -17,6 +13,7 @@ API Issues to work out:
 """
 
 import numpy as np
+
 from .systems import CoordinateSystemGraph
 from .types import Dims, StrOrNone, Mappable
 
@@ -258,15 +255,24 @@ class BaseTransform(object):
             'params': self.params,
         }
 
-    @property
-    def full_matrix(self):
-        """Return the full transformation matrix for this transform.
+    def as_affine(self):
+        """Return an equivalent affine transform if possible.
         """
         raise NotImplementedError()
+
+    @property
+    def full_matrix(self):
+        """
+        Return the full transformation matrix for this transform. Do not expect that any given transform
+        is implemented to _use_ its full matrix in any internal calculations, so treat this as a
+        disconnected copy.
+        """
+        return self.as_affine().full_matrix
 
     def to_vispy(self):
         """Return a VisPy transform that is equivalent to this transform."""
         from vispy.visuals.transforms import MatrixTransform
+        # a functional default if nothing else is implemented
         return MatrixTransform(self.full_matrix.T)
 
     def add_change_callback(self, cb):
@@ -369,12 +375,15 @@ class InverseTransform(BaseTransform):
         self._map = transform._imap
         self._imap = transform._map
 
+    def as_affine(self):
+        return self._inverse.as_affine().inverse
+
     @property
     def full_matrix(self):
         try:
             return np.linalg.inv(self._inverse.full_matrix)
-        except np.linalg.LinAlgError:
-            raise NotImplementedError("Cannot compute inverse matrix")
+        except np.linalg.LinAlgError as e:
+            raise NotImplementedError("Cannot compute inverse matrix") from e
 
     @property
     def dims(self):

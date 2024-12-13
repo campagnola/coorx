@@ -161,6 +161,17 @@ class CompositeTransform(unittest.TestCase):
 
         assert composite_inv.map(composite.map((1, 1))).tolist() == [1, 1]
 
+    def test_as_affine(self):
+        t1 = coorx.STTransform(scale=(2, 3, 1))
+        t2 = coorx.TTransform(offset=(3, 4, 0))
+        t3 = coorx.AffineTransform(dims=(3, 3))
+        t3.rotate(90, (0, 0, 1))
+        t3 = t3.inverse
+        t4 = coorx.NullTransform(dims=3)
+        composite = coorx.CompositeTransform(t1, t2, t3, t4)
+        affine = composite.as_affine()
+        assert isinstance(affine, coorx.AffineTransform)
+
     def test_full_matrix(self):
         t1 = coorx.STTransform(scale=(2, 3, 5))
         t2 = coorx.STTransform(offset=(3, 4, 2))

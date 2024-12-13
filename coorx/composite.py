@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
-from __future__ import division
-
 from coorx.types import Mappable
 
 from .base_transform import BaseTransform
@@ -165,10 +159,17 @@ class CompositeTransform(BaseTransform):
             coords = tr.imap(coords)
         return coords
 
+    def as_affine(self):
+        ret = None
+        for tr in self.transforms:
+            if ret is None:
+                ret = tr.as_affine()
+            else:
+                ret = ret * tr.as_affine()
+        return ret
+
     @property
     def full_matrix(self):
-        """Return the full transformation matrix for this transform.
-        """
         mat = None
         for tr in self.transforms:
             if mat is None:
