@@ -225,14 +225,14 @@ class CompositeTransform(BaseTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(self.transforms+trs)
+        return CompositeTransform(trs + self.transforms)
 
     def __rmul__(self, tr):
         if isinstance(tr, CompositeTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(trs+self.transforms)
+        return CompositeTransform(self.transforms + trs)
 
     def __eq__(self, b):
         if not isinstance(b, CompositeTransform):

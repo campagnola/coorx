@@ -330,7 +330,8 @@ class BaseTransform(object):
         return tr.__rmul__(self)
 
     def __rmul__(self, tr):
-        return CompositeTransform([tr, self])
+        """tr * self"""
+        return CompositeTransform([self, tr])
 
     def __repr__(self):
         return "<%s at 0x%x>" % (self.__class__.__name__, id(self))

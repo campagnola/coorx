@@ -57,16 +57,16 @@ class TransformMultiplication(unittest.TestCase):
         assert isinstance(a * p, CT)
         assert isinstance(p * a, CT)
         assert isinstance(p * s, CT)
-        assert_composite_types(p * a, [PT, AT])
-        assert_composite_types(p * s, [PT, ST])
-        assert_composite_types(s * p, [ST, PT])
-        assert_composite_types(s * p * a, [ST, PT, AT])
-        assert_composite_types(s * a * p, [AT, PT])
-        assert_composite_types(p * s * a, [PT, ST, AT])
+        assert_composite_types(p * a, [AT, PT])
+        assert_composite_types(p * s, [ST, PT])
+        assert_composite_types(s * p, [PT, ST])
+        assert_composite_types(s * p * a, [AT, PT, ST])
+        assert_composite_types(s * a * p, [PT, AT])
+        assert_composite_types(p * s * a, [AT, ST, PT])
         assert_composite_types(s * p * s, [ST, PT, ST])
-        assert_composite_types(s * a * p * s * a, [AT, PT, ST, AT])
-        assert_composite_types(c2 * a, [ST, AT, ST, AT])
-        assert_composite_types(p * log_trans * s, [PT, LT, ST])
+        assert_composite_types(s * a * p * s * a, [AT, ST, PT, AT])
+        assert_composite_types(c2 * a, [AT, ST, AT, ST])
+        assert_composite_types(p * log_trans * s, [ST, LT, PT])
 
 
 class CompositeTransform(unittest.TestCase):
@@ -95,9 +95,9 @@ class CompositeTransform(unittest.TestCase):
         assert coorx.CompositeTransform(a, b, c, a).transforms == [a, b, c, a]
 
         # Test composition by multiplication
-        assert_composite_objects(a * b, coorx.CompositeTransform(a, b))
-        assert_composite_objects(a * b * c, coorx.CompositeTransform(a, b, c))
-        assert_composite_objects(a * b * c * a, coorx.CompositeTransform(a, b, c, a))
+        assert_composite_objects(a * b, coorx.CompositeTransform(b, a))
+        assert_composite_objects(a * b * c, coorx.CompositeTransform(c, b, a))
+        assert_composite_objects(a * b * c * a, coorx.CompositeTransform(a, c, b, a))
 
         # Test adding/prepending to transform
         composite = coorx.CompositeTransform()
@@ -119,38 +119,50 @@ class CompositeTransform(unittest.TestCase):
         # Create multiplied versions
         t123 = t1*t2*t3
         t321 = t3*t2*t1
-        c123 = coorx.CompositeTransform(t1, t2, t3)
-        c321 = coorx.CompositeTransform(t3, t2, t1)
+        c123 = coorx.CompositeTransform(t3, t2, t1)
+        c321 = coorx.CompositeTransform(t1, t2, t3)
         c123s = c123.simplified
         c321s = c321.simplified
-        #
-        assert isinstance(t123, coorx.STTransform)  # or the test is useless
-        assert isinstance(t321, coorx.STTransform)  # or the test is useless
-        assert isinstance(c123s, coorx.CompositeTransform)  # or the test is useless
-        assert isinstance(c321s, coorx.CompositeTransform)  # or the test is useless
+
+        assert isinstance(t123, coorx.STTransform)
+        assert isinstance(t321, coorx.STTransform)
+        assert isinstance(c123s, coorx.CompositeTransform)
+        assert isinstance(c321s, coorx.CompositeTransform)
 
         # Test Mapping
         t1 = coorx.STTransform(scale=(2, 3))
         t2 = coorx.STTransform(offset=(3, 4))
-        composite1 = coorx.CompositeTransform(t1, t2)
-        composite2 = coorx.CompositeTransform(t2, t1)
-        #
-        assert composite1.transforms == [t1, t2]  # or the test is useless
-        assert composite2.transforms == [t2, t1]  # or the test is useless
-        #
+        composite12 = coorx.CompositeTransform(t1, t2)
+        composite21 = coorx.CompositeTransform(t2, t1)
+
+        assert composite12.transforms == [t1, t2]
+        assert composite21.transforms == [t2, t1]
+
         m12 = (t2*t1).map((1, 1)).tolist()
         m21 = (t1*t2).map((1, 1)).tolist()
-        m12_ = composite1.map((1, 1)).tolist()
-        m21_ = composite2.map((1, 1)).tolist()
-        #
-        #print(m12, m21, m12_, m21_)
+        m12_ = composite12.map((1, 1)).tolist()
+        m21_ = composite21.map((1, 1)).tolist()
+
         assert m12 != m21
         assert m12 == m12_
         assert m21 == m21_
 
         # test pickle
-        s = pickle.dumps(composite1)
-        assert pickle.loads(s) == composite1
+        s = pickle.dumps(composite12)
+        assert pickle.loads(s) == composite12
+
+    def test_srt_composites(self):
+        s = coorx.STTransform(scale=(2, 3, 1))
+        t = coorx.TTransform(offset=(3, 4, 5))
+        srt = coorx.SRT3DTransform(scale=(2, 3, 1), offset=(3, 4, 5), angle=90, axis=(0, 0, 1))
+
+        assert isinstance(srt, coorx.SRT3DTransform)
+        assert isinstance(s * t, coorx.STTransform)
+        assert isinstance(t * s, coorx.STTransform)
+        assert isinstance(s * srt, coorx.CompositeTransform)
+        assert isinstance(srt * s, coorx.CompositeTransform)
+        assert isinstance(t * srt, coorx.CompositeTransform)
+        assert isinstance(srt * t, coorx.CompositeTransform)
 
     def test_inverse_composite(self):
         # Test inverse of composite
@@ -160,6 +172,21 @@ class CompositeTransform(unittest.TestCase):
         composite_inv = composite.inverse
 
         assert composite_inv.map(composite.map((1, 1))).tolist() == [1, 1]
+
+    def test_map_order(self):
+        t1 = coorx.SRT3DTransform(scale=(2, 3, 1), offset=(3, 4, 5), angle=90, axis=(0, 0, 1))
+        t2 = coorx.TTransform(offset=(3, 4, 5))
+        t3 = coorx.TTransform(offset=(13, 4.1, 7)).inverse
+        composite = t1 * t2 * t3
+        explicit = coorx.CompositeTransform(t3, t2, t1)
+        assert composite.map((1, 1, 1)).tolist() == t1.map(t2.map(t3.map((1, 1, 1)))).tolist()
+        assert composite.map((1, 1, 1)).tolist() == explicit.map((1, 1, 1)).tolist()
+
+        composite = t3 * t2 * t1
+        explicit = coorx.CompositeTransform(t1, t2, t3)
+        assert composite.map((1, 1, 1)).tolist() == t3.map(t2.map(t1.map((1, 1, 1)))).tolist()
+        assert composite.map((1, 1, 1)).tolist() == explicit.map((1, 1, 1)).tolist()
+
 
     def test_as_affine(self):
         t1 = coorx.STTransform(scale=(2, 3, 1))
