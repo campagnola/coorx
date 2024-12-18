@@ -178,14 +178,14 @@ class TTransform(BaseTransform):
         elif isinstance(tr, AffineTransform):
             return self.as_affine() * tr
         else:
-            return super(STTransform, self).__mul__(tr)
+            return super().__mul__(tr)
 
     def __rmul__(self, tr):
         if isinstance(tr, STTransform):
             return tr * self.as_st()
         if isinstance(tr, AffineTransform):
             return tr * self.as_affine()
-        return super(TTransform, self).__rmul__(tr)
+        return super().__rmul__(tr)
 
     def __repr__(self):
         return ("<TTransform offset=%s at 0x%s>"
@@ -422,12 +422,12 @@ class STTransform(BaseTransform):
         elif isinstance(tr, AffineTransform):
             return self.as_affine() * tr
         else:
-            return super(STTransform, self).__mul__(tr)
+            return super().__mul__(tr)
 
     def __rmul__(self, tr):
         if isinstance(tr, AffineTransform):
             return tr * self.as_affine()
-        return super(STTransform, self).__rmul__(tr)
+        return super().__rmul__(tr)
 
     def __repr__(self):
         return ("<STTransform scale=%s offset=%s at 0x%s>"
