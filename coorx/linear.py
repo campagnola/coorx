@@ -1,11 +1,9 @@
-from __future__ import division
-
 import numpy as np
 import numpy.linalg
 import scipy.optimize
 
-from .base_transform import BaseTransform
 from . import matrices
+from .base_transform import BaseTransform
 
 
 class NullTransform(BaseTransform):
@@ -38,6 +36,13 @@ class NullTransform(BaseTransform):
             Coordinates to inverse map.
         """
         return coords
+
+    def as_affine(self):
+        return AffineTransform(matrix=np.eye(self.dims[0]), offset=np.zeros(self.dims[0]))
+
+    @property
+    def full_matrix(self):
+        return np.eye(self.dims[0]+1)
 
     def __mul__(self, tr):
         return tr
@@ -502,6 +507,10 @@ class AffineTransform(BaseTransform):
         return np.dot(self.inv_matrix, (coords + self.inv_offset[None, :]).T).T
 
     @property
+    def inverse(self):
+        return AffineTransform(matrix=self.inv_matrix, offset=self.inv_offset)
+
+    @property
     def matrix(self):
         return self._matrix
 
@@ -554,6 +563,9 @@ class AffineTransform(BaseTransform):
     @property
     def inv_offset(self):
         return -self.offset
+
+    def as_affine(self):
+        return AffineTransform(matrix=self.matrix.copy(), offset=self.offset.copy())
 
     @property
     def full_matrix(self):
@@ -828,9 +840,9 @@ class SRT3DTransform(BaseTransform):
             axis=axis
         )
 
-    def to_vispy(self):
-        from vispy.visuals.transforms import MatrixTransform
-        return MatrixTransform(self._get_affine().full_matrix.T)
+    @property
+    def full_matrix(self):
+        return self._get_affine().full_matrix
 
     def as2D(self):
         """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
@@ -949,12 +961,16 @@ class SRT3DTransform(BaseTransform):
         self._affine = None
         self._update()
 
+    def as_affine(self):
+        affine = AffineTransform(dims=(3, 3))
+        affine.scale(self._state['scale'])
+        affine.rotate(self._state['angle'], self._state['axis'])
+        affine.translate(self._state['offset'])
+        return affine
+
     def _get_affine(self):
         if self._affine is None:
-            self._affine = AffineTransform(dims=(3, 3))
-            self._affine.scale(self._state['scale'])
-            self._affine.rotate(self._state['angle'], self._state['axis'])
-            self._affine.translate(self._state['offset'])
+            self._affine = self.as_affine()
         return self._affine
 
     def __mul__(self, tr):
@@ -984,6 +1000,13 @@ class PerspectiveTransform(BaseTransform):
         arr4[:, 3] = 1
         out = self.affine._map(arr4)
         return out[:, :3] / out[:, 3:4]
+
+    def as_affine(self):
+        return self.affine.as_affine()
+
+    @property
+    def full_matrix(self):
+        return self.affine.full_matrix
 
     def set_ortho(self, left, right, bottom, top, znear, zfar):
         """Set orthographic transform.

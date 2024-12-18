@@ -1,7 +1,3 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
 """
 API Issues to work out:
 
@@ -17,6 +13,7 @@ API Issues to work out:
 """
 
 import numpy as np
+
 from .systems import CoordinateSystemGraph
 from .types import Dims, StrOrNone, Mappable
 
@@ -258,9 +255,25 @@ class BaseTransform(object):
             'params': self.params,
         }
 
-    def to_vispy(self):
-        """Return a VisPy transform that is equivalent to this transform."""
+    def as_affine(self):
+        """Return an equivalent affine transform if possible.
+        """
         raise NotImplementedError()
+
+    @property
+    def full_matrix(self):
+        """
+        Return the full transformation matrix for this transform, if possible. 
+
+        Modifying the returned array has no effect on the transform instance that generated it.
+        """
+        return self.as_affine().full_matrix
+
+    def to_vispy(self):
+        """Return a VisPy transform that is equivalent to this transform, if possible."""
+        from vispy.visuals.transforms import MatrixTransform
+        # a functional default if nothing else is implemented
+        return MatrixTransform(self.full_matrix.T)
 
     def add_change_callback(self, cb):
         self._change_callbacks.append(cb)
@@ -361,7 +374,10 @@ class InverseTransform(BaseTransform):
         self._inverse = transform
         self._map = transform._imap
         self._imap = transform._map
-    
+
+    def as_affine(self):
+        return self._inverse.as_affine().inverse
+
     @property
     def dims(self):
         return self._inverse.dims[::-1]

@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name = "coorx",
-    version = "0.1.0",
+    version = "1.0.2",
     author = "Luke Campagnola",
     author_email = "lukec@alleninstitute.org",
     description = ("Object-oriented coordinate system transforms in pure Python"),
