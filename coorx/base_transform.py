@@ -379,13 +379,6 @@ class InverseTransform(BaseTransform):
         return self._inverse.as_affine().inverse
 
     @property
-    def full_matrix(self):
-        try:
-            return np.linalg.inv(self._inverse.full_matrix)
-        except np.linalg.LinAlgError as e:
-            raise NotImplementedError("Cannot compute inverse matrix") from e
-
-    @property
     def dims(self):
         return self._inverse.dims[::-1]
 
