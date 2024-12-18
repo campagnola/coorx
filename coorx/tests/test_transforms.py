@@ -1,6 +1,8 @@
+import math
 import unittest
 import pickle
 import numpy as np
+from coorx import LogTransform
 
 try:
     import itk
@@ -333,6 +335,20 @@ class AffineTransform(unittest.TestCase):
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
 
+class LogTransformTest(unittest.TestCase):
+    def test_log(self):
+        lt = LogTransform((12, 0))
+        data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
+        output = lt.map(data)
+        self.assertAlmostEqual(output[0][0], 1)
+        self.assertAlmostEqual(output[1][0], 2)
+        self.assertAlmostEqual(output[1][1], 13.2)
+        self.assertTrue(math.isnan(output[2][0]))
+        self.assertTrue(math.isnan(output[3][0]))
+        self.assertTrue(math.isnan(output[4][0]))
+        self.assertAlmostEqual(output[4][1], 0)
+
+        
 class SRT3DTransformTest(unittest.TestCase):
     def test_srt3d(self):
         pts = np.random.normal(size=(10, 3))
@@ -367,7 +383,6 @@ class SRT3DTransformTest(unittest.TestCase):
         s = tr.save_state()
         assert s['type'] == 'SRT3DTransform'
         assert s['dims'] == (3, 3)
-
 
 
 class TransformInverse(unittest.TestCase):
