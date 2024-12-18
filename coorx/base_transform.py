@@ -263,14 +263,14 @@ class BaseTransform(object):
     @property
     def full_matrix(self):
         """
-        Return the full transformation matrix for this transform. Do not expect that any given transform
-        is implemented to _use_ its full matrix in any internal calculations, so treat this as a
-        disconnected copy.
+        Return the full transformation matrix for this transform, if possible. 
+
+        Modifying the returned array has no effect on the transform instance that generated it.
         """
         return self.as_affine().full_matrix
 
     def to_vispy(self):
-        """Return a VisPy transform that is equivalent to this transform."""
+        """Return a VisPy transform that is equivalent to this transform, if possible."""
         from vispy.visuals.transforms import MatrixTransform
         # a functional default if nothing else is implemented
         return MatrixTransform(self.full_matrix.T)
