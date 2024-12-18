@@ -3,6 +3,5 @@ __pycache__
 .cache/
 .coverage
 *.egg-info/
-
 dist/
 build/

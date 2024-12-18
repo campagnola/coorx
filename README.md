@@ -30,7 +30,7 @@ Usage
 
 Scale and translate 2D coordinates:
 
-```
+```python
 import numpy as np
 from coorx import STTransform
 

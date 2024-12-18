@@ -8,14 +8,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name = "coorx",
-    version = "0.1.0",
+    version = "1.0.0",
     author = "Luke Campagnola",
     author_email = "lukec@alleninstitute.org",
     description = ("Object-oriented coordinate system transforms in pure Python"),
     long_description=long_description,
     long_description_content_type="text/markdown",
     license = "BSD",
-    url = "http://github.com/campagnola/transforms",
+    url = "http://github.com/campagnola/coorx",
     packages=packages,
     classifiers=[
         "Programming Language :: Python :: 3",
