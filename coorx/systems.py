@@ -137,6 +137,9 @@ class CoordinateSystem:
             name = self.name
         return f"<CoordinateSystem {name}[{self.ndim}]>"
 
+    def __str__(self):
+        return self.name
+
     def save_state(self):
         return {'type': type(self).__name__, 'name': self.name, 'ndim': self.ndim, 'graph': self.graph.name}
 

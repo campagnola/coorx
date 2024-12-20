@@ -167,7 +167,7 @@ class Point(PointArray):
 
     def _coorx_transform(self, tr):
         if tr.systems[0] is not self.system:
-            raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this Point is defined in {self.system}")
+            raise TypeError(f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'")
         mapped = tr.map(self.coordinates)
         return Point(mapped, system=tr.systems[1])
 
