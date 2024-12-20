@@ -119,6 +119,11 @@ class PolarTransform(BaseTransform):
         return
 
 
+#class SphericalTransform(BaseTransform):
+#    # TODO
+#    pass
+
+
 #class BilinearTransform(BaseTransform):
 #    # TODO
 #    pass
@@ -139,8 +144,10 @@ class LensDistortionTransform(BaseTransform):
     Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
     and p1, p2 are tangential distortion coefficients.
     """
-    def __init__(self, coeff=(0, 0, 0, 0, 0)):
-        super().__init__(dims=(2, 2))
+    def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
+        kwds.setdefault('dims', (2, 2))
+        assert kwds['dims'] == (2, 2)
+        super().__init__(**kwds)
         self.coeff = coeff
 
     def set_coeff(self, coeff):
@@ -164,3 +171,10 @@ class LensDistortionTransform(BaseTransform):
         out[:, 1] += 2 * p2 * xy + p1 * (r2 + 2 * y**2)
 
         return out
+
+    @property
+    def params(self):
+        return {'coeff': self.coeff}
+
+    def set_params(self, coeff):
+        self.set_coeff(coeff)

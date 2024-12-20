@@ -974,9 +974,12 @@ class PerspectiveTransform(BaseTransform):
 
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
-    def __init__(self):
-        super().__init__(dims=(3, 3))
-        self.affine = AffineTransform(dims=(4, 4))
+    def __init__(self, **kwds):
+        kwds.setdefault('dims', (3, 3))
+        assert kwds['dims'] == (3, 3)
+        affine_params = kwds.pop('affine', {})
+        super().__init__(**kwds)
+        self.affine = AffineTransform(dims=(4, 4), **affine_params)
 
     def _map(self, arr):
         arr4 = np.empty((arr.shape[0], 4), dtype=arr.dtype)
@@ -1026,3 +1029,10 @@ class PerspectiveTransform(BaseTransform):
         """
         M = matrices.frustum(left, right, bottom, top, near, far)
         self.affine.matrix = M.T
+
+    @property
+    def params(self):
+        return {'affine': self.affine.params}
+    
+    def set_params(self, affine=None):
+        self.affine.set_params(**affine)

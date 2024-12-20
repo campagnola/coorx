@@ -239,14 +239,14 @@ class BaseTransform(object):
     def params(self):
         """Return a dict of parameters specifying this transform.
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"{self.__class__.__name__}.params")
 
     def set_params(self, **kwds):
         """Set parameters specifying this transform.
         
         Parameter names must be the same as the keys in self.params.
         """
-        raise NotImplementedError()
+        raise NotImplementedError(f"{self.__class__.__name__}.set_params")
 
     def save_state(self):
         """Return serializable parameters that specify this transform.

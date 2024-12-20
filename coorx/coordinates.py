@@ -150,7 +150,8 @@ class PointArray:
                 source_system = None
 
         return coord_arr, source_system
-        
+
+
 class Point(PointArray):
     """Represents a single point in space; one may request the coordinates of this point 
     in any coordinate system.
@@ -173,4 +174,3 @@ class Point(PointArray):
 
     def __repr__(self):
         return f"<{type(self).__name__} {tuple(self.coordinates)} in {self.system.name}>"
-

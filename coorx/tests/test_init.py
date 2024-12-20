@@ -53,7 +53,14 @@ class InitTests(unittest.TestCase):
         for typ in coorx.transform_types():
             if typ in [coorx.InverseTransform, coorx.CompositeTransform, coorx.SimplifiedCompositeTransform]:
                 continue
-            transform1 = typ(dims=(3, 3))
+
+            kwargs = {
+                coorx.nonlinear.LensDistortionTransform: {'dims': (2, 2)},
+                coorx.util.AxisSelectionEmbeddedTransform: {'dims': (3, 3), 'axes': [0, 1], 'transform': coorx.NullTransform(dims=(2, 2))},
+                coorx.util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
+            }
+            default_kwargs = {'dims': (3, 3)}
+            transform1 = typ(**kwargs.get(typ, default_kwargs))
             state = transform1.save_state()
             transform2 = coorx.create_transform(**state)
             assert type(transform1) is type(transform2)
