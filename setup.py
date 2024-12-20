@@ -15,7 +15,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license = "BSD",
-    url = "http://github.com/campagnola/transforms",
+    url = "http://github.com/campagnola/coorx",
     packages=packages,
     classifiers=[
         "Programming Language :: Python :: 3",

@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
+import warnings
 import numpy as np
 from .base_transform import Transform
 
@@ -55,13 +53,16 @@ class LogTransform(Transform):
         ret = np.empty(coords.shape, coords.dtype)
         if base is None:
             base = self.base
-        for i in range(min(ret.shape[-1], 3)):
-            if base[i] > 1.0:
-                ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
-            elif base[i] < -1.0:
-                ret[..., i] = -base[i] ** coords[..., i]
-            else:
-                ret[..., i] = coords[..., i]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # divide-by-zeros and invalid values
+            for i in range(min(ret.shape[-1], 3)):
+                if base[i] > 1.0:
+                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
+                elif base[i] < -1.0:
+                    ret[..., i] = -base[i] ** coords[..., i]
+                else:
+                    ret[..., i] = coords[..., i]
+        ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
     def _imap(self, coords):
