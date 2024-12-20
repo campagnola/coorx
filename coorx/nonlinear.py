@@ -1,9 +1,9 @@
 import warnings
 import numpy as np
-from .base_transform import BaseTransform
+from .base_transform import Transform
 
 
-class LogTransform(BaseTransform):
+class LogTransform(Transform):
     """ND transform perfoming logarithmic transformation.
 
     Maps (x, y, z) => (log(base_x, x), log(base_y, y), log(base_z, z))
@@ -79,7 +79,7 @@ class LogTransform(BaseTransform):
         return "<LogTransform base=%s>" % (self.base)
 
 
-class PolarTransform(BaseTransform):
+class PolarTransform(Transform):
     """Polar transform
 
     Maps (theta, r, z) to (x, y, z), where `x = r*cos(theta)`
@@ -119,17 +119,17 @@ class PolarTransform(BaseTransform):
         return
 
 
-#class SphericalTransform(BaseTransform):
+#class SphericalTransform(Transform):
 #    # TODO
 #    pass
 
 
-#class BilinearTransform(BaseTransform):
+#class BilinearTransform(Transform):
 #    # TODO
 #    pass
 
 
-#class WarpTransform(BaseTransform):
+#class WarpTransform(Transform):
 #    """ Multiple bilinear transforms in a grid arrangement.
 #    """
 #    # TODO
@@ -137,7 +137,7 @@ class PolarTransform(BaseTransform):
 
 
 
-class LensDistortionTransform(BaseTransform):
+class LensDistortionTransform(Transform):
     """https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
 
     Coefficients are (k1, k2, p1, p2, k3)

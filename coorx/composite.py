@@ -1,23 +1,17 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See vispy/LICENSE.txt for more info.
-
-from __future__ import division
-
 from coorx.types import Mappable
 
-from .base_transform import BaseTransform
+from .base_transform import Transform
 from .linear import NullTransform
 
 
-class CompositeTransform(BaseTransform):
+class CompositeTransform(Transform):
     """
-    BaseTransform subclass that performs a sequence of transformations in
+    Transform subclass that performs a sequence of transformations in
     order.
 
     Arguments:
 
-    transforms : list of BaseTransform instances
+    transforms : list of Transform instances
         See ``transforms`` property.
     """
     Linear = False
@@ -39,6 +33,9 @@ class CompositeTransform(BaseTransform):
             else:
                 trs.append(tr)
         self.transforms = trs
+        for i in range(len(trs)-1):
+            if trs[i].systems[1] != trs[i+1].systems[0]:
+                raise TypeError(f"Coordinate systems of transform {trs[i]} ({trs[i].systems[1]}) does not map to {trs[i+1]} ({trs[i+1].systems[0]})")
 
     @property
     def dims(self):
@@ -70,7 +67,7 @@ class CompositeTransform(BaseTransform):
 
     @transforms.setter
     def transforms(self, tr):
-        if isinstance(tr, BaseTransform):
+        if isinstance(tr, Transform):
             tr = [tr]
         if not isinstance(tr, list):
             raise TypeError("Transform chain must be a list")
@@ -165,6 +162,25 @@ class CompositeTransform(BaseTransform):
             coords = tr.imap(coords)
         return coords
 
+    def as_affine(self):
+        ret = None
+        for tr in self.transforms:
+            if ret is None:
+                ret = tr.as_affine()
+            else:
+                ret = ret * tr.as_affine()
+        return ret
+
+    @property
+    def full_matrix(self):
+        mat = None
+        for tr in self.transforms:
+            if mat is None:
+                mat = tr.full_matrix
+            else:
+                mat = tr.full_matrix.dot(mat)
+        return mat
+
     def to_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 
@@ -212,14 +228,14 @@ class CompositeTransform(BaseTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(self.transforms+trs)
+        return CompositeTransform(trs + self.transforms)
 
     def __rmul__(self, tr):
         if isinstance(tr, CompositeTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(trs+self.transforms)
+        return CompositeTransform(self.transforms + trs)
 
     def __eq__(self, b):
         if not isinstance(b, CompositeTransform):

@@ -47,7 +47,7 @@ class CoordinateSystemGraph:
     def get_system(self, name):
         return self.systems[name]
 
-    def add_transform(self, transform:'BaseTransform', from_cs:CoordSysOrStr, to_cs:CoordSysOrStr):
+    def add_transform(self, transform:'Transform', from_cs:CoordSysOrStr, to_cs:CoordSysOrStr):
         # look up coordinate systems
         cs = (
             self.check_system(from_cs, ndim=transform.dims[0], create=True),
