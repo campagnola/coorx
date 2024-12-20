@@ -507,10 +507,6 @@ class AffineTransform(Transform):
         return np.dot(self.inv_matrix, (coords + self.inv_offset[None, :]).T).T
 
     @property
-    def inverse(self):
-        return AffineTransform(matrix=self.inv_matrix, offset=self.inv_offset)
-
-    @property
     def matrix(self):
         return self._matrix
 
