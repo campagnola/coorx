@@ -1,17 +1,17 @@
 from coorx.types import Mappable
 
-from .base_transform import BaseTransform
+from .base_transform import Transform
 from .linear import NullTransform
 
 
-class CompositeTransform(BaseTransform):
+class CompositeTransform(Transform):
     """
-    BaseTransform subclass that performs a sequence of transformations in
+    Transform subclass that performs a sequence of transformations in
     order.
 
     Arguments:
 
-    transforms : list of BaseTransform instances
+    transforms : list of Transform instances
         See ``transforms`` property.
     """
     Linear = False
@@ -33,6 +33,9 @@ class CompositeTransform(BaseTransform):
             else:
                 trs.append(tr)
         self.transforms = trs
+        for i in range(len(trs)-1):
+            if trs[i].systems[1] != trs[i+1].systems[0]:
+                raise TypeError(f"Coordinate systems of transform {trs[i]} ({trs[i].systems[1]}) does not map to {trs[i+1]} ({trs[i+1].systems[0]})")
 
     @property
     def dims(self):
@@ -64,7 +67,7 @@ class CompositeTransform(BaseTransform):
 
     @transforms.setter
     def transforms(self, tr):
-        if isinstance(tr, BaseTransform):
+        if isinstance(tr, Transform):
             tr = [tr]
         if not isinstance(tr, list):
             raise TypeError("Transform chain must be a list")

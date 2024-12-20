@@ -1,4 +1,4 @@
-from .base_transform import BaseTransform, InverseTransform
+from .base_transform import Transform, InverseTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform
 from .nonlinear import LogTransform, PolarTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform

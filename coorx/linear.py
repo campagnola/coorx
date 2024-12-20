@@ -3,10 +3,10 @@ import numpy.linalg
 import scipy.optimize
 
 from . import matrices
-from .base_transform import BaseTransform
+from .base_transform import Transform
 
 
-class NullTransform(BaseTransform):
+class NullTransform(Transform):
     """ Transform having no effect on coordinates (identity transform).
     """
     Linear = True
@@ -58,7 +58,7 @@ class NullTransform(BaseTransform):
         return
 
 
-class TTransform(BaseTransform):
+class TTransform(Transform):
     """Transform performing only translation.
 
     Input/output dimensionality of this transform may be set by the length of the offset parameter.
@@ -200,7 +200,7 @@ class TTransform(BaseTransform):
             self.offset = offset
 
 
-class STTransform(BaseTransform):
+class STTransform(Transform):
     """ Transform performing only scale and translate, in that order.
 
     Input/output dimensionality of this transform may be set by the length of the scale or offset parameters.
@@ -434,7 +434,7 @@ class STTransform(BaseTransform):
                 % (self.scale, self.offset, id(self)))
 
 
-class AffineTransform(BaseTransform):
+class AffineTransform(Transform):
     """Affine transformation class
 
     Parameters
@@ -691,7 +691,7 @@ class SRT2DTransform:
         raise NotImplementedError()
 
 
-class SRT3DTransform(BaseTransform):
+class SRT3DTransform(Transform):
     """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
@@ -966,12 +966,18 @@ class SRT3DTransform(BaseTransform):
         affine.scale(self._state['scale'])
         affine.rotate(self._state['angle'], self._state['axis'])
         affine.translate(self._state['offset'])
+        # TODO affine.set_systems(*self.systems)
+        # TODO figure out if this can be generalized to all meta data
         return affine
 
     def _get_affine(self):
         if self._affine is None:
             self._affine = self.as_affine()
         return self._affine
+
+    def __repr__(self):
+        return "<SRT3DTransform offset=%s scale=%s angle=%s axis=%s at 0x%s>" % (
+            self._state['offset'], self._state['scale'], self._state['angle'], self._state['axis'], id(self))
 
     def __mul__(self, tr):
         if isinstance(tr, SRT3DTransform):
@@ -982,7 +988,7 @@ class SRT3DTransform(BaseTransform):
             return tr.__rmul__(self)
 
 
-class PerspectiveTransform(BaseTransform):
+class PerspectiveTransform(Transform):
     """3D perspective or orthographic matrix transform using homogeneous coordinates.
 
     Assumes a camera at the origin, looking toward the -Z axis.

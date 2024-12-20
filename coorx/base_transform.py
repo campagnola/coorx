@@ -18,12 +18,12 @@ from .systems import CoordinateSystemGraph
 from .types import Dims, StrOrNone, Mappable
 
 
-class BaseTransform(object):
+class Transform(object):
     """
-    BaseTransform is a base class that defines a pair of complementary
+    Transform is a base class that defines a pair of complementary
     coordinate mapping functions in both python and GLSL.
 
-    All BaseTransform subclasses define map() and imap() methods that map
+    All Transform subclasses define map() and imap() methods that map
     an object through the forward or inverse transformation, respectively.
 
     Optionally, an inverse() method returns a new transform performing the
@@ -275,6 +275,13 @@ class BaseTransform(object):
         # a functional default if nothing else is implemented
         return MatrixTransform(self.full_matrix.T)
 
+    def as_pyqtgraph(self):
+        """Return a PyQtGraph transform that is equivalent to this transform, if possible."""
+        from pyqtgraph import SRTTransform3D
+        from pyqtgraph.Qt import QtGui
+        # a functional default if nothing else is implemented
+        return SRTTransform3D(QtGui.QMatrix4x4(self.full_matrix.reshape(-1)))
+
     def add_change_callback(self, cb):
         self._change_callbacks.append(cb)
         
@@ -312,7 +319,7 @@ class BaseTransform(object):
                * return NotImplemented if the superclass would return an
                  invalid result.
 
-        3. When BaseTransform.__mul__(A, B) is called, it returns 
+        3. When Transform.__mul__(A, B) is called, it returns
            NotImplemented, which causes B.__rmul__(A) to be invoked.
         4. B.__rmul__(A) attempts to generate an optimized transform product.
         5. If that fails, it must:
@@ -321,7 +328,7 @@ class BaseTransform(object):
                * return ChainTransform([B, A]) if the superclass would return
                  an invalid result.
 
-        6. When BaseTransform.__rmul__(B, A) is called, ChainTransform([A, B])
+        6. When Transform.__rmul__(B, A) is called, ChainTransform([A, B])
            is returned.
         """
         # switch to __rmul__ attempts.
@@ -369,9 +376,9 @@ class BaseTransform(object):
         return True
 
 
-class InverseTransform(BaseTransform):
+class InverseTransform(Transform):
     def __init__(self, transform):
-        BaseTransform.__init__(self)
+        Transform.__init__(self)
         self._inverse = transform
         self._map = transform._imap
         self._imap = transform._map
@@ -422,5 +429,5 @@ class ChangeEvent:
         return  s
 
 
-# import here to avoid import cycle; needed for BaseTransform.__mul__.
+# import here to avoid import cycle; needed for Transform.__mul__.
 from .composite import CompositeTransform
