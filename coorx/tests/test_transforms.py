@@ -75,7 +75,7 @@ class CompositeTransform(unittest.TestCase):
     def test_transform_composite(self):
         # Make dummy classes for easier distinguishing the transforms
 
-        class DummyTrans(coorx.BaseTransform):
+        class DummyTrans(coorx.Transform):
             pass
 
         class TransA(DummyTrans):

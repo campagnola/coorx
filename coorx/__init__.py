@@ -11,7 +11,7 @@ __version__ = "1.0.0"
 
 
 def transform_types():
-    typs = [BaseTransform]
+    typs = [Transform]
     i = 0
     while i < len(typs):
         typs.extend(typs[i].__subclasses__())

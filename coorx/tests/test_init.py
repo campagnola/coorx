@@ -34,7 +34,7 @@ class InitTests(unittest.TestCase):
                     self.list_types(coorx.composite) +
                     self.list_types(coorx.util)
                 ))
-        types.remove(coorx.BaseTransform)
+        types.remove(coorx.Transform)
         
         found_types = coorx.transform_types()
         for typ in types:
@@ -42,13 +42,13 @@ class InitTests(unittest.TestCase):
             found_types.remove(typ)
         assert len(found_types) == 0
 
-        class TestTransform(coorx.BaseTransform):
+        class TestTransform(coorx.Transform):
             pass
         
         assert TestTransform in coorx.transform_types()
                     
     def list_types(self, mod):
-        return [x for x in mod.__dict__.values() if inspect.isclass(x) and issubclass(x, coorx.BaseTransform)]
+        return [x for x in mod.__dict__.values() if inspect.isclass(x) and issubclass(x, coorx.Transform)]
 
     def test_create(self):
         for typ in coorx.transform_types():
