@@ -1,8 +1,8 @@
 import numpy as np
-from .base_transform import BaseTransform
+from .base_transform import Transform
 
 
-class AxisSelectionEmbeddedTransform(BaseTransform):
+class AxisSelectionEmbeddedTransform(Transform):
     """Wraps any transform in a larger-dimensional transform that passes specific axes to the wrapped
     transform, while keeping other axes unchanged.
 
@@ -24,7 +24,7 @@ class AxisSelectionEmbeddedTransform(BaseTransform):
         return out
 
 
-class HomogeneousEmbeddedTransform(BaseTransform):
+class HomogeneousEmbeddedTransform(Transform):
     """Wraps any transform that uses homogeneous coordinates, 
     allowing to operate with nonhomogeneous inputs/outputs instead. 
     """
