@@ -31,7 +31,8 @@ class InitTests(unittest.TestCase):
                     self.list_types(coorx.base_transform) +
                     self.list_types(coorx.linear) + 
                     self.list_types(coorx.nonlinear) +
-                    self.list_types(coorx.composite)
+                    self.list_types(coorx.composite) +
+                    self.list_types(coorx.util)
                 ))
         types.remove(coorx.BaseTransform)
         
