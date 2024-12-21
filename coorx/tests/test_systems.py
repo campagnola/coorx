@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+from coorx import CompositeTransform
 from pytest import raises
 from coorx.coordinates import Point, PointArray
 from coorx.systems import CoordinateSystemGraph
@@ -44,6 +45,11 @@ def test_coordinate_systems():
     assert cs1_to_cs2.imap(pt_cs2).system is default_graph.system('cs1')
     assert np.all(pt_cs2.coordinates == np.array([10, 20]))
     assert np.all(pt_cs1.coordinates == cs1_to_cs2.inverse.map(pt_cs2).coordinates)
+
+    # composites and their inverses
+    loop = CompositeTransform([cs1_to_cs2, cs1_to_cs2.inverse])
+    assert loop.map(pt_cs1) == pt_cs1
+    assert loop.inverse.map(pt_cs1) == pt_cs1
 
     # pickle point with CS
     assert pickle.loads(pickle.dumps(pt_cs1)) == pt_cs1

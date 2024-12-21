@@ -351,6 +351,18 @@ class AffineTransform(unittest.TestCase):
         t2 = rm * coorx.TTransform([3, 3, 3]) * coorx.STTransform(scale=[2, 2, 2]) * coorx.TTransform([1, 1, 1])
         assert t2 == t
 
+    def test_inverse(self):
+        tr = AT(dims=(3, 3), matrix=np.eye(3) * 0.1, offset=[1, 2, 3])
+        pts = np.random.normal(size=(10, 3))
+        arr = np.array(pts)
+        if arr.shape[-1] == tr.dims[0]:
+            pts2 = tr.map(pts)
+            assert pts2.shape[-1] == tr.dims[1]
+            pts3 = tr.imap(pts2)
+            assert np.allclose(arr, pts3)
+        else:
+            with self.assertRaises(TypeError):
+                tr.map(pts)
 
     def x_test_affine_mapping(self):
         t = coorx.AffineTransform()

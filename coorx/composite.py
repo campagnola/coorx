@@ -38,6 +38,10 @@ class CompositeTransform(Transform):
                 raise TypeError(f"Coordinate systems of transform {trs[i]} ({trs[i].systems[1]}) does not map to {trs[i+1]} ({trs[i+1].systems[0]})")
 
     @property
+    def systems(self):
+        return (self.transforms[0].systems[0], self.transforms[-1].systems[1])
+
+    @property
     def dims(self):
         if len(self.transforms) == 0:
             return (None, None)
