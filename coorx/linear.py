@@ -347,7 +347,7 @@ class STTransform(Transform):
         m.translate(self.offset)
         return m
 
-    def to_vispy(self):
+    def as_vispy(self):
         from vispy.visuals.transforms import STTransform as VispySTTransform
         return VispySTTransform(scale=self.scale, translate=self.offset)
 

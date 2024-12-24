@@ -269,7 +269,7 @@ class Transform(object):
         """
         return self.as_affine().full_matrix
 
-    def to_vispy(self):
+    def as_vispy(self):
         """Return a VisPy transform that is equivalent to this transform, if possible."""
         from vispy.visuals.transforms import MatrixTransform
         # a functional default if nothing else is implemented

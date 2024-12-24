@@ -207,13 +207,13 @@ class CompositeTransform(unittest.TestCase):
         composite = coorx.CompositeTransform(t1, t2.inverse)
         assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
 
-    def test_to_vispy(self):
+    def test_as_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 
         t1 = coorx.STTransform(scale=(2, 3, 5))
         t2 = coorx.STTransform(offset=(3, 4, 0))
         composite = coorx.CompositeTransform(t1, t2)
-        as_vispy = composite.to_vispy()
+        as_vispy = composite.as_vispy()
         assert isinstance(as_vispy, ChainTransform)
         assert np.allclose(as_vispy.map((1, 1, 1))[:3], composite.map((1, 1, 1)))
 
@@ -459,9 +459,9 @@ class SRT3DTransformTest(unittest.TestCase):
         assert s['type'] == 'SRT3DTransform'
         assert s['dims'] == (3, 3)
 
-    def test_to_vispy(self):
+    def test_as_vispy(self):
         tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
-        vt = tr.to_vispy()
+        vt = tr.as_vispy()
         assert np.allclose(vt.map((1, 1, 1))[:3], tr.map((1, 1, 1)))
         assert np.allclose(vt.map((1, 3, 5))[:3], tr.map((1, 3, 5)))
 

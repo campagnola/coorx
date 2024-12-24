@@ -185,10 +185,10 @@ class CompositeTransform(Transform):
                 mat = tr.full_matrix.dot(mat)
         return mat
 
-    def to_vispy(self):
+    def as_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 
-        return ChainTransform([tr.to_vispy() for tr in reversed(self.transforms)])
+        return ChainTransform([tr.as_vispy() for tr in reversed(self.transforms)])
 
     def append(self, tr):
         """
