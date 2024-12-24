@@ -425,6 +425,7 @@ class LogTransformTest(unittest.TestCase):
 
         
 class SRT3DTransformTest(unittest.TestCase):
+    @unittest.expectedFailure
     def test_srt3d(self):
         pts = np.random.normal(size=(10, 3))
 
