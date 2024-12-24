@@ -560,14 +560,6 @@ class AffineTransform(Transform):
     def inv_offset(self):
         return -self.offset
 
-    def inverted(self):
-        """Return a new AffineTransform that is the inverse of this one.
-
-        Unlike when using `transform.inverse`, the new transform will not be
-        dynamically updated when this transform changes.
-        """
-        return AffineTransform(matrix=self.inv_matrix, offset=self.inv_matrix @ self.inv_offset)
-
     def as_affine(self):
         return AffineTransform(matrix=self.matrix.copy(), offset=self.offset.copy())
 

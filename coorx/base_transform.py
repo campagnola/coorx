@@ -384,7 +384,8 @@ class InverseTransform(Transform):
         self._imap = transform._map
 
     def as_affine(self):
-        return self._inverse.as_affine().inverted()
+        affine = self._inverse.as_affine()
+        return type(affine)(matrix=affine.inv_matrix, offset=affine.inv_matrix @ affine.inv_offset)
 
     @property
     def dims(self):
