@@ -38,22 +38,32 @@ class NullTransform(Transform):
         return coords
 
     def as_affine(self):
-        return AffineTransform(matrix=np.eye(self.dims[0]), offset=np.zeros(self.dims[0]))
+        return AffineTransform(
+            matrix=np.eye(self.dims[0]), offset=np.zeros(self.dims[0]), from_cs=self.systems[0], to_cs=self.systems[1]
+        )
 
     @property
     def full_matrix(self):
-        return np.eye(self.dims[0]+1)
+        return np.eye(self.dims[0] + 1)
 
     def __mul__(self, tr):
+        tr = tr.copy()
+        if tr.systems[1] != self.systems[0]:
+            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
+        tr.set_systems(tr.systems[0], self.systems[1], override=True)
         return tr
 
     def __rmul__(self, tr):
+        tr = tr.copy()
+        if tr.systems[0] != self.systems[1]:
+            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
+        tr.set_systems(self.systems[0], tr.systems[1], override=True)
         return tr
 
     @property
     def params(self):
         return {}
-    
+
     def set_params(self):
         return
 
@@ -672,9 +682,8 @@ class AffineTransform(Transform):
     def __mul__(self, tr):
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
-            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1])
-        else:
-            return tr.__rmul__(self)
+            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=self.systems[0], to_cs=self.systems[1])
+        return tr.__rmul__(self)
 
     def __eq__(self, tr):
         if not isinstance(tr, AffineTransform):
@@ -683,7 +692,7 @@ class AffineTransform(Transform):
         return np.all(self.full_matrix == tr.full_matrix)
 
     def copy(self):
-        return AffineTransform(matrix=self.matrix, offset=self.offset)
+        return AffineTransform(matrix=self.matrix, offset=self.offset, from_cs=self.systems[0], to_cs=self.systems[1])
 
 
 class SRT2DTransform:

@@ -258,6 +258,9 @@ class TTransform(unittest.TestCase):
         tt2.__setstate__(tt.__getstate__())
         assert np.all(tt.map(pts) == tt2.map(pts))
 
+        tt3 = pickle.loads(pickle.dumps(tt))
+        assert np.all(tt.map(pts) == tt3.map(pts))
+
     def test_itk_compat(self):
         if not HAVE_ITK:
             self.skipTest("itk could not be imported")
