@@ -1,10 +1,11 @@
 Coorx
 ==========
 
-Object-oriented linear and nonlinear coordinate system transforms.
+A dynamic web of linear and nonlinear coordinate system transforms.
 
 * A collection of different types of coordinate system transform classes with unit test coverage
 * Easy methods for mapping coordinate data through these transforms
+* "Coordinate system" type-check-like functionality to find transform disagreements explicitly and early
 * Transform composition and simplification
 * Transforms intelligently map data types including numpy arrays, lists, etc.
 
@@ -12,7 +13,7 @@ Wishlist:
 
 * Automatic generation of composite transforms from a coordinate system graph
 * Coordinate arrays that know which coordinate system they live in to handle automatic mapping
-* Conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
+* 2-way conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
 * Numba, cuda optimization
 
 
