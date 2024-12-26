@@ -14,8 +14,8 @@ class NullTransform(Transform):
     NonScaling = True
     Isometric = True
 
-    def __init__(self, dims=None, **kwargs):
-        super().__init__(dims, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def _map(self, coords):
         """Return the input array unmodified.
@@ -47,18 +47,14 @@ class NullTransform(Transform):
         return np.eye(self.dims[0] + 1)
 
     def __mul__(self, tr):
-        tr = tr.copy()
         if tr.systems[1] != self.systems[0]:
             raise TypeError("Cannot multiply transforms with different inner coordinate systems")
-        tr.set_systems(tr.systems[0], self.systems[1], override=True)
-        return tr
+        return tr.copy(from_cs=tr.systems[0], to_cs=self.systems[1])
 
     def __rmul__(self, tr):
-        tr = tr.copy()
         if tr.systems[0] != self.systems[1]:
             raise TypeError("Cannot multiply transforms with different inner coordinate systems")
-        tr.set_systems(self.systems[0], tr.systems[1], override=True)
-        return tr
+        return tr.copy(from_cs=self.systems[0], to_cs=tr.systems[1])
 
     @property
     def params(self):
@@ -682,7 +678,9 @@ class AffineTransform(Transform):
     def __mul__(self, tr):
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
-            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=self.systems[0], to_cs=self.systems[1])
+            return AffineTransform(
+                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=self.systems[0], to_cs=self.systems[1]
+            )
         return tr.__rmul__(self)
 
     def __eq__(self, tr):
@@ -691,8 +689,10 @@ class AffineTransform(Transform):
             return False
         return np.all(self.full_matrix == tr.full_matrix)
 
-    def copy(self):
-        return AffineTransform(matrix=self.matrix, offset=self.offset, from_cs=self.systems[0], to_cs=self.systems[1])
+    def copy(self, from_cs=None, to_cs=None):
+        return AffineTransform(
+            matrix=self.matrix, offset=self.offset, from_cs=from_cs or self.systems[0], to_cs=to_cs or self.systems[1]
+        )
 
 
 class SRT2DTransform:
@@ -981,8 +981,10 @@ class SRT3DTransform(Transform):
         return self._affine
 
     def __repr__(self):
-        return (f'<SRT3DTransform offset={self._state["offset"]} scale={self._state["scale"]}'
-                f' angle={self._state["angle"]} axis={self._state["axis"]} at 0x{id(self)}>')
+        return (
+            f'<SRT3DTransform offset={self._state["offset"]} scale={self._state["scale"]}'
+            f' angle={self._state["angle"]} axis={self._state["axis"]} at 0x{id(self)}>'
+        )
 
     def __mul__(self, tr):
         if isinstance(tr, SRT3DTransform):

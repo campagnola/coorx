@@ -47,7 +47,7 @@ class CoordinateSystemGraph:
     def get_system(self, name):
         return self.systems[name]
 
-    def add_transform(self, transform:'Transform', from_cs:CoordSysOrStr, to_cs:CoordSysOrStr, override: bool = False):
+    def add_transform(self, transform:'Transform', from_cs:CoordSysOrStr, to_cs:CoordSysOrStr):
         # look up coordinate systems
         cs = (
             self.check_system(from_cs, ndim=transform.dims[0], create=True),
@@ -61,9 +61,8 @@ class CoordinateSystemGraph:
             assert not have_transform_already, f"A transform is already added connecting '{from_cs}' to '{to_cs}'"
             assert not have_inverse_already, f"A transform is already added connecting '{to_cs}' to '{from_cs}'"
 
-        if not override:
-            # make sure this transform has not been assigned elsewhere
-            assert transform._systems == (None, None), "This transform already connects a different set of coordinate systems"
+        # make sure this transform has not been assigned elsewhere
+        assert transform._systems == (None, None), "This transform already connects a different set of coordinate systems"
         transform._systems = cs
 
         # record the new transform connection

@@ -115,13 +115,11 @@ class Transform(object):
         """
         return self._systems
 
-    def set_systems(self, from_cs, to_cs, cs_graph=None, override=False):
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
         assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be coordinate systems"
-        if override and from_cs is None:
-            self._systems = (None, None)
-        elif from_cs is not None:
+        if from_cs is not None:
             cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
-            cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs, override=override)
+            cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
 
     def map(self, obj:Mappable):
         """
@@ -361,11 +359,14 @@ class Transform(object):
         self._systems = (None, None)
         self.set_systems(from_cs, to_cs, graph)
 
-    def copy(self):
+    def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform.
         """
         tr = self.__class__(dims=self.dims)
-        tr.__setstate__(self.__getstate__())
+        state = self.__getstate__()
+        if from_cs is not None:
+            state['_systems'] = (from_cs, to_cs, from_cs.graph.name)
+        tr.__setstate__(state)
         return tr
 
     def __eq__(self, tr):
