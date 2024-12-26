@@ -312,6 +312,8 @@ class Transform(object):
         To ensure that both operands have a chance to simplify the operation,
         all subclasses should follow the same procedure. For `A * B`:
 
+        0. The inner systems of A and B must be the same (all
+           implementations must call validate_transform_for_mul to ensure this).
         1. A.__mul__(B) attempts to generate an optimized transform product.
         2. If that fails, it must:
 
@@ -338,6 +340,7 @@ class Transform(object):
 
     def __rmul__(self, tr):
         """tr * self"""
+        tr.validate_transform_for_mul(self)
         return CompositeTransform([self, tr])
 
     def __repr__(self):
@@ -384,6 +387,10 @@ class Transform(object):
                 if not np.all(np.asarray(v1) == np.asarray(v2)):
                     return False
         return True
+
+    def validate_transform_for_mul(self, tr):
+        if tr.systems[1] != self.systems[0]:
+            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
 
 
 class InverseTransform(Transform):

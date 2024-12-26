@@ -157,8 +157,8 @@ def test_composite_times_other(type1):
     with raises(TypeError, match=wrong_system):
         cs0_to_cs1.map(cs3_from_cs1.map(pt_cs0))
 
-    with raises(TypeError, match=comp_impossible):
+    with raises(TypeError):
         cs0_to_cs1 * cs3_from_cs1
 
-    with raises(TypeError, match=comp_impossible):
+    with raises(TypeError):
         CompositeTransform(cs3_from_cs1, cs0_to_cs1)

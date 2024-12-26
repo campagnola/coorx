@@ -47,13 +47,11 @@ class NullTransform(Transform):
         return np.eye(self.dims[0] + 1)
 
     def __mul__(self, tr):
-        if tr.systems[1] != self.systems[0]:
-            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
+        self.validate_transform_for_mul(tr)
         return tr.copy(from_cs=tr.systems[0], to_cs=self.systems[1])
 
     def __rmul__(self, tr):
-        if tr.systems[0] != self.systems[1]:
-            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
+        tr.validate_transform_for_mul(self)
         return tr.copy(from_cs=self.systems[0], to_cs=tr.systems[1])
 
     @property
@@ -170,16 +168,17 @@ class TTransform(Transform):
         self.offset = self.offset + offset
 
     def as_affine(self):
-        m = AffineTransform(dims=self.dims)
+        m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
         m.translate(self.offset)
         return m
 
     def as_st(self):
-        return STTransform(offset=self.offset, scale=(1,) * self.dims[0])
+        return STTransform(offset=self.offset, scale=(1,) * self.dims[0], from_cs=self.systems[0], to_cs=self.systems[1])
 
     def __mul__(self, tr):
+        self.validate_transform_for_mul(tr)
         if isinstance(tr, TTransform):
-            return TTransform(self.offset + tr.offset)
+            return TTransform(self.offset + tr.offset, from_cs=tr.systems[0], to_cs=self.systems[1])
         elif isinstance(tr, STTransform):
             return self.as_st() * tr
         elif isinstance(tr, AffineTransform):
@@ -188,6 +187,7 @@ class TTransform(Transform):
             return super().__mul__(tr)
 
     def __rmul__(self, tr):
+        tr.validate_transform_for_mul(self)
         if isinstance(tr, STTransform):
             return tr * self.as_st()
         if isinstance(tr, AffineTransform):
@@ -348,7 +348,7 @@ class STTransform(Transform):
         self.set_params(scale=scale, offset=trans)
 
     def as_affine(self):
-        m = AffineTransform(dims=self.dims)
+        m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
         m.scale(self.scale)
         m.translate(self.offset)
         return m
@@ -420,16 +420,18 @@ class STTransform(Transform):
         self.set_params(scale=s, offset=t)
 
     def __mul__(self, tr):
+        self.validate_transform_for_mul(tr)
         if isinstance(tr, STTransform):
             s = self.scale * tr.scale
             t = self.offset + (tr.offset * self.scale)
-            return STTransform(scale=s, offset=t)
+            return STTransform(scale=s, offset=t, from_cs=tr.systems[0], to_cs=self.systems[1])
         elif isinstance(tr, AffineTransform):
             return self.as_affine() * tr
         else:
             return super().__mul__(tr)
 
     def __rmul__(self, tr):
+        tr.validate_transform_for_mul(self)
         if isinstance(tr, AffineTransform):
             return tr * self.as_affine()
         return super().__rmul__(tr)
@@ -572,7 +574,7 @@ class AffineTransform(Transform):
         return -self.offset
 
     def as_affine(self):
-        return AffineTransform(matrix=self.matrix.copy(), offset=self.offset.copy())
+        return AffineTransform(matrix=self.matrix.copy(), offset=self.offset.copy(), from_cs=self.systems[0], to_cs=self.systems[1])
 
     @property
     def full_matrix(self):
@@ -676,6 +678,7 @@ class AffineTransform(Transform):
         self._update()
 
     def __mul__(self, tr):
+        self.validate_transform_for_mul(tr)
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
             return AffineTransform(
@@ -967,7 +970,7 @@ class SRT3DTransform(Transform):
         self._update()
 
     def as_affine(self):
-        affine = AffineTransform(dims=(3, 3))
+        affine = AffineTransform(dims=(3, 3), from_cs=self.systems[0], to_cs=self.systems[1])
         affine.scale(self._state["scale"])
         affine.rotate(self._state["angle"], self._state["axis"])
         affine.translate(self._state["offset"])
@@ -987,6 +990,7 @@ class SRT3DTransform(Transform):
         )
 
     def __mul__(self, tr):
+        self.validate_transform_for_mul(tr)
         if isinstance(tr, SRT3DTransform):
             return self._get_affine() * tr._get_affine()
         elif isinstance(tr, AffineTransform):
@@ -1009,7 +1013,7 @@ class PerspectiveTransform(Transform):
         assert kwds["dims"] == (3, 3)
         affine_params = kwds.pop("affine", {})
         super().__init__(**kwds)
-        self.affine = AffineTransform(dims=(4, 4), **affine_params)
+        self.affine = AffineTransform(dims=(4, 4), **affine_params, from_cs=self.systems[0], to_cs=self.systems[1])
 
     def _map(self, arr):
         arr4 = np.empty((arr.shape[0], 4), dtype=arr.dtype)
