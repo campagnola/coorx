@@ -4,8 +4,7 @@ from coorx import CompositeTransform
 from pytest import raises
 from coorx.coordinates import Point, PointArray
 from coorx.systems import CoordinateSystemGraph
-from coorx.linear import STTransform
-
+from coorx.linear import STTransform, NullTransform
 
 missing_tr = "No transform defined linking"
 missing_cs = "No coordinate system named"
@@ -58,3 +57,15 @@ def test_coordinate_systems():
     cs1_to_cs2_p = pickle.loads(pickle.dumps(cs1_to_cs2))
     assert cs1_to_cs2_p == cs1_to_cs2
     assert cs1_to_cs2_p.systems == cs1_to_cs2.systems
+
+
+def test_composite_times_null():
+    cs1_to_cs2 = STTransform(scale=[3, 2], offset=[10, 20], from_cs='cs1', to_cs='cs2')
+    cs2_to_cs3 = STTransform(scale=[1, 1], offset=[0, 0], from_cs='cs2', to_cs='cs3')
+    null_cs3_to_cs4 = NullTransform(2, from_cs='cs3', to_cs='cs4')
+
+    comp = CompositeTransform([cs1_to_cs2, cs2_to_cs3])
+    mult = null_cs3_to_cs4 * comp
+    pt_cs1 = Point([0, 0], 'cs1')
+    pt_cs4 = mult.map(pt_cs1)
+    assert pt_cs4.system == 'cs4'
