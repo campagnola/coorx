@@ -221,7 +221,7 @@ class CompositeTransform(Transform):
     def __setitem__(self, index, tr):
         self._transforms[index].remove_change_callback(self._subtr_changed)
         self._transforms[index] = tr
-        tr.add_change_callback(self.subtr_changed)
+        tr.add_change_callback(self._subtr_changed)
         self._update()
 
     def __mul__(self, tr):
