@@ -7,8 +7,8 @@ from .base_transform import Transform
 
 
 class NullTransform(Transform):
-    """ Transform having no effect on coordinates (identity transform).
-    """
+    """Transform having no effect on coordinates (identity transform)."""
+
     Linear = True
     Orthogonal = True
     NonScaling = True
@@ -70,13 +70,14 @@ class TTransform(Transform):
     dims : tuple
         (input, output) dimensions for transform.
     """
+
     Linear = True
     Orthogonal = True
     NonScaling = False
     Isometric = False
 
     def __init__(self, offset=None, dims=None, **kwargs):
-        dims = self._dims_from_params(dims=dims, params={'offset': offset})
+        dims = self._dims_from_params(dims=dims, params={"offset": offset})
 
         if offset is not None:
             offset = np.asarray(offset)
@@ -88,7 +89,7 @@ class TTransform(Transform):
             dims = (d, d)
         if dims is None:
             dims = (3, 3)
-            
+
         try:
             dims = tuple(dims)
             assert len(dims) == 2
@@ -96,10 +97,10 @@ class TTransform(Transform):
             raise TypeError("dims must be length-2 tuple")
 
         super().__init__(dims, **kwargs)
-        
+
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
-            
+
         self._offset = np.zeros(self.dims[0], dtype=float)
         if offset is not None:
             self.offset = offset
@@ -147,9 +148,9 @@ class TTransform(Transform):
             raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
         if np.all(t == self._offset):
             return
-        
+
         self._offset[:] = t
-        self._update()   # inform listeners there has been a change
+        self._update()  # inform listeners there has been a change
 
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
@@ -188,20 +189,19 @@ class TTransform(Transform):
         return super().__rmul__(tr)
 
     def __repr__(self):
-        return ("<TTransform offset=%s at 0x%s>"
-                % (self.offset, id(self)))
+        return f"<TTransform offset={self.offset} at 0x{id(self)}>"
 
     @property
     def params(self):
-        return {'offset': self.offset}
-    
+        return {"offset": self.offset}
+
     def set_params(self, offset=None):
         if offset is not None:
             self.offset = offset
 
 
 class STTransform(Transform):
-    """ Transform performing only scale and translate, in that order.
+    """Transform performing only scale and translate, in that order.
 
     Input/output dimensionality of this transform may be set by the length of the scale or offset parameters.
 
@@ -212,20 +212,20 @@ class STTransform(Transform):
     offset : array-like
         Translation distances.
     """
+
     Linear = True
     Orthogonal = True
     NonScaling = False
     Isometric = False
 
     def __init__(self, scale=None, offset=None, dims=None, **kwargs):
+        dims = self._dims_from_params(dims=dims, params={"offset": offset, "scale": scale})
 
-        dims = self._dims_from_params(dims=dims, params={'offset': offset, 'scale': scale})
-        
         super().__init__(dims, **kwargs)
-        
+
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
-            
+
         self._scale = np.ones(self.dims[0], dtype=float)
         self._offset = np.zeros(self.dims[0], dtype=float)
 
@@ -281,7 +281,7 @@ class STTransform(Transform):
 
     @property
     def params(self):
-        return {'scale': self.scale, 'offset': self.offset}
+        return {"scale": self.scale, "offset": self.offset}
 
     def set_params(self, scale=None, offset=None):
         need_update = False
@@ -303,7 +303,7 @@ class STTransform(Transform):
                 need_update = True
 
         if need_update:
-            self._update()   # inform listeners there has been a change
+            self._update()  # inform listeners there has been a change
 
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
@@ -333,7 +333,7 @@ class STTransform(Transform):
         """
         zoom = np.asarray(zoom)
         center = np.asarray(center)
-        assert zoom.shape == center.shape == (self.ndim[0],)
+        assert zoom.shape == center.shape == (self.dims[0],)
         scale = self.scale * zoom
         if mapped:
             trans = center - (center - self.offset) * zoom
@@ -349,11 +349,12 @@ class STTransform(Transform):
 
     def as_vispy(self):
         from vispy.visuals.transforms import STTransform as VispySTTransform
+
         return VispySTTransform(scale=self.scale, translate=self.offset)
 
     @classmethod
     def from_mapping(cls, x0, x1):
-        """ Create an STTransform from the given mapping
+        """Create an STTransform from the given mapping
 
         See `set_mapping` for details.
 
@@ -402,10 +403,8 @@ class STTransform(Transform):
         """
         x0 = np.asarray(x0)
         x1 = np.asarray(x1)
-        if (x0.ndim != 2 or x0.shape[0] != 2 or x1.ndim != 2 or 
-                x1.shape[0] != 2):
-            raise TypeError("set_mapping requires array inputs of shape "
-                            "(2, N).")
+        if x0.ndim != 2 or x0.shape[0] != 2 or x1.ndim != 2 or x1.shape[0] != 2:
+            raise TypeError("set_mapping requires array inputs of shape " "(2, N).")
         denom = x0[1] - x0[0]
         mask = denom == 0
         denom[mask] = 1.0
@@ -430,8 +429,7 @@ class STTransform(Transform):
         return super().__rmul__(tr)
 
     def __repr__(self):
-        return ("<STTransform scale=%s offset=%s at 0x%s>"
-                % (self.scale, self.offset, id(self)))
+        return f"<STTransform scale={self.scale} offset={self.offset} at 0x{id(self)}>"
 
 
 class AffineTransform(Transform):
@@ -447,8 +445,9 @@ class AffineTransform(Transform):
         The translation to apply in this affine transform.
     dims : tuple
         Optionally specifies the (input, output) dimensions of this transform.
-        
+
     """
+
     Linear = True
     Orthogonal = False
     NonScaling = False
@@ -459,11 +458,11 @@ class AffineTransform(Transform):
             matrix = np.asarray(matrix)
             if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
                 raise TypeError("Matrix must be 2-dimensional and square")
-        dims = self._dims_from_params(dims=dims, params={'matrix': matrix, 'offset': offset})
+        dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
         self._inv_matrix = None
 
         super().__init__(dims, **kwargs)
-        
+
         self.reset()
         if matrix is not None:
             self.matrix = matrix
@@ -485,7 +484,10 @@ class AffineTransform(Transform):
             Mapped coordinates: (M * coords) + offset
         """
         if coords.shape[-1] != self.dims[0]:
-            raise TypeError("Shape of last axis (%d) is not equal to input dimension of transform (%d)" % (coords.shape[-1], self.dims[0]))
+            raise TypeError(
+                "Shape of last axis (%d) is not equal to input dimension of transform (%d)"
+                % (coords.shape[-1], self.dims[0])
+            )
         return np.dot(self.matrix, coords.T).T + self.offset[None, :]
 
     def _imap(self, coords):
@@ -503,7 +505,10 @@ class AffineTransform(Transform):
             Mapped coordinates: M_inv * (coords - offset)
         """
         if coords.shape[-1] != self.dims[1]:
-            raise TypeError("Shape of last axis (%d) is not equal to output dimension of transform (%d)" % (coords.shape[-1], self.dims[1]))
+            raise TypeError(
+                "Shape of last axis (%d) is not equal to output dimension of transform (%d)"
+                % (coords.shape[-1], self.dims[1])
+            )
         return np.dot(self.inv_matrix, (coords + self.inv_offset[None, :]).T).T
 
     @property
@@ -517,22 +522,22 @@ class AffineTransform(Transform):
     @property
     def offset(self):
         return self._offset
-    
+
     @offset.setter
     def offset(self, o):
         self.set_params(offset=o)
 
     @property
     def params(self):
-        return {'matrix': self.matrix, 'offset': self.offset}
+        return {"matrix": self.matrix, "offset": self.offset}
 
     def set_params(self, matrix=None, offset=None):
         need_update = False
-        
+
         if matrix is not None:
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
-                raise TypeError("Matrix shape must be %s" % (self.dims[::-1],))
+                raise TypeError(f"Matrix shape must be {self.dims[::-1]}")
             if np.any(m != self._matrix):
                 self._matrix = m
                 self._inv_matrix = None
@@ -573,10 +578,10 @@ class AffineTransform(Transform):
              [m31, m32, m33, o3],
              [  0,   0,   0,  1]]
 
-        The full matrix can be multiplied by other similar matrices in order to compose affine 
+        The full matrix can be multiplied by other similar matrices in order to compose affine
         transforms together.
         """
-        m = np.zeros((self.dims[1]+1, self.dims[0]+1))
+        m = np.zeros((self.dims[1] + 1, self.dims[0] + 1))
         m[:-1, :-1] = self.matrix
         m[:-1, -1] = self.offset
         m[-1, -1] = 1
@@ -615,7 +620,7 @@ class AffineTransform(Transform):
             scale = (scale,) * self.dims[0]
         scale_matrix = np.zeros(self.dims[::-1])
         for i in range(min(self.dims)):
-            scale_matrix[i,i] = scale[i]
+            scale_matrix[i, i] = scale[i]
 
         if center is not None:
             raise NotImplementedError()
@@ -656,12 +661,11 @@ class AffineTransform(Transform):
             Four ending coordinates.
         """
         m = matrices.affine_map(points1, points2)
-        self.set_params(matrix=m[:,:-1], offset=m[:, -1])
+        self.set_params(matrix=m[:, :-1], offset=m[:, -1])
 
     def reset(self):
-        """Reset this transform to have an identity matrix and no offset.
-        """
-        self._matrix = np.eye(max(self.dims))[:self.dims[1], :self.dims[0]]
+        """Reset this transform to have an identity matrix and no offset."""
+        self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
         self._offset = np.zeros(self.dims[1])
         self._update()
 
@@ -677,7 +681,7 @@ class AffineTransform(Transform):
             # todo: we can assess equality for some others like TTransform and STTransform
             return False
         return np.all(self.full_matrix == tr.full_matrix)
-    
+
     def copy(self):
         return AffineTransform(matrix=self.matrix, offset=self.offset)
 
@@ -691,92 +695,89 @@ class SRT3DTransform(Transform):
     """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
+
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
-        kwds.setdefault('dims', (3, 3))
+        kwds.setdefault("dims", (3, 3))
         super().__init__(**kwds)
         assert self.dims == (3, 3), "SRT3DTransform can only map 3D coordinates"
-        self._state = {
-            'offset': np.zeros(3),
-            'scale': np.ones(3),
-            'angle': 0,
-            'axis': np.array([0., 0., 1.])
-        }
+        self._state = {"offset": np.zeros(3), "scale": np.ones(3), "angle": 0, "axis": np.array([0.0, 0.0, 1.0])}
         self._affine = None
-        if all([p is None for p in (offset, scale, angle, axis)]):
+        if all(p is None for p in (offset, scale, angle, axis)):
             if init is not None:
+                # TODO the following looks like broken, untested code
                 if isinstance(init, SRT3DTransform):
                     self.set_state(**init._state)
                 elif isinstance(init, SRT2DTransform):
                     self.set_state(
-                        offset=tuple(init._state['offset']) + (0,),
-                        scale=tuple(init._state['scale']) + (1,),
-                        angle=init._state['angle'],
+                        offset=tuple(init._state["offset"]) + (0,),
+                        scale=tuple(init._state["scale"]) + (1,),
+                        angle=init._state["angle"],
                         axis=(0, 0, 1),
                     )
                 elif isinstance(init, AffineTransform):
                     self.set_from_affine(init)
                 else:
-                    raise Exception("Cannot build SRTTransform3D from argument type:", type(init))
+                    raise TypeError("Cannot build SRTTransform3D from argument type:", type(init))
         else:
             assert init is None
             self.set_params(offset, scale, angle, axis)
 
     def get_scale(self):
-        return np.array(self._state['scale'])
-        
+        return np.array(self._state["scale"])
+
     def get_rotation(self):
         """Return (angle, axis) of rotation"""
-        return self._state['angle'], np.array([self._state['axis']])
-        
+        return self._state["angle"], np.array([self._state["axis"]])
+
     def get_translation(self):
-        return np.array(self._state['offset'])
-    
+        return np.array(self._state["offset"])
+
     def reset(self):
         self._state = {
-            'offset': np.array([0,0,0]),
-            'scale': np.array([1,1,1]),
-            'angle': 0.0,  ## in degrees
-            'axis': (0, 0, 1)
+            "offset": np.array([0, 0, 0]),
+            "scale": np.array([1, 1, 1]),
+            "angle": 0.0,  ## in degrees
+            "axis": (0, 0, 1),
         }
         self._update_affine()
-        
+
     def translate(self, offset):
         """Adjust the translation of this transform"""
-        self.set_offset(self._state['offset'] + offset)
+        self.set_offset(self._state["offset"] + offset)
 
     def set_offset(self, offset):
         """Set the translation of this transform"""
         self.set_params(offset=offset)
-        
+
     def scale(self, scale):
         """adjust the scale of this transform"""
         ## try to prevent accidentally setting 0 scale on z axis
         if np.isscalar(scale):
             scale = (scale,) * 3
-        self.set_scale(self._state['scale'] * scale)
-        
+        self.set_scale(self._state["scale"] * scale)
+
     def set_scale(self, scale):
         """Set the scale of this transform"""
         self.set_params(scale=scale)
-        
+
     def rotate(self, angle, axis):
         """Adjust the rotation of this transform"""
         axis = np.asarray(axis)
-        origAxis = self._state['axis']
+        origAxis = self._state["axis"]
         if np.all(axis == origAxis):
-            self.set_rotation(self._state['angle'] + angle)
+            self.set_rotation(self._state["angle"] + angle)
         else:
             m = AffineTransform(dims=self.dims)
-            m.translate(self._state['offset'])
-            m.rotate(self._state['angle'], self._state['axis'])
+            m.translate(self._state["offset"])
+            m.rotate(self._state["angle"], self._state["axis"])
             m.rotate(angle, axis)
-            m.scale(self._state['scale'])
+            m.scale(self._state["scale"])
             self.set_from_affine(m)
-        
-    def set_rotation(self, angle, axis=(0,0,1)):
+
+    def set_rotation(self, angle, axis=(0, 0, 1)):
         """Set the transformation rotation to angle (in degrees)"""
         self.set_params(angle=angle, axis=axis)
-    
+
     def set_from_affine(self, tr):
         """
         Set this transform based on the elements of *m*
@@ -787,54 +788,49 @@ class SRT3DTransform(Transform):
 
         # scale is vector-length of first three matrix columns
         m = tr.matrix.T
-        scale = (m**2).sum(axis=0)**0.5
+        scale = (m**2).sum(axis=0) ** 0.5
 
         # see whether there is an inversion
         z = np.cross(m[0], m[1])
         if np.dot(z, m[2]) < 0:
             scale[1] *= -1  ## doesn't really matter which axis we invert
-        
+
         ## rotation axis is the eigenvector with eigenvalue=1
         r = m / scale[np.newaxis, :]
         try:
             evals, evecs = numpy.linalg.eig(r)
         except Exception:
-            print("Rotation matrix: %s" % str(r))
-            print("Scale: %s" % str(scale))
-            print("Original matrix: %s" % str(m))
+            print(f"Rotation matrix: {r}")
+            print(f"Scale: {scale}")
+            print(f"Original matrix: {m}")
             raise
-        eigIndex = np.argwhere(np.abs(evals-1) < 1e-6)
+        eigIndex = np.argwhere(np.abs(evals - 1) < 1e-6)
         if len(eigIndex) < 1:
-            print("eigenvalues: %s" % str(evals))
-            print("eigenvectors: %s" % str(evecs))
-            print("index: %s, %s" % (str(eigIndex), str(evals-1)))
-            raise Exception("Could not determine rotation axis.")
-        axis = evecs[:,eigIndex[0,0]].real
-        axis /= ((axis**2).sum())**0.5
-        
+            print(f"eigenvalues: {evals}")
+            print(f"eigenvectors: {evecs}")
+            print(f"index: {eigIndex}, {evals - 1}")
+            raise ValueError("Could not determine rotation axis.")
+        axis = evecs[:, eigIndex[0, 0]].real
+        axis /= ((axis**2).sum()) ** 0.5
+
         # trace(r) == 2 cos(angle) + 1, so:
-        cos = (r.trace()-1)*0.5  # this only gets us abs(angle)
-        
-        # The off-diagonal values can be used to correct the angle ambiguity, 
+        cos = (r.trace() - 1) * 0.5  # this only gets us abs(angle)
+
+        # The off-diagonal values can be used to correct the angle ambiguity,
         # but we need to figure out which element to use:
         axisInd = np.argmax(np.abs(axis))
-        rInd,sign = [((1,2), -1), ((0,2), 1), ((0,1), -1)][axisInd]
-        
+        rInd, sign = [((1, 2), -1), ((0, 2), 1), ((0, 1), -1)][axisInd]
+
         # Then we have r-r.T = sin(angle) * 2 * sign * axis[axisInd];
         # solve for sin(angle)
-        sin = (r-r.T)[rInd] / (2. * sign * axis[axisInd])
-        
+        sin = (r - r.T)[rInd] / (2.0 * sign * axis[axisInd])
+
         # finally, we get the complete angle from arctan(sin/cos)
         angle = np.arctan2(sin, cos) * 180 / np.pi
         if angle == 0:
-            axis = (0,0,1)
+            axis = (0, 0, 1)
 
-        self.set_params(
-            offset=tr.offset,
-            scale=scale,
-            angle=angle,
-            axis=axis
-        )
+        self.set_params(offset=tr.offset, scale=scale, angle=angle, axis=axis)
 
     @property
     def full_matrix(self):
@@ -847,10 +843,10 @@ class SRT3DTransform(Transform):
     @property
     def params(self):
         return {
-            'offset': tuple(self._state['offset']), 
-            'scale': tuple(self._state['scale']), 
-            'angle': self._state['angle'], 
-            'axis': tuple(self._state['axis']),
+            "offset": tuple(self._state["offset"]),
+            "scale": tuple(self._state["scale"]),
+            "angle": self._state["angle"],
+            "axis": tuple(self._state["axis"]),
         }
 
     def _map(self, arr):
@@ -861,10 +857,10 @@ class SRT3DTransform(Transform):
 
     def set_params(self, offset=None, scale=None, angle=None, axis=None):
         need_update = False
-        need_update |= self._set_param('offset', offset)
-        need_update |= self._set_param('scale', scale)
-        need_update |= self._set_param('angle', angle)
-        need_update |= self._set_param('axis', axis)
+        need_update |= self._set_param("offset", offset)
+        need_update |= self._set_param("scale", scale)
+        need_update |= self._set_param("angle", angle)
+        need_update |= self._set_param("axis", axis)
 
         if need_update:
             self._update_affine()
@@ -894,13 +890,13 @@ class SRT3DTransform(Transform):
         #     else:
         #         params_flat.extend(v)
         #         param_len[k] = len(v)
-        params_flat = list(params['offset']) + [params['scale'][0]] + list(params['axis']) + [params['angle']]
-        params_flat = list(params['offset']) + list(params['scale']) + list(params['axis']) + [params['angle']]
+        params_flat = list(params["offset"]) + [params["scale"][0]] + list(params["axis"]) + [params["angle"]]
+        params_flat = list(params["offset"]) + list(params["scale"]) + list(params["axis"]) + [params["angle"]]
         x0 = np.array(params_flat)
 
         def unflatten_params(x):
             # return {'offset': x[:3], 'scale': (x[3], x[3], x[3]), 'axis': x[4:7], 'angle': x[7]}
-            return {'offset': x[:3], 'scale': x[3:6], 'axis': x[6:9], 'angle': x[9]}
+            return {"offset": x[:3], "scale": x[3:6], "axis": x[6:9], "angle": x[9]}
             # params = {}
             # i = 0
             # for k,l in param_len.items():
@@ -915,7 +911,7 @@ class SRT3DTransform(Transform):
         def err_func(tr, points1, points2):
             mapped = tr.map(points1)
             err = (mapped - points2).flatten()
-            err = (err**2).mean()**0.5
+            err = (err**2).mean() ** 0.5
             return err
 
         def flat_err_func(x, points1, points2):
@@ -926,11 +922,13 @@ class SRT3DTransform(Transform):
         # result = scipy.optimize.leastsq(err_func, x0, args=(points1, points2))
         # params = unflatten_params(result[0])
         result = scipy.optimize.minimize(
-            flat_err_func, x0, args=(points1, points2),
-            #method=None,
-            #method='CG',
-            #method=None,
-            #method=None,
+            flat_err_func,
+            x0,
+            args=(points1, points2),
+            # method=None,
+            # method='CG',
+            # method=None,
+            # method=None,
         )
         params = unflatten_params(result.x)
 
@@ -947,7 +945,9 @@ class SRT3DTransform(Transform):
                 return False
         else:
             value = np.asarray(value)
-            assert len(value) == len(current_value), f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
+            assert len(value) == len(
+                current_value
+            ), f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
             if np.all(current_value == value):
                 return False
         self._state[param] = value
@@ -959,9 +959,9 @@ class SRT3DTransform(Transform):
 
     def as_affine(self):
         affine = AffineTransform(dims=(3, 3))
-        affine.scale(self._state['scale'])
-        affine.rotate(self._state['angle'], self._state['axis'])
-        affine.translate(self._state['offset'])
+        affine.scale(self._state["scale"])
+        affine.rotate(self._state["angle"], self._state["axis"])
+        affine.translate(self._state["offset"])
         # TODO affine.set_systems(*self.systems)
         # TODO figure out if this can be generalized to all meta data
         return affine
@@ -972,8 +972,8 @@ class SRT3DTransform(Transform):
         return self._affine
 
     def __repr__(self):
-        return "<SRT3DTransform offset=%s scale=%s angle=%s axis=%s at 0x%s>" % (
-            self._state['offset'], self._state['scale'], self._state['angle'], self._state['axis'], id(self))
+        return (f'<SRT3DTransform offset={self._state["offset"]} scale={self._state["scale"]}'
+                f' angle={self._state["angle"]} axis={self._state["axis"]} at 0x{id(self)}>')
 
     def __mul__(self, tr):
         if isinstance(tr, SRT3DTransform):
@@ -992,10 +992,11 @@ class PerspectiveTransform(Transform):
 
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
+
     def __init__(self, **kwds):
-        kwds.setdefault('dims', (3, 3))
-        assert kwds['dims'] == (3, 3)
-        affine_params = kwds.pop('affine', {})
+        kwds.setdefault("dims", (3, 3))
+        assert kwds["dims"] == (3, 3)
+        affine_params = kwds.pop("affine", {})
         super().__init__(**kwds)
         self.affine = AffineTransform(dims=(4, 4), **affine_params)
 
@@ -1014,11 +1015,10 @@ class PerspectiveTransform(Transform):
         return self.affine.full_matrix
 
     def set_ortho(self, left, right, bottom, top, znear, zfar):
-        """Set orthographic transform.
-        """
-        assert(right != left)
-        assert(bottom != top)
-        assert(znear != zfar)
+        """Set orthographic transform."""
+        assert right != left
+        assert bottom != top
+        assert znear != zfar
 
         M = np.zeros((4, 4), dtype=np.float32)
         M[0, 0] = +2.0 / (right - left)
@@ -1044,20 +1044,19 @@ class PerspectiveTransform(Transform):
         far : float
             Far location.
         """
-        assert(znear != zfar)
+        assert znear != zfar
         h = np.tan(fovy * np.pi / 360.0) * znear
         w = h * aspect
         self.set_frustum(-w, w, -h, h, znear, zfar)
 
     def set_frustum(self, left, right, bottom, top, near, far):  # noqa
-        """Set the frustum
-        """
+        """Set the frustum"""
         M = matrices.frustum(left, right, bottom, top, near, far)
         self.affine.matrix = M.T
 
     @property
     def params(self):
-        return {'affine': self.affine.params}
-    
+        return {"affine": self.affine.params}
+
     def set_params(self, affine=None):
         self.affine.set_params(**affine)
