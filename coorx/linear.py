@@ -847,7 +847,7 @@ class SRT3DTransform(Transform):
 
     def as2D(self):
         """Return an SRT2DTransform representing the x,y portion of this transform (if possible)"""
-        return SRT2DTransform(self)
+        return SRT2DTransform(init=self)
 
     @property
     def params(self):

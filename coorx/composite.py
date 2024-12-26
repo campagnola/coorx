@@ -20,8 +20,8 @@ class CompositeTransform(Transform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, *transforms):
-        super(CompositeTransform, self).__init__()
+    def __init__(self, *transforms, **kwargs):
+        super().__init__(**kwargs)
         self._transforms = []
         self._simplified = None
         self._null_transform = NullTransform()
