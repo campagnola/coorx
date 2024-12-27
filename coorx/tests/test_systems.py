@@ -119,7 +119,7 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
 def test_as_affine_systems(type1):
     xform = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
     point = Point([1, 2, 3], "affine1")
-    with contextlib.suppress(NotImplementedError):
+    with contextlib.suppress(NotImplementedError):  # ignore non-affine transforms here
         assert np.all(xform.as_affine().map(point) == xform.map(point))
         assert xform.as_affine().systems == xform.systems
         assert xform.inverse.as_affine().systems == xform.inverse.systems
