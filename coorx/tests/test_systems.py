@@ -158,7 +158,11 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     with raises(TypeError, match=wrong_system):
         cs3_from_cs1.map(cs4_from_cs3.map(pt_cs1))
 
-    with raises(TypeError, match=comp_impossible):
+    if inverse_composite and (type1 != "NullTransform" or inverse1):
+        comp_mult_err = mult_impossible
+    else:
+        comp_mult_err = comp_impossible
+    with raises(TypeError, match=comp_mult_err):
         cs3_from_cs1 * cs4_from_cs3
 
     with raises(TypeError, match=comp_impossible):
