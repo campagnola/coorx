@@ -81,7 +81,7 @@ class PointArray(np.ndarray):
             raise TypeError(
                 f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}"
             )
-        mapped = tr.map(self)
+        mapped = tr.map(self.coordinates)
         return PointArray(mapped, system=tr.systems[1])
 
     def __repr__(self):
@@ -153,7 +153,7 @@ class Point(PointArray):
             raise TypeError(
                 f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'"
             )
-        mapped = tr.map(self)
+        mapped = tr.map(self.coordinates)
         return Point(mapped, system=tr.systems[1])
 
     def __repr__(self):
