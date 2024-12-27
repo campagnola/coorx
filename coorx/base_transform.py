@@ -404,7 +404,7 @@ class InverseTransform(Transform):
 
     def as_affine(self):
         affine = self._inverse.as_affine()
-        return type(affine)(matrix=affine.inv_matrix, offset=affine.inv_matrix @ affine.inv_offset)
+        return type(affine)(matrix=affine.inv_matrix, offset=affine.inv_matrix @ affine.inv_offset, from_cs=self.systems[0], to_cs=self.systems[1])
 
     def copy(self, from_cs=None, to_cs=None):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse

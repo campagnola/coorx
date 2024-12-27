@@ -122,6 +122,8 @@ def test_as_affine_systems(type1):
     with contextlib.suppress(NotImplementedError):
         assert np.all(xform.as_affine().map(point) == xform.map(point))
         assert xform.as_affine().systems == xform.systems
+        assert xform.inverse.as_affine().systems == xform.inverse.systems
+        assert np.allclose(xform.inverse.as_affine().map(xform.map(point)), point)
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
