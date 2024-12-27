@@ -62,6 +62,9 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
+    # The transform is dynamically bound to other transforms that may change.
+    Dynamic = False
+
     def __init__(self, dims:Dims=None, from_cs:StrOrNone=None, to_cs:StrOrNone=None, cs_graph:StrOrNone=None):
         if dims is None or np.isscalar(dims):
             dims = (dims, dims)
@@ -361,8 +364,9 @@ class Transform(object):
     def __setstate__(self, state):
         from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
         self.__dict__.update(state)
-        self._systems = (None, None)
-        self.set_systems(from_cs, to_cs, graph)
+        if not self.Dynamic:
+            self._systems = (None, None)
+            self.set_systems(from_cs, to_cs, graph)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform.
@@ -396,6 +400,8 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
+    Dynamic = True
+
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
