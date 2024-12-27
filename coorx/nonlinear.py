@@ -66,7 +66,7 @@ class LogTransform(Transform):
         return ret
 
     def _imap(self, coords):
-        return self.map(coords, -self.base)
+        return self._map(coords, -self.base)
 
     @property
     def params(self):

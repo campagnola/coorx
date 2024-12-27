@@ -79,10 +79,18 @@ PARAMS = {
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
 @pytest.mark.parametrize("type2", PARAMS.keys())
-def test_transform_mapping(type1, type2):
+@pytest.mark.parametrize("inverse1", [False, True])
+@pytest.mark.parametrize("inverse2", [False, True])
+def test_transform_mapping(type1, type2, inverse1, inverse2):
     point = Point((1., 1., 1.), "cs1")
-    cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
-    cs3_from_cs2 = create_transform(type2, PARAMS[type2], dims=(3, 3), systems=("cs2", "cs3"))
+    if inverse1:
+        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
+    else:
+        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
+    if inverse2:
+        cs3_from_cs2 = create_transform(type2, PARAMS[type2], dims=(3, 3), systems=("cs3", "cs2")).inverse
+    else:
+        cs3_from_cs2 = create_transform(type2, PARAMS[type2], dims=(3, 3), systems=("cs2", "cs3"))
 
     assert str(cs2_from_cs1.map(point).system) == "cs2"
 
@@ -117,13 +125,23 @@ def test_as_affine_systems(type1):
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
-def test_composite_times_other(type1):
+@pytest.mark.parametrize("inverse1", [False, True])
+@pytest.mark.parametrize("inverse_composite", [False, True])
+def test_composite_times_other(type1, inverse1, inverse_composite):
     pt_cs1 = Point([0., 0., 1.], "cs1")
     pt_cs3 = Point([0., 0., 0.], "cs3")
-    cs2_from_cs1 = STTransform(scale=[3, 2, 1], offset=[10, 20, 30], from_cs="cs1", to_cs="cs2")
-    cs3_from_cs2 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs2", to_cs="cs3")
-    cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
-    cs4_from_cs3 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs3", "cs4"))
+    if inverse_composite:
+        cs1_from_cs2 = STTransform(scale=[3, 2, 1], offset=[10, 20, 30], from_cs="cs1", to_cs="cs2").inverse
+        cs2_from_cs3 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs3", to_cs="cs2")
+        cs3_from_cs1 = CompositeTransform(cs2_from_cs3, cs1_from_cs2).inverse
+    else:
+        cs2_from_cs1 = STTransform(scale=[3, 2, 1], offset=[10, 20, 30], from_cs="cs1", to_cs="cs2")
+        cs3_from_cs2 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs2", to_cs="cs3")
+        cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
+    if inverse1:
+        cs4_from_cs3 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs4", "cs3")).inverse
+    else:
+        cs4_from_cs3 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs3", "cs4"))
 
     assert str(cs3_from_cs1.map(pt_cs1).system) == "cs3"
     assert str(cs4_from_cs3.map(pt_cs3).system) == "cs4"

@@ -406,6 +406,9 @@ class InverseTransform(Transform):
         affine = self._inverse.as_affine()
         return type(affine)(matrix=affine.inv_matrix, offset=affine.inv_matrix @ affine.inv_offset)
 
+    def copy(self, from_cs=None, to_cs=None):
+        return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
+
     @property
     def dims(self):
         return self._inverse.dims[::-1]
