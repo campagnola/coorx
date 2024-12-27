@@ -396,7 +396,7 @@ class Transform(object):
 
     def validate_transform_for_mul(self, tr):
         if tr.systems[1] != self.systems[0]:
-            raise TypeError("Cannot multiply transforms with different inner coordinate systems")
+            raise TypeError(f"Cannot multiply transforms with different inner coordinate systems: {self.systems[1]} != {tr.systems[0]}")
 
 
 class InverseTransform(Transform):
