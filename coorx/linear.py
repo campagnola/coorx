@@ -51,6 +51,8 @@ class NullTransform(Transform):
 
         if isinstance(tr, CompositeTransform):
             return tr.__rmul__(self)
+        if isinstance(tr.inverse, CompositeTransform):
+            return tr.inverse.__mul__(self.inverse).inverse
         self.validate_transform_for_mul(tr)
         return tr.copy(from_cs=tr.systems[0], to_cs=self.systems[1])
 
@@ -59,6 +61,8 @@ class NullTransform(Transform):
 
         if isinstance(tr, CompositeTransform):
             return tr.__mul__(self)
+        if isinstance(tr.inverse, CompositeTransform):
+            return tr.inverse.__rmul__(self.inverse).inverse
         tr.validate_transform_for_mul(self)
         return tr.copy(from_cs=self.systems[0], to_cs=tr.systems[1])
 
