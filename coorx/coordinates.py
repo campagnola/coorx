@@ -98,8 +98,7 @@ class PointArray(np.ndarray):
         self.set_system(sys, graph)
 
     def __eq__(self, b):
-        if self.system is not b.system:
-            return False
+        self._check_operand(b)
         return super().__eq__(b)
 
     @staticmethod
