@@ -1,3 +1,4 @@
+import contextlib
 import pickle
 
 import numpy as np
@@ -106,7 +107,13 @@ def test_transform_mapping(type1, type2):
     # TODO inverses
 
 
-# TODO test as_affine
+@pytest.mark.parametrize("type1", PARAMS.keys())
+def test_as_affine_systems(type1):
+    xform = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
+    point = Point([1, 2, 3], "affine1")
+    with contextlib.suppress(NotImplementedError):
+        assert np.all(xform.as_affine().map(point) == xform.map(point))
+        assert xform.as_affine().systems == xform.systems
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())

@@ -42,7 +42,10 @@ class CompositeTransform(Transform):
 
     @property
     def systems(self):
-        return (self.transforms[0].systems[0], self.transforms[-1].systems[1])
+        return self.transforms[0].systems[0], self.transforms[-1].systems[1]
+
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
+        raise NotImplementedError("Cannot set systems on a CompositeTransform")
 
     @property
     def dims(self):

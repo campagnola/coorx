@@ -11,6 +11,7 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+import contextlib
 
 import numpy as np
 
@@ -72,8 +73,9 @@ class Transform(object):
         self._change_callbacks = []
         self._systems = (None, None)
 
-        # optional coordinate system tracking
-        self.set_systems(from_cs, to_cs, cs_graph)
+        with contextlib.suppress(NotImplementedError):
+            # optional coordinate system tracking
+            self.set_systems(from_cs, to_cs, cs_graph)
 
     @property
     def dims(self):
@@ -411,6 +413,9 @@ class InverseTransform(Transform):
     @property
     def systems(self):
         return self._inverse.systems[::-1]
+
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
+        raise NotImplementedError("Cannot set systems on an InverseTransform")
 
     @property
     def Linear(self):

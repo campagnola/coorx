@@ -47,10 +47,18 @@ class NullTransform(Transform):
         return np.eye(self.dims[0] + 1)
 
     def __mul__(self, tr):
+        from coorx import CompositeTransform
+
+        if isinstance(tr, CompositeTransform):
+            return tr.__rmul__(self)
         self.validate_transform_for_mul(tr)
         return tr.copy(from_cs=tr.systems[0], to_cs=self.systems[1])
 
     def __rmul__(self, tr):
+        from coorx import CompositeTransform
+
+        if isinstance(tr, CompositeTransform):
+            return tr.__mul__(self)
         tr.validate_transform_for_mul(self)
         return tr.copy(from_cs=self.systems[0], to_cs=tr.systems[1])
 
@@ -682,7 +690,7 @@ class AffineTransform(Transform):
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
             return AffineTransform(
-                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=self.systems[0], to_cs=self.systems[1]
+                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1]
             )
         return tr.__rmul__(self)
 
