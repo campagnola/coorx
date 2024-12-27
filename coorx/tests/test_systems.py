@@ -124,6 +124,12 @@ def test_as_affine_systems(type1):
         assert xform.as_affine().systems == xform.systems
         assert xform.inverse.as_affine().systems == xform.inverse.systems
         assert np.allclose(xform.inverse.as_affine().map(xform.map(point)), point)
+        explicitly_looped = xform.inverse.as_affine().map(xform.as_affine().map(point))
+        assert np.allclose(explicitly_looped, point)
+        mult_loop = xform.inverse * xform
+        assert np.allclose(mult_loop.as_affine().map(point), point)
+        comp_loop = CompositeTransform(xform, xform.inverse)
+        assert np.allclose(comp_loop.as_affine().map(point), point)
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())

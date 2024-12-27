@@ -173,7 +173,7 @@ class CompositeTransform(Transform):
             if ret is None:
                 ret = tr.as_affine()
             else:
-                ret = ret * tr.as_affine()
+                ret = tr.as_affine() * ret
         return ret
 
     @property
