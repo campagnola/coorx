@@ -68,6 +68,12 @@ tr3 = CompositeTransform([tr2, tr1])
 print(tr3.map(coords))
 ```
 
+Caveats
+=======
+* setting a CoordinateSystemGraph to have unique_transforms is incompatible with
+  using `as_affine` or anything that depends on that (`full_matrix`, `to_vispy`,
+  etc.)
+
 Todo
 ====
 

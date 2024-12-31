@@ -185,7 +185,9 @@ class TTransform(Transform):
         return m
 
     def as_st(self):
-        return STTransform(offset=self.offset, scale=(1,) * self.dims[0], from_cs=self.systems[0], to_cs=self.systems[1])
+        return STTransform(
+            offset=self.offset, scale=(1,) * self.dims[0], from_cs=self.systems[0], to_cs=self.systems[1]
+        )
 
     def __mul__(self, tr):
         self.validate_transform_for_mul(tr)
@@ -586,7 +588,9 @@ class AffineTransform(Transform):
         return -self.offset
 
     def as_affine(self):
-        return AffineTransform(matrix=self.matrix.copy(), offset=self.offset.copy(), from_cs=self.systems[0], to_cs=self.systems[1])
+        return AffineTransform(
+            matrix=self.matrix.copy(), offset=self.offset.copy(), from_cs=self.systems[0], to_cs=self.systems[1]
+        )
 
     @property
     def full_matrix(self):
@@ -693,9 +697,7 @@ class AffineTransform(Transform):
         self.validate_transform_for_mul(tr)
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
-            return AffineTransform(
-                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1]
-            )
+            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1])
         return tr.__rmul__(self)
 
     def __eq__(self, tr):
