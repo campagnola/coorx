@@ -119,8 +119,12 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
 
 def test_this_one_weird_situation():
     cs2_from_cs1 = create_transform("NullTransform", {}, dims=(3, 3), systems=("cs1", "cs2"))
-    cs3_from_cs2 = create_transform("SRT3DTransform", PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs3", "cs2"))
-    cs1_from_cs0 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs0"))
+    cs3_from_cs2 = create_transform("SRT3DTransform", PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs2", "cs3"))
+    cs3_from_cs1 = cs3_from_cs2 * cs2_from_cs1
+    assert str(cs3_from_cs1.map(Point([1, 1, 1], "cs1")).system) == "cs3"
+    assert cs3_from_cs2.full_matrix.shape == (4, 4)  # just used to access it, really
+
+    cs1_from_cs0 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs0", "cs1"))
     cs3_from_cs0 = cs3_from_cs2 * cs2_from_cs1 * cs1_from_cs0
     assert str(cs3_from_cs0.map(Point([1, 1, 1], "cs0")).system) == "cs3"
 
