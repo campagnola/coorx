@@ -97,6 +97,10 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
     explicitly_mapped = cs3_from_cs2.map(cs2_from_cs1.map(point))
     assert str(explicitly_mapped.system) == "cs3"
 
+    with contextlib.suppress(NotImplementedError):  # ignore non-affine transforms here
+        affine_mapped = cs3_from_cs2.as_affine().map(cs2_from_cs1.as_affine().map(point))
+        assert str(affine_mapped.system) == "cs3"
+
     mult_mapped = (cs3_from_cs2 * cs2_from_cs1).map(point)
     assert str(mult_mapped.system) == "cs3"
 
@@ -112,7 +116,13 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
     with raises(TypeError, match=comp_impossible):
         CompositeTransform(cs3_from_cs2, cs2_from_cs1)
 
-    # TODO inverses
+
+def test_this_one_weird_situation():
+    cs2_from_cs1 = create_transform("NullTransform", {}, dims=(3, 3), systems=("cs1", "cs2"))
+    cs3_from_cs2 = create_transform("SRT3DTransform", PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs3", "cs2"))
+    cs1_from_cs0 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs0"))
+    cs3_from_cs0 = cs3_from_cs2 * cs2_from_cs1 * cs1_from_cs0
+    assert str(cs3_from_cs0.map(Point([1, 1, 1], "cs0")).system) == "cs3"
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
