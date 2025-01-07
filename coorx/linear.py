@@ -91,6 +91,7 @@ class TTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
+    state_keys = ["offset"]
 
     def __init__(self, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset})
@@ -237,6 +238,7 @@ class STTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
+    state_keys = ["_scale", "_offset"]
 
     def __init__(self, scale=None, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset, "scale": scale})
@@ -474,6 +476,7 @@ class AffineTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
+    state_keys = ["matrix", "offset"]
 
     def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
@@ -721,6 +724,7 @@ class SRT3DTransform(Transform):
     """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
+    state_keys = ["_state"]
 
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
         kwds.setdefault("dims", (3, 3))
@@ -988,7 +992,6 @@ class SRT3DTransform(Transform):
         affine.scale(self._state["scale"])
         affine.rotate(self._state["angle"], self._state["axis"])
         affine.translate(self._state["offset"])
-        # TODO affine.set_systems(*self.systems)
         # TODO figure out if this can be generalized to all meta data
         return affine
 
@@ -1021,6 +1024,7 @@ class PerspectiveTransform(Transform):
 
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
+    state_keys = ["affine"]
 
     def __init__(self, **kwds):
         kwds.setdefault("dims", (3, 3))

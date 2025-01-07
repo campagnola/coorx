@@ -63,7 +63,10 @@ class Transform(object):
     Additive = None
 
     # The transform is dynamically bound to other transforms that may change.
-    Dynamic = False
+    Dependent = False
+
+    # List of keys that will be saved and restored in __getstate__ and __setstate__
+    state_keys = []
 
     def __init__(self, dims:Dims=None, from_cs:StrOrNone=None, to_cs:StrOrNone=None, cs_graph:StrOrNone=None):
         if dims is None or np.isscalar(dims):
@@ -352,9 +355,8 @@ class Transform(object):
         return "<%s at 0x%x>" % (self.__class__.__name__, id(self))
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state['_change_callbacks'] = []
-        state['_inverse'] = None
+        state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
+        state["_dims"] = self.dims
         if self.systems[0] is None:
             state['_systems'] = (None, None, None)
         else:
@@ -364,7 +366,7 @@ class Transform(object):
     def __setstate__(self, state):
         from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
         self.__dict__.update(state)
-        if not self.Dynamic:
+        if not self.Dependent:
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)
 
@@ -400,7 +402,9 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    Dynamic = True
+    Dependent = True
+
+    state_keys = ["_inverse"]
 
     def __init__(self, transform):
         Transform.__init__(self)
