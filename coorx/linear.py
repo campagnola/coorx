@@ -91,7 +91,7 @@ class TTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["offset"]
+    state_keys = ["_offset"]
 
     def __init__(self, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset})
