@@ -12,6 +12,13 @@ try:
 except ImportError:
     HAVE_ITK = False
 
+
+try:
+    import vispy
+    HAVE_VISPY = True
+except ImportError:
+    HAVE_VISPY = False
+
 import coorx
 
 NT = coorx.NullTransform
@@ -208,6 +215,7 @@ class CompositeTransform(unittest.TestCase):
         composite = coorx.CompositeTransform(t1, t2.inverse)
         assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
 
+    @unittest.skipIf(not HAVE_VISPY, "vispy could not be imported")
     def test_as_vispy(self):
         from vispy.visuals.transforms import ChainTransform
 
@@ -261,10 +269,8 @@ class TTransform(unittest.TestCase):
         tt3 = pickle.loads(pickle.dumps(tt))
         assert np.all(tt.map(pts) == tt3.map(pts))
 
+    @unittest.skipIf(not HAVE_ITK, "itk could not be imported")
     def test_itk_compat(self):
-        if not HAVE_ITK:
-            self.skipTest("itk could not be imported")
-
         itk_tr = itk.TranslationTransform[itk.D, 3].New()
         ttr = TT(dims=(3, 3))
 
@@ -454,6 +460,7 @@ class SRT3DTransformTest(unittest.TestCase):
         assert s["type"] == "SRT3DTransform"
         assert s["dims"] == (3, 3)
 
+    @unittest.skipIf(not HAVE_VISPY, "vispy could not be imported")
     def test_as_vispy(self):
         tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
         vt = tr.as_vispy()

@@ -3,6 +3,9 @@ Coorx
 
 A dynamic web of linear and nonlinear coordinate system transforms.
 
+[![Tests](https://github.com/campagnola/coorx/actions/workflows/test.yml/badge.svg)](https://github.com/campagnola/coorx/actions/workflows/test.yml)
+[![PyPI version](https://badge.fury.io/py/coorx.svg)](https://badge.fury.io/py/coorx)
+
 * A collection of different types of coordinate system transform classes with unit test coverage
 * Easy methods for mapping coordinate data through these transforms
 * "Coordinate system" type-check-like functionality to find transform disagreements explicitly and early
