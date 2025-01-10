@@ -79,7 +79,7 @@ class Transform(object):
         self._change_callbacks = []
         self._systems = (None, None)
 
-        with contextlib.suppress(NotImplementedError):
+        if not self.Dependent:
             # optional coordinate system tracking
             self.set_systems(from_cs, to_cs, cs_graph)
 
