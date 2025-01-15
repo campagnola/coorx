@@ -7,7 +7,7 @@ from .coordinates import Point, PointArray
 from .util import AxisSelectionEmbeddedTransform
 
 
-__version__ = "1.0.0"
+__version__ = "1.0.3"
 
 
 def transform_types():
@@ -28,6 +28,6 @@ def create_transform(type, params, dims=None, systems=(None, None)):
         _cached_types = {tr.__name__: tr for tr in transform_types()}
 
     if type not in _cached_types:
-        raise TypeError("Unknown transform type %r" % type)
+        raise TypeError(f"Unknown transform type {type!r}")
 
     return _cached_types[type](dims=dims, from_cs=systems[0], to_cs=systems[1], **params)
