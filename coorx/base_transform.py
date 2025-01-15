@@ -375,8 +375,17 @@ class Transform(object):
         """
         tr = self.__class__(dims=self.dims)
         state = self.__getstate__()
-        if from_cs is not None:
-            state['_systems'] = (from_cs, to_cs, from_cs.graph.name)
+        if from_cs is not None or to_cs is not None:
+            if self.Dependent:
+                raise TypeError("Cannot set systems on a dependent transform")
+            from_cs = from_cs or self.systems[0]
+            to_cs = to_cs or self.systems[1]
+            graph = None
+            if from_cs is not None and not isinstance(from_cs, str):
+                graph = from_cs.graph.name
+            if graph is None and to_cs is not None and not isinstance(to_cs, str):
+                graph = to_cs.graph.name
+            state['_systems'] = (from_cs, to_cs, graph)
         tr.__setstate__(state)
         return tr
 

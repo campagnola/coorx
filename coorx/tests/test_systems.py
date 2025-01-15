@@ -130,6 +130,35 @@ def test_this_one_weird_situation():
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
+@pytest.mark.parametrize("inverse1", [False, True])
+@pytest.mark.parametrize("inverse2", [False, True])
+def test_copy(type1, inverse1, inverse2):
+    if inverse1:
+        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
+    else:
+        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
+    copy = cs2_from_cs1.copy(from_cs="cs4")
+    assert str(copy.systems[0]) == "cs4"
+    assert str(copy.systems[1]) == "cs2"
+    copy = cs2_from_cs1.copy(to_cs="cs5")
+    assert str(copy.systems[0]) == "cs1"
+    assert str(copy.systems[1]) == "cs5"
+    copy = cs2_from_cs1.copy(from_cs="cs4", to_cs="cs5")
+    assert str(copy.systems[0]) == "cs4"
+    assert str(copy.systems[1]) == "cs5"
+
+
+def test_composite_copy():
+    cs2_from_cs1 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs2"))
+    cs3_from_cs2 = create_transform("STTransform", PARAMS["STTransform"], dims=(3, 3), systems=("cs2", "cs3"))
+    cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
+    with pytest.raises(TypeError):
+        cs3_from_cs1.copy(from_cs="cs4")
+    with pytest.raises(TypeError):
+        cs3_from_cs1.copy(to_cs="cs4")
+
+
+@pytest.mark.parametrize("type1", PARAMS.keys())
 def test_as_affine_systems(type1):
     xform = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
     point = Point([1, 2, 3], "affine1")
