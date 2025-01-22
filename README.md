@@ -1,23 +1,21 @@
 Coorx
 ==========
 
-A dynamic web of linear and nonlinear coordinate system transforms.
+Coorx implements object-oriented linear and nonlinear coordinate system transforms.
+Optionally, coorx also keeps track of a graph of coordinate systems (such as a scene graph)
+that are connected by transforms, allowing automatic mapping between coordinate systems.
 
 [![Tests](https://github.com/campagnola/coorx/actions/workflows/test.yml/badge.svg)](https://github.com/campagnola/coorx/actions/workflows/test.yml)
 [![PyPI version](https://badge.fury.io/py/coorx.svg)](https://badge.fury.io/py/coorx)
 
 * A collection of different types of coordinate system transform classes with unit test coverage
 * Easy methods for mapping coordinate data through these transforms
-* "Coordinate system" type-check-like functionality to find transform disagreements explicitly and early
 * Transform composition and simplification
 * Transforms intelligently map data types including numpy arrays, lists, etc.
-
-Wishlist:
-
 * Automatic generation of composite transforms from a coordinate system graph
 * Coordinate arrays that know which coordinate system they live in to handle automatic mapping
-* 2-way conversion of transforms between ITK, Qt, scikit-image, vispy, etc.
-* Numba, cuda optimization
+* Using named coordinate systems, coorx warns you wnen you try to map data through the wrong transform
+* Automatic conversion of (some) transforms between ITK, Qt, scikit-image, and vispy
 
 
 Installation
