@@ -11,8 +11,6 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
-import contextlib
-
 import numpy as np
 
 from .systems import CoordinateSystemGraph
@@ -79,6 +77,8 @@ class Transform(object):
         self._change_callbacks = []
         self._systems = (None, None)
 
+        if self.Dependent and any((from_cs, to_cs, cs_graph)):
+            raise ValueError("Cannot set systems on a dependent transform")
         if not self.Dependent:
             # optional coordinate system tracking
             self.set_systems(from_cs, to_cs, cs_graph)
@@ -352,7 +352,7 @@ class Transform(object):
         return CompositeTransform([self, tr])
 
     def __repr__(self):
-        return "<%s at 0x%x>" % (self.__class__.__name__, id(self))
+        return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
         state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
@@ -366,9 +366,8 @@ class Transform(object):
     def __setstate__(self, state):
         from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
         self.__dict__.update(state)
-        if not self.Dependent:
-            self._systems = (None, None)
-            self.set_systems(from_cs, to_cs, graph)
+        self._systems = (None, None)
+        self.set_systems(from_cs, to_cs, graph)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform.
@@ -427,6 +426,12 @@ class InverseTransform(Transform):
 
     def copy(self, from_cs=None, to_cs=None):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
+
+    def __setstate__(self, state):
+        inverse = state["_inverse"]
+        self._inverse = inverse
+        self._map = inverse._imap
+        self._imap = inverse._map
 
     @property
     def dims(self):

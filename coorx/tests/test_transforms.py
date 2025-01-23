@@ -3,6 +3,8 @@ import pickle
 import unittest
 
 import numpy as np
+
+import coorx
 from coorx import LogTransform
 
 try:
@@ -19,7 +21,6 @@ try:
 except ImportError:
     HAVE_VISPY = False
 
-import coorx
 
 NT = coorx.NullTransform
 TT = coorx.TTransform

@@ -49,6 +49,9 @@ class CompositeTransform(Transform):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         raise NotImplementedError("Cannot set systems on a CompositeTransform")
 
+    def __setstate__(self, state):
+        self._transforms = state["_transforms"]
+
     @property
     def dims(self):
         if len(self.transforms) == 0:
