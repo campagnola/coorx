@@ -11,7 +11,6 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
-import contextlib
 
 import numpy as np
 
