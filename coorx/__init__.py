@@ -1,7 +1,7 @@
 from ._util import TransformCache
 from .base_transform import Transform, InverseTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform
-from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform
+from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform, TransposeTransform
 from .nonlinear import LogTransform, PolarTransform
 from .coordinates import Point, PointArray
 from .util import AxisSelectionEmbeddedTransform

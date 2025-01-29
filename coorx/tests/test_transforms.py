@@ -24,6 +24,7 @@ except ImportError:
 
 NT = coorx.NullTransform
 TT = coorx.TTransform
+XT = coorx.TransposeTransform
 ST = coorx.STTransform
 AT = coorx.AffineTransform
 RT = coorx.AffineTransform
@@ -47,8 +48,9 @@ class TransformMultiplication(unittest.TestCase):
         s = ST(dims=(3, 3))
         a = AT(dims=(3, 3))
         p = PT(dims=(3, 3))
+        x = XT(dims=(3, 3))
         log_trans = LT(dims=(3, 3))
-        c1 = CT([s, a, p])
+        c1 = CT([s, a, p, x])
         assert c1
         c2 = CT([s, a, s])
 
@@ -57,6 +59,7 @@ class TransformMultiplication(unittest.TestCase):
         assert isinstance(n * s, ST)
         assert isinstance(n * p, PT)
         assert isinstance(t * t, TT)
+        assert isinstance(x * x, NT)
         assert isinstance(t * s, ST)
         assert isinstance(t * a, AT)
         assert isinstance(s * t, ST)
@@ -69,6 +72,10 @@ class TransformMultiplication(unittest.TestCase):
         assert isinstance(a * p, CT)
         assert isinstance(p * a, CT)
         assert isinstance(p * s, CT)
+        assert isinstance(s * x, CT)
+        assert isinstance(x * a, CT)
+        assert isinstance(t * x, CT)
+        assert isinstance(x.inverse * t, CT)
         assert_composite_types(p * a, [AT, PT])
         assert_composite_types(p * s, [ST, PT])
         assert_composite_types(s * p, [PT, ST])
@@ -76,7 +83,7 @@ class TransformMultiplication(unittest.TestCase):
         assert_composite_types(s * a * p, [PT, AT])
         assert_composite_types(p * s * a, [AT, ST, PT])
         assert_composite_types(s * p * s, [ST, PT, ST])
-        assert_composite_types(s * a * p * s * a, [AT, ST, PT, AT])
+        assert_composite_types(s * a * p * x * s * a, [AT, ST, XT, PT, AT])
         assert_composite_types(c2 * a, [AT, ST, AT, ST])
         assert_composite_types(p * log_trans * s, [ST, LT, PT])
 
@@ -409,6 +416,14 @@ class AffineTransform(unittest.TestCase):
         t2.rotate(90)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
+
+
+class TransposeTransformTest(unittest.TestCase):
+    def test_inverse_and_map(self):
+        tt = XT(dims=(3, 3))
+        pts = np.random.normal(size=(10, 3))
+        assert np.allclose(tt.inverse.map(tt.map(pts)), pts)
+        assert np.allclose(tt.map(pts), pts[..., ::-1])
 
 
 class LogTransformTest(unittest.TestCase):

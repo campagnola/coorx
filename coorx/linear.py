@@ -74,6 +74,40 @@ class NullTransform(Transform):
         return
 
 
+class TransposeTransform(Transform):
+    """Transforms XYZ into IJK and vice versa. Equivalent to doing [::-1] on the last axis of the input array. This
+    does not perform a transpose on the data to be mapped, but rather represents a relationship between two
+    coordinate systems that are themselves transposed in relation to each other."""
+
+    Linear = True
+    Orthogonal = True
+    NonScaling = True
+    Isometric = False
+
+    def _map(self, coords):
+        """Return the input array reversed."""
+        return coords[..., ::-1]
+
+    def _imap(self, coords):
+        """Return the input array reversed."""
+        return coords[..., ::-1]
+
+    @property
+    def params(self):
+        return {}
+
+    def as_affine(self):
+        return AffineTransform(
+            matrix=np.eye(self.dims[0])[::-1], offset=np.zeros(self.dims[0]), from_cs=self.systems[0], to_cs=self.systems[1]
+        )
+
+    def __rmul__(self, tr):
+        if isinstance(tr, TransposeTransform):
+            tr.validate_transform_for_mul(self)
+            return NullTransform(dims=self.dims, from_cs=self.systems[0], to_cs=tr.systems[1])
+        return super().__rmul__(tr)
+
+
 class TTransform(Transform):
     """Transform performing only translation.
 
@@ -724,6 +758,7 @@ class SRT3DTransform(Transform):
     """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
     """
+
     state_keys = ["_state"]
 
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
@@ -1024,6 +1059,7 @@ class PerspectiveTransform(Transform):
 
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
+
     state_keys = ["affine"]
 
     def __init__(self, **kwds):
