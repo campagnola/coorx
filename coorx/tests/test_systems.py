@@ -48,13 +48,13 @@ def test_coordinate_systems():
 
     # composites and their inverses
     loop = CompositeTransform([cs1_to_cs2, cs1_to_cs2.inverse])
-    assert loop.map(pt_cs1) == pt_cs1
-    assert loop.inverse.map(pt_cs1) == pt_cs1
+    assert np.all(loop.map(pt_cs1) == pt_cs1)
+    assert np.all(loop.inverse.map(pt_cs1) == pt_cs1)
 
     # pickle point with CS
-    assert pickle.loads(pickle.dumps(pt_cs1)) == pt_cs1
+    assert np.all(pickle.loads(pickle.dumps(pt_cs1)) == pt_cs1)
 
     # pickle transform with CS
     cs1_to_cs2_p = pickle.loads(pickle.dumps(cs1_to_cs2))
-    assert cs1_to_cs2_p == cs1_to_cs2
+    assert np.all(cs1_to_cs2_p == cs1_to_cs2)
     assert cs1_to_cs2_p.systems == cs1_to_cs2.systems

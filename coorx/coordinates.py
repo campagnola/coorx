@@ -87,14 +87,14 @@ class PointArray(np.ndarray):
     def __repr__(self):
         return f"<{type(self).__name__} {self.shape} in {self.system}>"
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state["system"] = None if self.system is None else (self.system, self.system.graph.name)
-        return state
+    def __reduce__(self):
+        pickled = super().__reduce__()
+        with_system = pickled[2] + ({"system": (self.system.name, self.system.graph.name)},)
+        return pickled[0], pickled[1], with_system
 
     def __setstate__(self, state):
-        sys, graph = state.pop("system")
-        self.__dict__.update(state)
+        sys, graph = state[-1]["system"]
+        super().__setstate__(state[:-1])
         self.set_system(sys, graph)
 
     def __eq__(self, b):
