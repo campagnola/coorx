@@ -1,4 +1,5 @@
 from coorx.types import Mappable
+from ._util import DependentTransformError
 
 from .base_transform import Transform
 from .linear import NullTransform
@@ -19,7 +20,6 @@ class CompositeTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
-    Dependent = True
     state_keys = ["_transforms"]
 
     def __init__(self, *transforms, **kwargs):
@@ -47,7 +47,12 @@ class CompositeTransform(Transform):
         return self.transforms[0].systems[0], self.transforms[-1].systems[1]
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
-        raise NotImplementedError("Cannot set systems on a CompositeTransform")
+        raise DependentTransformError("Cannot set systems on a CompositeTransform")
+
+    def copy(self, from_cs=None, to_cs=None):
+        if from_cs is not None or to_cs is not None:
+            raise ValueError("Cannot set systems on a CompositeTransform")
+        return super().copy()
 
     def __setstate__(self, state):
         self._transforms = state["_transforms"]

@@ -1,4 +1,4 @@
-from ._util import TransformCache
+from ._util import DependentTransformError
 from .base_transform import Transform, InverseTransform
 from .composite import CompositeTransform, SimplifiedCompositeTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform, TransposeTransform

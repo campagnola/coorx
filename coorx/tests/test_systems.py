@@ -153,9 +153,9 @@ def test_composite_copy():
     cs2_from_cs1 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs2"))
     cs3_from_cs2 = create_transform("STTransform", PARAMS["STTransform"], dims=(3, 3), systems=("cs2", "cs3"))
     cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         cs3_from_cs1.copy(from_cs="cs4")
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         cs3_from_cs1.copy(to_cs="cs4")
 
 

@@ -11,8 +11,11 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+import contextlib
+
 import numpy as np
 
+from ._util import DependentTransformError
 from .systems import CoordinateSystemGraph
 from .types import Dims, StrOrNone, Mappable
 
@@ -60,9 +63,6 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    # The transform is dynamically bound to other transforms that may change.
-    Dependent = False
-
     # List of keys that will be saved and restored in __getstate__ and __setstate__
     state_keys = []
 
@@ -77,10 +77,8 @@ class Transform(object):
         self._change_callbacks = []
         self._systems = (None, None)
 
-        if self.Dependent and any((from_cs, to_cs, cs_graph)):
-            raise ValueError("Cannot set systems on a dependent transform")
-        if not self.Dependent:
-            # optional coordinate system tracking
+        # optional coordinate system tracking
+        with contextlib.suppress(DependentTransformError):
             self.set_systems(from_cs, to_cs, cs_graph)
 
     @property
@@ -375,8 +373,6 @@ class Transform(object):
         tr = self.__class__(dims=self.dims)
         state = self.__getstate__()
         if from_cs is not None or to_cs is not None:
-            if self.Dependent:
-                raise TypeError("Cannot set systems on a dependent transform")
             from_cs = from_cs or self.systems[0]
             to_cs = to_cs or self.systems[1]
             graph = None
@@ -410,8 +406,6 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    Dependent = True
-
     state_keys = ["_inverse"]
 
     def __init__(self, transform):
@@ -419,6 +413,9 @@ class InverseTransform(Transform):
         self._inverse = transform
         self._map = transform._imap
         self._imap = transform._map
+
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
+        raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
     def as_affine(self):
         affine = self._inverse.as_affine()
@@ -440,9 +437,6 @@ class InverseTransform(Transform):
     @property
     def systems(self):
         return self._inverse.systems[::-1]
-
-    def set_systems(self, from_cs, to_cs, cs_graph=None):
-        raise NotImplementedError("Cannot set systems on an InverseTransform")
 
     @property
     def Linear(self):
