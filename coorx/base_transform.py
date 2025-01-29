@@ -78,7 +78,7 @@ class Transform(object):
         self._systems = (None, None)
 
         # optional coordinate system tracking
-        with contextlib.suppress(DependentTransformError):
+        if from_cs is not None:
             self.set_systems(from_cs, to_cs, cs_graph)
 
     @property
