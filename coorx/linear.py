@@ -75,27 +75,27 @@ class NullTransform(Transform):
 
 
 class TransposeTransform(Transform):
-    """Transposes axes of input coordinates (as opposed to dimensions)."""
+    """Transposes columns of input coordinates (as opposed to dimensions)."""
 
     Linear = True
     Orthogonal = True
     NonScaling = True
     Isometric = False
-    state_keys = ["axes"]
+    state_keys = ["access_order"]
 
-    def __init__(self, axes: tuple[int, ...] = None, *args, **kwargs):
+    def __init__(self, access_order: tuple[int, ...] = None, *args, **kwargs):
         if "dims" not in kwargs:
-            kwargs["dims"] = (len(axes),) * 2
+            kwargs["dims"] = (len(access_order),) * 2
         super().__init__(*args, **kwargs)
-        self.axes = axes
+        self.access_order = access_order
 
     def _map(self, coords):
         """Return the input array with columns swapped."""
-        return coords[:, self.axes]
+        return coords[:, self.access_order]
 
     def _imap(self, coords):
         """Return the input array columns inversely swapped."""
-        return coords[:, np.argsort(self.axes)]
+        return coords[:, np.argsort(self.access_order)]
 
     @property
     def params(self):
@@ -103,7 +103,7 @@ class TransposeTransform(Transform):
 
     def as_affine(self):
         return AffineTransform(
-            matrix=np.eye(self.dims[0])[:, self.axes],
+            matrix=np.eye(self.dims[0])[:, self.access_order],
             offset=np.zeros(self.dims[0]),
             from_cs=self.systems[0],
             to_cs=self.systems[1],
