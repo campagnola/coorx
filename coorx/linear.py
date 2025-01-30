@@ -75,22 +75,27 @@ class NullTransform(Transform):
 
 
 class TransposeTransform(Transform):
-    """Transforms XYZ into IJK and vice versa. Equivalent to doing [::-1] on the last axis of the input array. This
-    does not perform a transpose on the data to be mapped, but rather represents a relationship between two
-    coordinate systems that are themselves transposed in relation to each other."""
+    """Transposes axes of input coordinates (as opposed to dimensions)."""
 
     Linear = True
     Orthogonal = True
     NonScaling = True
     Isometric = False
+    state_keys = ["axes"]
+
+    def __init__(self, axes: tuple[int, ...] = None, *args, **kwargs):
+        if "dims" not in kwargs:
+            kwargs["dims"] = (len(axes),) * 2
+        super().__init__(*args, **kwargs)
+        self.axes = axes
 
     def _map(self, coords):
-        """Return the input array reversed."""
-        return coords[..., ::-1]
+        """Return the input array with columns swapped."""
+        return coords[:, self.axes]
 
     def _imap(self, coords):
-        """Return the input array reversed."""
-        return coords[..., ::-1]
+        """Return the input array columns inversely swapped."""
+        return coords[:, np.argsort(self.axes)]
 
     @property
     def params(self):
@@ -98,7 +103,10 @@ class TransposeTransform(Transform):
 
     def as_affine(self):
         return AffineTransform(
-            matrix=np.eye(self.dims[0])[::-1], offset=np.zeros(self.dims[0]), from_cs=self.systems[0], to_cs=self.systems[1]
+            matrix=np.eye(self.dims[0])[:, self.axes],
+            offset=np.zeros(self.dims[0]),
+            from_cs=self.systems[0],
+            to_cs=self.systems[1],
         )
 
     def __rmul__(self, tr):

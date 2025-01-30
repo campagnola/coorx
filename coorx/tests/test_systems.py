@@ -72,7 +72,7 @@ PARAMS = {
     "STTransform": {"scale": (2, 2, 2), "offset": (1, 2, 3)},
     "AffineTransform": {"matrix": [[0.5, 0, 0.707107], [0, 2, 0], [0.707107, 0, 0.5]], "offset": (4, 5, 6)},
     "SRT3DTransform": {"scale": (11, 11, 11), "angle": 45, "axis": (0, 1, 0), "offset": (1, 1, 1)},
-    "TransposeTransform": {},
+    "TransposeTransform": {"axes": (1, 0, 2)},
     "LogTransform": {"base": (10, 10, 10)},
     "PolarTransform": {},
 }
