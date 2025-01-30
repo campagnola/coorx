@@ -22,6 +22,7 @@ class LogTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
+    state_keys = ["_base"]
 
     def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
@@ -66,7 +67,7 @@ class LogTransform(Transform):
         return ret
 
     def _imap(self, coords):
-        return self.map(coords, -self.base)
+        return self._map(coords, -self.base)
 
     @property
     def params(self):
@@ -135,8 +136,6 @@ class PolarTransform(Transform):
 #    # TODO
 
 
-
-
 class LensDistortionTransform(Transform):
     """https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
 
@@ -144,6 +143,8 @@ class LensDistortionTransform(Transform):
     Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
     and p1, p2 are tangential distortion coefficients.
     """
+    state_keys = ["coeff"]
+
     def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
         kwds.setdefault('dims', (2, 2))
         assert kwds['dims'] == (2, 2)

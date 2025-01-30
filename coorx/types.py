@@ -4,7 +4,7 @@ from typing import Union, Protocol
 
 StrOrNone = Union[None, str]
 Dim = Union[None, int]
-Dims = Union[Dim, 'tuple[Dim]']
+Dims = Union[Dim, 'tuple[Dim, Dim]']
 CoordSysOrStr = Union[str, 'CoordinateSystem']
 
 class CustomMappable(Protocol):
