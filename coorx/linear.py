@@ -91,11 +91,11 @@ class TransposeTransform(Transform):
 
     def _map(self, coords):
         """Return the input array with columns swapped."""
-        return coords[:, self.axis_order]
+        return coords[..., self.axis_order]
 
     def _imap(self, coords):
         """Return the input array columns inversely swapped."""
-        return coords[:, np.argsort(self.axis_order)]
+        return coords[..., np.argsort(self.axis_order)]
 
     @property
     def params(self):
@@ -112,7 +112,9 @@ class TransposeTransform(Transform):
     def __rmul__(self, tr):
         if isinstance(tr, TransposeTransform):
             tr.validate_transform_for_mul(self)
-            return NullTransform(dims=self.dims, from_cs=self.systems[0], to_cs=tr.systems[1])
+            return TransposeTransform(
+                axis_order=tuple(self._map(np.array(tr.axis_order))), from_cs=self.systems[0], to_cs=tr.systems[1]
+            )
         return super().__rmul__(tr)
 
 

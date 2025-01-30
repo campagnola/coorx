@@ -59,7 +59,7 @@ class TransformMultiplication(unittest.TestCase):
         assert isinstance(n * s, ST)
         assert isinstance(n * p, PT)
         assert isinstance(t * t, TT)
-        assert isinstance(x * x, NT)
+        assert isinstance(x * x, XT)
         assert isinstance(t * s, ST)
         assert isinstance(t * a, AT)
         assert isinstance(s * t, ST)
