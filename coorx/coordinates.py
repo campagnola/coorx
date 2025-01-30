@@ -30,7 +30,10 @@ class PointArray(np.ndarray):
         system = points_system or system
         graph = points_graph or graph
         if system is not None:
-            obj.set_system(system, graph)
+            if graph is None:
+                obj.set_system(system)
+            else:
+                obj.set_system(system, graph.name)
         if obj.system is not None and obj.shape[-1] != obj.system.ndim:
             raise ValueError(f"System ndim is {obj.system.ndim}, but coordinate data is {obj.shape[-1]}D")
 
@@ -41,6 +44,24 @@ class PointArray(np.ndarray):
             return
         self.system = getattr(obj, "system", None)
         self.graph = getattr(obj, "graph", None)
+
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        args = [x.view(np.ndarray) if isinstance(x, PointArray) else x for x in inputs]
+        result = getattr(ufunc, method)(*args, **kwargs)
+        if isinstance(result, tuple):
+            return tuple(x.view(np.ndarray) if isinstance(x, PointArray) else x for x in result)
+        elif isinstance(result, PointArray):
+            return result.view(np.ndarray)
+        else:
+            return result
+
+    def __array_wrap__(
+        self,
+        array,
+        context = ...,
+        /,
+    ):
+        return array.view(np.ndarray)
 
     def __getitem__(self, idx):
         result = super().__getitem__(idx)
@@ -56,11 +77,11 @@ class PointArray(np.ndarray):
 
     def __add__(self, b):
         self._check_operand(b)
-        return super().__add__(b)
+        return super().__add__(b).view(np.ndarray)
 
     def __sub__(self, b):
         self._check_operand(b)
-        return super().__sub__(b)
+        return super().__sub__(b).view(np.ndarray)
 
     def mapped_through(self, cs_list):
         chain = self.system.graph.transform_chain([self.system] + cs_list)
@@ -75,6 +96,7 @@ class PointArray(np.ndarray):
         from .systems import get_coordinate_system
 
         self.system = get_coordinate_system(system, graph=graph, ndim=self.shape[-1], create=True)
+        self.graph = self.system.graph
 
     def _coorx_transform(self, tr):
         if tr.systems[0] is not self.system:
@@ -85,7 +107,8 @@ class PointArray(np.ndarray):
         return PointArray(mapped, system=tr.systems[1])
 
     def __repr__(self):
-        return f"<{type(self).__name__} {self.shape} in {self.system}>"
+        sysname = f" in {self.system}" if self.system is not None else ""
+        return f"<{type(self).__name__} {self.shape}{sysname}>"
 
     def __reduce__(self):
         pickled = super().__reduce__()
@@ -121,7 +144,7 @@ class PointArray(np.ndarray):
                     raise TypeError(f"Object array with item type {type(first)} not supported as input.")
             else:
                 first = coordinates
-                for i in range(coord_arr.ndim - 1):
+                for _ in range(coord_arr.ndim - 1):
                     first = first[0]
 
             if isinstance(first, Point):
