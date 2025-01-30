@@ -21,6 +21,12 @@ class CoordinateSystemGraph:
       (such as dimensionality)
     - Only one transform connecting any pair of coordinate systems
       (requires unique_transforms=True; the default graph ignores this constraint)
+
+    Caveats
+    =======
+    * setting a CoordinateSystemGraph to have unique_transforms is incompatible with
+      using `as_affine` or anything that depends on that (`full_matrix`, `as_vispy`,
+      etc.)
     """
 
     all_graphs = {}

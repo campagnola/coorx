@@ -14,6 +14,7 @@ API Issues to work out:
 
 import numpy as np
 
+from ._util import DependentTransformError
 from .systems import CoordinateSystemGraph
 from .types import Dims, StrOrNone, Mappable
 
@@ -61,6 +62,9 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
+    # List of keys that will be saved and restored in __getstate__ and __setstate__
+    state_keys = []
+
     def __init__(self, dims:Dims=None, from_cs:StrOrNone=None, to_cs:StrOrNone=None, cs_graph:StrOrNone=None):
         if dims is None or np.isscalar(dims):
             dims = (dims, dims)
@@ -73,7 +77,8 @@ class Transform(object):
         self._systems = (None, None)
 
         # optional coordinate system tracking
-        self.set_systems(from_cs, to_cs, cs_graph)
+        if from_cs is not None:
+            self.set_systems(from_cs, to_cs, cs_graph)
 
     @property
     def dims(self):
@@ -116,7 +121,7 @@ class Transform(object):
         return self._systems
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
-        assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be str"
+        assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be coordinate systems"
         if from_cs is not None:
             cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
             cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
@@ -269,7 +274,7 @@ class Transform(object):
         """
         return self.as_affine().full_matrix
 
-    def to_vispy(self):
+    def as_vispy(self):
         """Return a VisPy transform that is equivalent to this transform, if possible."""
         from vispy.visuals.transforms import MatrixTransform
         # a functional default if nothing else is implemented
@@ -312,6 +317,8 @@ class Transform(object):
         To ensure that both operands have a chance to simplify the operation,
         all subclasses should follow the same procedure. For `A * B`:
 
+        0. The inner systems of A and B must be the same (all
+           implementations must call validate_transform_for_mul to ensure this).
         1. A.__mul__(B) attempts to generate an optimized transform product.
         2. If that fails, it must:
 
@@ -338,15 +345,15 @@ class Transform(object):
 
     def __rmul__(self, tr):
         """tr * self"""
+        tr.validate_transform_for_mul(self)
         return CompositeTransform([self, tr])
 
     def __repr__(self):
-        return "<%s at 0x%x>" % (self.__class__.__name__, id(self))
+        return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state['_change_callbacks'] = []
-        state['_inverse'] = None
+        state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
+        state["_dims"] = self.dims
         if self.systems[0] is None:
             state['_systems'] = (None, None, None)
         else:
@@ -358,6 +365,23 @@ class Transform(object):
         self.__dict__.update(state)
         self._systems = (None, None)
         self.set_systems(from_cs, to_cs, graph)
+
+    def copy(self, from_cs=None, to_cs=None):
+        """Return a copy of this transform.
+        """
+        tr = self.__class__(dims=self.dims)
+        state = self.__getstate__()
+        if from_cs is not None or to_cs is not None:
+            from_cs = from_cs or self.systems[0]
+            to_cs = to_cs or self.systems[1]
+            graph = None
+            if from_cs is not None and not isinstance(from_cs, str):
+                graph = from_cs.graph.name
+            if graph is None and to_cs is not None and not isinstance(to_cs, str):
+                graph = to_cs.graph.name
+            state['_systems'] = (from_cs, to_cs, graph)
+        tr.__setstate__(state)
+        return tr
 
     def __eq__(self, tr):
         if type(self) is not type(tr):
@@ -375,16 +399,35 @@ class Transform(object):
                     return False
         return True
 
+    def validate_transform_for_mul(self, tr):
+        if tr.systems[1] != self.systems[0]:
+            raise TypeError(f"Cannot multiply transforms with different inner coordinate systems: {self.systems[1]} != {tr.systems[0]}")
+
 
 class InverseTransform(Transform):
+    state_keys = ["_inverse"]
+
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
         self._map = transform._imap
         self._imap = transform._map
 
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
+        raise DependentTransformError("Cannot set systems on a dependent inverse transform")
+
     def as_affine(self):
-        return self._inverse.as_affine().inverse
+        affine = self._inverse.as_affine()
+        return type(affine)(matrix=affine.inv_matrix, offset=affine.inv_matrix @ affine.inv_offset, from_cs=self.systems[0], to_cs=self.systems[1])
+
+    def copy(self, from_cs=None, to_cs=None):
+        return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
+
+    def __setstate__(self, state):
+        inverse = state["_inverse"]
+        self._inverse = inverse
+        self._map = inverse._imap
+        self._imap = inverse._map
 
     @property
     def dims(self):
