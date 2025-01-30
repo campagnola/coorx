@@ -79,13 +79,17 @@ class TransposeTransform(Transform):
 
     Linear = True
     Orthogonal = True
-    NonScaling = True
-    Isometric = False
+    NonScaling = False
+    Isometric = True
     state_keys = ["axis_order"]
 
     def __init__(self, axis_order: tuple[int, ...] = None, *args, **kwargs):
         if "dims" not in kwargs:
             kwargs["dims"] = (len(axis_order),) * 2
+        if kwargs["dims"][0] != kwargs["dims"][1]:
+            raise ValueError("Input and output dimensions must be equal")
+        if axis_order is not None and len(axis_order) != kwargs["dims"][0]:
+            raise ValueError("Axis order must have length equal to transform dimensionality")
         super().__init__(*args, **kwargs)
         self.axis_order = axis_order
 
