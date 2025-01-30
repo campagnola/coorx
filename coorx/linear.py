@@ -81,21 +81,21 @@ class TransposeTransform(Transform):
     Orthogonal = True
     NonScaling = True
     Isometric = False
-    state_keys = ["access_order"]
+    state_keys = ["axis_order"]
 
-    def __init__(self, access_order: tuple[int, ...] = None, *args, **kwargs):
+    def __init__(self, axis_order: tuple[int, ...] = None, *args, **kwargs):
         if "dims" not in kwargs:
-            kwargs["dims"] = (len(access_order),) * 2
+            kwargs["dims"] = (len(axis_order),) * 2
         super().__init__(*args, **kwargs)
-        self.access_order = access_order
+        self.axis_order = axis_order
 
     def _map(self, coords):
         """Return the input array with columns swapped."""
-        return coords[:, self.access_order]
+        return coords[:, self.axis_order]
 
     def _imap(self, coords):
         """Return the input array columns inversely swapped."""
-        return coords[:, np.argsort(self.access_order)]
+        return coords[:, np.argsort(self.axis_order)]
 
     @property
     def params(self):
@@ -103,7 +103,7 @@ class TransposeTransform(Transform):
 
     def as_affine(self):
         return AffineTransform(
-            matrix=np.eye(self.dims[0])[:, self.access_order],
+            matrix=np.eye(self.dims[0])[:, self.axis_order],
             offset=np.zeros(self.dims[0]),
             from_cs=self.systems[0],
             to_cs=self.systems[1],

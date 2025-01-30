@@ -48,7 +48,7 @@ class TransformMultiplication(unittest.TestCase):
         s = ST(dims=(3, 3))
         a = AT(dims=(3, 3))
         p = PT(dims=(3, 3))
-        x = XT(access_order=(2, 1, 0))
+        x = XT(axis_order=(2, 1, 0))
         log_trans = LT(dims=(3, 3))
         c1 = CT([s, a, p, x])
         assert c1
@@ -420,7 +420,7 @@ class AffineTransform(unittest.TestCase):
 
 class TransposeTransformTest(unittest.TestCase):
     def test_inverse_and_map(self):
-        tt = XT(access_order=(2, 1, 0))
+        tt = XT(axis_order=(2, 1, 0))
         pts = np.random.normal(size=(10, 3))
         assert np.allclose(tt.inverse.map(tt.map(pts)), pts)
         assert np.allclose(tt.map(pts), pts[..., ::-1])
