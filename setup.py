@@ -23,7 +23,7 @@ setup(
     version=get_version(),
     author="Luke Campagnola",
     author_email="lukec@alleninstitute.org",
-    description="A dynamic web of linear and nonlinear coordinate system transforms.",
+    description="Object-oriented linear and nonlinear coordinate system transforms, plus coordinate system graphs.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="BSD",
