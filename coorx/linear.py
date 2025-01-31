@@ -1064,6 +1064,21 @@ class SRT3DTransform(Transform):
         else:
             return tr.__rmul__(self)
 
+    @classmethod
+    def from_pyqtgraph(cls, pg_transform, *init_args, **init_kwargs):
+        """Create an SRT3DTransform from a pyqtgraph Transform3D instance"""
+        from pyqtgraph import SRTTransform3D
+
+        if not isinstance(pg_transform, SRTTransform3D):
+            raise TypeError("Input must be a SRTTransform3D instance")
+        tr = cls(*init_args, **init_kwargs)
+        tr.set_offset(pg_transform.getTranslation())
+        tr.set_scale(pg_transform.getScale())
+        angle, axis = pg_transform.getRotation()
+        angle = -angle  # pyqtgraph uses left-handed rotations
+        tr.set_rotation(angle, axis)
+        return tr
+
 
 class PerspectiveTransform(Transform):
     """3D perspective or orthographic matrix transform using homogeneous coordinates.
