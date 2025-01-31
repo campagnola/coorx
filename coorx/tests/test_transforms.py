@@ -22,6 +22,14 @@ except ImportError:
     HAVE_VISPY = False
 
 
+try:
+    import pyqtgraph as pg
+
+    HAVE_PG = True
+except ImportError:
+    HAVE_PG = False
+
+
 NT = coorx.NullTransform
 TT = coorx.TTransform
 XT = coorx.TransposeTransform
@@ -482,6 +490,16 @@ class SRT3DTransformTest(unittest.TestCase):
         vt = tr.as_vispy()
         assert np.allclose(vt.map((1, 1, 1))[:3], tr.map((1, 1, 1)))
         assert np.allclose(vt.map((1, 3, 5))[:3], tr.map((1, 3, 5)))
+
+    @unittest.skipIf(not HAVE_PG, "pyqtgraph could not be imported")
+    def test_to_and_from_pyqtgraph(self):
+        axis = np.array((1, 1, 2))
+        axis = axis / np.linalg.norm(axis)
+        tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=axis)
+        tr2 = coorx.SRT3DTransform.from_pyqtgraph(tr.as_pyqtgraph())
+        assert np.allclose(tr.full_matrix, tr2.full_matrix)
+        pt = np.random.normal(size=(10, 3))
+        assert np.allclose(tr.map(pt), tr2.map(pt))
 
     def test_composite(self):
         tr1 = coorx.SRT3DTransform(offset=(1, 2, 3))
