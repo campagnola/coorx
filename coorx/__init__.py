@@ -7,7 +7,7 @@ from .coordinates import Point, PointArray
 from .util import AxisSelectionEmbeddedTransform
 
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 
 def transform_types():
