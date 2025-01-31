@@ -1070,7 +1070,7 @@ class SRT3DTransform(Transform):
         from pyqtgraph import SRTTransform3D
 
         if not isinstance(pg_transform, SRTTransform3D):
-            raise TypeError("Input must be a Transform3D instance")
+            raise TypeError("Input must be a SRTTransform3D instance")
         tr = cls(*init_args, **init_kwargs)
         tr.set_offset(pg_transform.getTranslation())
         tr.set_scale(pg_transform.getScale())
