@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .types import StrOrNone, CoordSysOrStr
 
 
@@ -120,6 +122,26 @@ class CoordinateSystemGraph:
             return inv.inverse
 
         raise TypeError(f"No transform defined linking '{cs1}' to '{cs2}'")
+
+    def transform_path(self, start, end) -> list:
+        """Return a list of transforms needed to map from start to end."""
+        start, end = self.system(start), self.system(end)
+        if start == end:
+            return []
+        return self._find_path(start, end, set()) or []
+
+    def _find_path(self, start, end, visited) -> list | None:
+        if start in visited:
+            return None
+        visited.add(start)
+        from_start = self.transforms.get(start, {})
+        if end in from_start:
+            return [from_start[end]]
+        for next_cs, transform in from_start.items():
+            path = self._find_path(next_cs, end, visited)
+            if path is not None:
+                return [transform] + path
+        return None
 
     def transform_chain(self, systems):
         from .composite import CompositeTransform

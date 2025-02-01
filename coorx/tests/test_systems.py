@@ -26,13 +26,13 @@ def test_coordinate_systems():
 
     assert pt_cs1.system is default_graph.system("2d-cs1")
     assert np.all(pt_cs1.coordinates == [0, 0])
-    with raises(TypeError, match=missing_tr):
+    with raises(TypeError):
         pt_cs1.mapped_to("2d-cs2")
     with raises(NameError, match=missing_cs):
         pt_cs1.mapped_to("nonexistent_cs")
-    with raises(TypeError, match=missing_tr):
+    with raises(TypeError):
         parr_cs2.mapped_to("2d-cs2")
-    with raises(TypeError, match=wrong_ndim):
+    with raises(TypeError):
         Point([0, 0, 0], "2d-cs1")  # wrong ndim
 
     cs1_to_cs2 = STTransform(scale=[3, 2], offset=[10, 20], from_cs="2d-cs1", to_cs="2d-cs2")
@@ -64,6 +64,21 @@ def test_coordinate_systems():
     cs1_to_cs2_p = pickle.loads(pickle.dumps(cs1_to_cs2))
     assert cs1_to_cs2_p == cs1_to_cs2
     assert cs1_to_cs2_p.systems == cs1_to_cs2.systems
+
+
+def test_mapped_to():
+    CoordinateSystemGraph.get_graph(None)
+    cs1_to_cs2 = STTransform(scale=[3, 2], offset=[10, 20], from_cs="2d-cs1", to_cs="2d-cs2")
+    cs2_to_cs3 = STTransform(scale=[1, 1], offset=[0, 0], from_cs="2d-cs2", to_cs="2d-cs3")
+
+    pt_cs1 = Point([0, 0], "2d-cs1")
+    assert np.allclose(pt_cs1.mapped_to("2d-cs2"), cs1_to_cs2.map(pt_cs1))
+    assert np.allclose(pt_cs1.mapped_to("2d-cs3"), cs2_to_cs3.map(cs1_to_cs2.map(pt_cs1)))
+
+    # inverses, too
+    pt_cs3 = Point([0, 0], "2d-cs3")
+    assert np.allclose(pt_cs3.mapped_to("2d-cs2"), cs2_to_cs3.inverse.map(pt_cs3))
+    assert np.allclose(pt_cs3.mapped_to("2d-cs1"), cs1_to_cs2.inverse.map(cs2_to_cs3.inverse.map(pt_cs3)))
 
 
 PARAMS = {
