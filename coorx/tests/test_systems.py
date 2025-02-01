@@ -29,9 +29,7 @@ def test_coordinate_systems():
     with raises(TypeError):
         pt_cs1.mapped_to("2d-cs2")
     with raises(NameError, match=missing_cs):
-        pt_cs1.mapped_to("nonexistent_cs")
-    with raises(TypeError):
-        parr_cs2.mapped_to("2d-cs2")
+        parr_cs2.mapped_to("nonexistent_cs")
     with raises(TypeError):
         Point([0, 0, 0], "2d-cs1")  # wrong ndim
 
@@ -72,6 +70,7 @@ def test_mapped_to():
     cs2_to_cs3 = STTransform(scale=[1, 1], offset=[0, 0], from_cs="2d-cs2", to_cs="2d-cs3")
 
     pt_cs1 = Point([0, 0], "2d-cs1")
+    assert np.allclose(pt_cs1.mapped_to("2d-cs1"), pt_cs1)
     assert np.allclose(pt_cs1.mapped_to("2d-cs2"), cs1_to_cs2.map(pt_cs1))
     assert np.allclose(pt_cs1.mapped_to("2d-cs3"), cs2_to_cs3.map(cs1_to_cs2.map(pt_cs1)))
 

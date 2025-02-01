@@ -82,9 +82,6 @@ class PointArray:
 
     def mapped_to(self, system):
         path = self.system.graph.transform_path(self.system, system)
-        if not path:
-            raise TypeError(f"No transform path from {self.system} to {system}")
-
         chain = self.system.graph.transform_chain(path)
         return chain.map(self.coordinates)
 

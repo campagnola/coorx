@@ -128,10 +128,9 @@ class CoordinateSystemGraph:
         start, end = self.system(start), self.system(end)
         if start == end:
             return []
-        found = self._find_path(start, end, set())
-        if found:
+        if found := self._find_path(start, end, set()):
             return [start] + found
-        return []
+        raise TypeError(f"No transform path from {start} to {end}")
 
     def _find_path(self, start, end, visited) -> list | None:
         if start in visited:
