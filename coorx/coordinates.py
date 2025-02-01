@@ -85,8 +85,7 @@ class PointArray:
         if not path:
             raise TypeError(f"No transform path from {self.system} to {system}")
 
-        from .composite import CompositeTransform
-        chain = CompositeTransform(path)
+        chain = self.system.graph.transform_chain(path)
         return chain.map(self.coordinates)
 
     def set_system(self, system, graph=None):
