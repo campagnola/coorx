@@ -81,8 +81,8 @@ class PointArray:
         return chain.map(self.coordinates)
 
     def mapped_to(self, system):
-        # todo: automatically determine longer chains
-        chain = self.system.graph.transform_chain([self.system, system])
+        path = self.system.graph.transform_path(self.system, system)
+        chain = self.system.graph.transform_chain(path)
         return chain.map(self.coordinates)
 
     def set_system(self, system, graph=None):

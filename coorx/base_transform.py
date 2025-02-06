@@ -126,7 +126,7 @@ class Transform(object):
             cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
             cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
 
-    def map(self, obj:Mappable):
+    def map(self, obj: Mappable):
         """
         Return *obj* mapped through the forward transformation.
 
@@ -266,7 +266,7 @@ class Transform(object):
         raise NotImplementedError()
 
     @property
-    def full_matrix(self):
+    def full_matrix(self) -> np.ndarray:
         """
         Return the full transformation matrix for this transform, if possible. 
 
@@ -401,7 +401,7 @@ class Transform(object):
 
     def validate_transform_for_mul(self, tr):
         if tr.systems[1] != self.systems[0]:
-            raise TypeError(f"Cannot multiply transforms with different inner coordinate systems: {self.systems[1]} != {tr.systems[0]}")
+            raise TypeError(f"Cannot multiply transforms with different inner coordinate systems: {self.systems[0]} != {tr.systems[1]}")
 
 
 class InverseTransform(Transform):
