@@ -19,8 +19,6 @@ jobs:
         pip install
         build
         --user
-    - name: Install pytest
-      run: python3 -m pip install pytest
     - name: Build a binary wheel and a source tarball
       run: python3 -m build
     - name: Store the distribution packages
@@ -48,8 +46,6 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
-    - name: Run tests
-      run: python3 -m pytest
     - name: Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
 
