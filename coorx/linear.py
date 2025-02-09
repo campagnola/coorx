@@ -1158,3 +1158,80 @@ class PerspectiveTransform(Transform):
 
     def set_params(self, affine=None):
         self.affine.set_params(**affine)
+
+
+class BilinearTransform(Transform):
+    """2D bilinear transform.
+
+    """
+    state_keys = ["_matrix", "_inv_matrix"]
+
+    def __init__(self, **kwds):
+        kwds.setdefault("dims", (2, 2))
+        assert kwds["dims"] == (2, 2)
+        super().__init__(**kwds)
+        
+        self._matrix = np.eye(4)[:2]
+        self._inv_matrix = np.eye(4)[:2]
+
+    def set_mapping(self, points1, points2):
+        """Set to a transformation matrix that maps points1 onto points2.
+
+        Arguments must be array-like with shape (4, 2).
+        """
+        # convert inputs to (4, 2) arrays
+        points1 = self._prepare_arg_for_mapping(points1)[0]
+        points2 = self._prepare_arg_for_mapping(points2)[0]
+        assert points1.shape == points2.shape == (4, 2), "Input arrays must have shape (4, 2)"
+       
+        self._inv_matrix = self._solve_matrix(points2, points1)
+        self._matrix = self._solve_matrix(points1, points2)
+
+    @staticmethod
+    def _solve_matrix(a, b):
+        # solve 2 sets of linear equations to determine transformation matrix elements
+        c = BilinearTransform._prepare_for_mapping(a)
+        matrix = np.zeros((2,4))
+        for i in range(2):
+            # solve Ax = B; x is one row of the desired transformation matrix
+            matrix[i] = numpy.linalg.solve(c, b[:, i])
+        return matrix
+
+    @staticmethod
+    def _prepare_for_mapping(points):
+        # convert [[x, y], ...] to [[x*y, x, y, 1], ...]
+        assert points.ndim >= 2
+        assert points.shape[-1] == 2
+        out = np.empty(points.shape[:-1] + (4,), dtype=points.dtype)
+        out[..., 0] = points[..., 0] * points[..., 1]
+        out[..., 1:3] = points
+        out[..., 3] = 1
+        return out
+
+    @property
+    def matrix(self):
+        return self._matrix.copy()
+    
+    @property
+    def inv_matrix(self):
+        return self._inv_matrix.copy()
+    
+    @matrix.setter
+    def matrix(self, m):
+        self._matrix = np.asarray(m)
+        self._update()
+
+    @inv_matrix.setter
+    def inv_matrix(self, m):
+        self._inv_matrix = np.asarray(m)
+        self._update()
+
+    def _map(self, arr):        
+        arr4 = BilinearTransform._prepare_for_mapping(arr)
+        out = np.dot(arr4, self._matrix.T)
+        return out[:, :2]
+
+    def _imap(self, arr):        
+        arr4 = BilinearTransform._prepare_for_mapping(arr)
+        out = np.dot(arr4, self._inv_matrix.T)
+        return out[:, :2]
