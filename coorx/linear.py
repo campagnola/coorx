@@ -103,7 +103,7 @@ class TransposeTransform(Transform):
 
     @property
     def params(self):
-        return {}
+        return {'axis_order': self.axis_order}
 
     def as_affine(self):
         return AffineTransform(
@@ -1167,12 +1167,13 @@ class BilinearTransform(Transform):
     state_keys = ["_matrix", "_inv_matrix"]
 
     def __init__(self, **kwds):
+        ident = np.eye(4)[:2]
+        self._matrix = kwds.pop("matrix", ident)
+        self._inv_matrix = kwds.pop("inv_matrix", ident)
+
         kwds.setdefault("dims", (2, 2))
         assert kwds["dims"] == (2, 2)
-        super().__init__(**kwds)
-        
-        self._matrix = np.eye(4)[:2]
-        self._inv_matrix = np.eye(4)[:2]
+        super().__init__(**kwds)        
 
     def set_mapping(self, points1, points2):
         """Set to a transformation matrix that maps points1 onto points2.
@@ -1215,16 +1216,6 @@ class BilinearTransform(Transform):
     @property
     def inv_matrix(self):
         return self._inv_matrix.copy()
-    
-    @matrix.setter
-    def matrix(self, m):
-        self._matrix = np.asarray(m)
-        self._update()
-
-    @inv_matrix.setter
-    def inv_matrix(self, m):
-        self._inv_matrix = np.asarray(m)
-        self._update()
 
     def _map(self, arr):        
         arr4 = BilinearTransform._prepare_for_mapping(arr)
@@ -1235,3 +1226,12 @@ class BilinearTransform(Transform):
         arr4 = BilinearTransform._prepare_for_mapping(arr)
         out = np.dot(arr4, self._inv_matrix.T)
         return out[:, :2]
+
+    @property
+    def params(self):
+        return {"matrix": self.matrix, "inv_matrix": self.inv_matrix}
+    
+    def set_params(self, matrix, inv_matrix):
+        self._matrix = matrix
+        self._inv_matrix = inv_matrix
+        self._update()
