@@ -125,11 +125,6 @@ class PolarTransform(Transform):
 #    pass
 
 
-#class BilinearTransform(Transform):
-#    # TODO
-#    pass
-
-
 #class WarpTransform(Transform):
 #    """ Multiple bilinear transforms in a grid arrangement.
 #    """

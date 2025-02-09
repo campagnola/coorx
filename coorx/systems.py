@@ -3,10 +3,11 @@ from __future__ import annotations
 from .types import StrOrNone, CoordSysOrStr
 
 
-def get_coordinate_system(system: CoordSysOrStr, graph: StrOrNone = None, ndim=None, create=False):
-    """Return a CoordinateSystem instance."""
-    graph = CoordinateSystemGraph.get_graph(graph)
-    return graph.check_system(system, ndim=ndim, create=create)
+def get_coordinate_system(system: CoordSysOrStr, graph: StrOrNone = None, ndim=None, create=False) -> 'CoordinateSystem':
+    """Return a CoordinateSystem instance.
+    """
+    csg = CoordinateSystemGraph.get_graph(graph)
+    return csg.check_system(system, ndim=ndim, create=create)
 
 
 class CoordinateSystemGraph:
@@ -30,10 +31,10 @@ class CoordinateSystemGraph:
       etc.)
     """
 
-    all_graphs = {}
+    all_graphs:dict[str|None, 'CoordinateSystemGraph'] = {}
 
     @classmethod
-    def get_graph(cls, graph_name=None):
+    def get_graph(cls, graph_name=None) -> 'CoordinateSystemGraph':
         return cls.all_graphs[graph_name]
 
     def __init__(self, name: str, unique_transforms=False):
@@ -109,8 +110,9 @@ class CoordinateSystemGraph:
         else:
             raise TypeError("system must be str or CoordinateSystem instance")
 
-    def transform(self, cs1: CoordSysOrStr, cs2: CoordSysOrStr):
-        """Return the transform linking cs1 to cs2, or raise KeyError if none is defined."""
+    def transform(self, cs1: CoordSysOrStr, cs2: CoordSysOrStr) -> "Transform":
+        """Return the transform linking cs1 to cs2, or raise KeyError if none is defined.
+        """
         # check that coordinate systems exist
         cs1, cs2 = self.system(cs1), self.system(cs2)
 
@@ -152,7 +154,7 @@ class CoordinateSystemGraph:
                 return [next_cs] + path
         return None
 
-    def transform_chain(self, systems):
+    def transform_chain(self, systems) -> 'CompositeTransform':
         from .composite import CompositeTransform
 
         transforms = []

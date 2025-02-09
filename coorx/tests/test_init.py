@@ -59,6 +59,8 @@ class InitTests(unittest.TestCase):
                 coorx.nonlinear.LensDistortionTransform: {'dims': (2, 2)},
                 coorx.util.AxisSelectionEmbeddedTransform: {'dims': (3, 3), 'axes': [0, 1], 'transform': coorx.NullTransform(dims=(2, 2))},
                 coorx.util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
+                coorx.linear.BilinearTransform: {'dims': (2, 2)},
+                coorx.linear.TransposeTransform: {'axis_order': [1, 0, 2]},
             }
             default_kwargs = {'dims': (3, 3)}
             transform1 = typ(**kwargs.get(typ, default_kwargs))
