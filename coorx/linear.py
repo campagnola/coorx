@@ -1183,7 +1183,7 @@ class BilinearTransform(Transform):
         # convert inputs to (4, 2) arrays
         points1 = self._prepare_arg_for_mapping(points1)[0]
         points2 = self._prepare_arg_for_mapping(points2)[0]
-        assert points1.shape == points2.shape == (4, 2), "Input arrays must have shape (4, 2)"
+        assert points1.shape == points2.shape == (4, 2), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
        
         self._inv_matrix = self._solve_matrix(points2, points1)
         self._matrix = self._solve_matrix(points1, points2)
@@ -1226,6 +1226,100 @@ class BilinearTransform(Transform):
         arr4 = BilinearTransform._prepare_for_mapping(arr)
         out = np.dot(arr4, self._inv_matrix.T)
         return out[:, :2]
+
+    @property
+    def params(self):
+        return {"matrix": self.matrix, "inv_matrix": self.inv_matrix}
+    
+    def set_params(self, matrix, inv_matrix):
+        self._matrix = matrix
+        self._inv_matrix = inv_matrix
+        self._update()
+
+
+
+class Homography2DTransform(Transform):
+    """2D homography transform.
+
+    """
+    state_keys = ["_matrix", "_inv_matrix"]
+
+    def __init__(self, **kwds):
+        ident = np.eye(3)
+        self._matrix = kwds.pop("matrix", ident)
+        self._inv_matrix = kwds.pop("inv_matrix", ident)
+
+        kwds.setdefault("dims", (2, 2))
+        assert kwds["dims"] == (2, 2)
+        super().__init__(**kwds)        
+
+    def set_mapping(self, points1, points2):
+        """Set to a transformation matrix that maps points1 onto points2.
+
+        Arguments must be array-like with shape (4, 2).
+        """
+        # convert inputs to (4, 2) arrays
+        points1 = self._prepare_arg_for_mapping(points1)[0]
+        points2 = self._prepare_arg_for_mapping(points2)[0]
+        assert points1.shape == points2.shape == (4, 2), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
+       
+        self._inv_matrix = self._solve_matrix(points2, points1)
+        self._matrix = self._solve_matrix(points1, points2)
+
+    @staticmethod
+    def _solve_matrix(a, b):
+        assert a.shape == (4, 2) and b.shape == (4, 2), "a and B must be of shape (4, 2)"
+        
+        # Constructing the matrix to solve ah = b
+        a_matrix = []
+        b_matrix = []
+        for (x, y), (x_prime, y_prime) in zip(a, b):
+            a_matrix.append([x, y, 1, 0, 0, 0, -x * x_prime, -y * x_prime])
+            a_matrix.append([0, 0, 0, x, y, 1, -x * y_prime, -y * y_prime])
+            b_matrix.extend([x_prime, y_prime])
+        
+        a_matrix = np.array(a_matrix)
+        b_matrix = np.array(b_matrix)
+        
+        # Solving for h (the homography parameters)
+        h = np.linalg.lstsq(a_matrix, b_matrix, rcond=None)[0]
+        
+        # Construct the homography matrix
+        H = np.array([
+            [h[0], h[1], h[2]],
+            [h[3], h[4], h[5]],
+            [h[6], h[7], 1]
+        ])
+        
+        return H
+
+    @staticmethod
+    def _prepare_for_mapping(points):
+        # convert [[x, y], ...] to [[x, y, 1], ...]
+        assert points.ndim >= 2
+        assert points.shape[-1] == 2
+        out = np.empty(points.shape[:-1] + (3,), dtype=points.dtype)
+        out[..., :2] = points
+        out[..., 2] = 1
+        return out
+
+    @property
+    def matrix(self):
+        return self._matrix.copy()
+    
+    @property
+    def inv_matrix(self):
+        return self._inv_matrix.copy()
+
+    def _map(self, arr):        
+        arr4 = self._prepare_for_mapping(arr)
+        out = np.dot(arr4, self._matrix.T)
+        return out[:, :2] / out[:, 2:3]
+
+    def _imap(self, arr):        
+        arr4 = self._prepare_for_mapping(arr)
+        out = np.dot(arr4, self._inv_matrix.T)
+        return out[:, :2] / out[:, 2:3]
 
     @property
     def params(self):
