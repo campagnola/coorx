@@ -15,7 +15,7 @@ API Issues to work out:
 import numpy as np
 
 from ._util import DependentTransformError
-from .systems import CoordinateSystemGraph
+from .systems import CoordinateSystemGraph, CoordinateSystem
 from .types import Dims, StrOrNone, Mappable
 
 
@@ -123,7 +123,10 @@ class Transform(object):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         assert (from_cs is None) == (to_cs is None), "from_cs and to_cs must both be None or both be coordinate systems"
         if from_cs is not None:
-            cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
+            if cs_graph is None and isinstance(from_cs, CoordinateSystem):
+                cs_graph = from_cs.graph
+            else:
+                cs_graph = CoordinateSystemGraph.get_graph(cs_graph)
             cs_graph.add_transform(self, from_cs=from_cs, to_cs=to_cs)
 
     def map(self, obj: Mappable):
