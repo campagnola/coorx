@@ -61,6 +61,7 @@ class InitTests(unittest.TestCase):
                 coorx.util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
                 coorx.linear.BilinearTransform: {'dims': (2, 2)},
                 coorx.linear.TransposeTransform: {'axis_order': [1, 0, 2]},
+                coorx.linear.Homography2DTransform: {'dims': (2, 2)},
             }
             default_kwargs = {'dims': (3, 3)}
             transform1 = typ(**kwargs.get(typ, default_kwargs))
