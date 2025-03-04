@@ -177,7 +177,6 @@ class NotebookExecutionTest(pytest.Item):
         # Execute the entire notebook with a single kernel
         executor = nbclient.NotebookClient(
             test_notebook, 
-            kernel_name='python3',
             timeout=600,  # Increase timeout for longer-running notebooks
             allow_errors=True  # Don't stop on errors, check them later
         )
