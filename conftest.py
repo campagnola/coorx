@@ -52,17 +52,18 @@ def image_to_ascii(img, width=80, height=40):
     img = img.convert('L')
     # Get pixel data
     pixels = np.array(img)
-    
+
     # ASCII characters from dark to light
     chars = ' .:-=+*#%@'
-    
+
     # Map pixel values to ASCII characters
     ascii_img = []
     for row in pixels:
         ascii_row = ''.join(chars[min(int(p * len(chars) / 256), len(chars) - 1)] for p in row)
         ascii_img.append(ascii_row)
-    
+
     return '\n'.join(ascii_img)
+
 
 def create_image_diff(img1_data, img2_data, width=80, height=40):
     """Create a visual diff between two images in ASCII art."""
@@ -70,39 +71,38 @@ def create_image_diff(img1_data, img2_data, width=80, height=40):
     try:
         img1_bytes = base64.b64decode(img1_data)
         img2_bytes = base64.b64decode(img2_data)
-        
+
         img1 = Image.open(io.BytesIO(img1_bytes))
         img2 = Image.open(io.BytesIO(img2_bytes))
-        
+
         # Resize to same dimensions
         size = (min(img1.width, img2.width), min(img1.height, img2.height))
         img1 = img1.resize(size)
         img2 = img2.resize(size)
-        
+
         # Convert to numpy arrays
         arr1 = np.array(img1.convert('RGB')).astype(float)
         arr2 = np.array(img2.convert('RGB')).astype(float)
-        
+
         # Calculate difference and normalize to enhance visibility
         diff = np.abs(arr1 - arr2)
-        if diff.max() > 0:  # Avoid division by zero
-            diff = diff * 255.0 / diff.max()  # Normalize to enhance subtle differences
-        
+        if diff.max() == 0:  # Avoid division by zero
+            return "Could not find any reason why these two images were reported as different"
+
+        diff = diff * 255.0 / diff.max()  # Normalize to enhance subtle differences
+
         # Convert difference back to image
         diff_img = Image.fromarray(diff.astype(np.uint8))
-        
-        # Create ASCII representations
-        ascii_img1 = image_to_ascii(img1, width, height)
-        ascii_img2 = image_to_ascii(img2, width, height)
+
         ascii_diff = image_to_ascii(diff_img, width, height)
-        
+        percent_diff = diff.sum() / (255 * diff.size)
+
         return (
-            "Expected image:\n" + ascii_img1 + "\n\n" +
-            "Actual image:\n" + ascii_img2 + "\n\n" +
-            "Difference (normalized to enhance subtle changes):\n" + ascii_diff
+            f"Normalized difference ({percent_diff:.4f}%):\n{ascii_diff}"
         )
     except Exception as e:
         return f"Failed to create image diff: {str(e)}"
+
 
 def format_diff(expected, actual):
     """Format diff between expected and actual outputs."""
@@ -161,8 +161,8 @@ def compare_outputs(expected_outputs, actual_outputs):
                 elif key not in actual_data:
                     differences.append(f"Missing key {key} in actual output {i}")
                 elif key == 'image/png':
-                    # For images, create an ASCII representation of the diff
                     if expected_data[key] != actual_data[key]:
+                        # For images, create an ASCII representation of the diff
                         image_diff = create_image_diff(expected_data[key], actual_data[key])
                         differences.extend([
                             f"Image data differs in output {i}:",
