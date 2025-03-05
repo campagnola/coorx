@@ -2,6 +2,8 @@ import difflib
 import json
 import base64
 import io
+import os
+
 import numpy as np
 from PIL import Image
 
@@ -307,6 +309,11 @@ class NotebookExecutionTest(pytest.Item):
                 cell_failures.append(f"Cell {i} output differs:\n" + "\n".join(differences))
 
         if cell_failures:
+            # save the new ipynb for comparison
+            base, name = os.path.split(self.notebook_path)
+            failure_path = os.path.join(base, f"test-failure-{name}")
+            with open(failure_path, "w") as f:
+                nbformat.write(test_notebook, f)
             raise OutputDiffError("\n\n".join(cell_failures))
 
     def repr_failure(self, excinfo, **kwargs):
