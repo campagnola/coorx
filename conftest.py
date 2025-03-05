@@ -54,12 +54,17 @@ def image_to_ascii(img, width=80, height=40):
     pixels = np.array(img)
 
     # ASCII characters from dark to light
-    chars = ' .:-=+*#%@'
+    chars = '.:-=+*#%@'
+
+    def char_for_val(p):
+        if p == 0:
+            return ' '
+        return chars[min(int(p * len(chars) / 256), len(chars) - 1)]
 
     # Map pixel values to ASCII characters
     ascii_img = []
     for row in pixels:
-        ascii_row = ''.join(chars[min(int(p * len(chars) / 256), len(chars) - 1)] for p in row)
+        ascii_row = ''.join(char_for_val(p) for p in row)
         ascii_img.append(ascii_row)
 
     return '\n'.join(ascii_img)
