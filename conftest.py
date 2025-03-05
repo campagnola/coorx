@@ -79,10 +79,13 @@ def compare_outputs(expected_outputs, actual_outputs):
                 differences.append(f"Stream name differs: expected {expected.get('name')}, got {actual.get('name')}")
 
             if expected.get('text') != actual.get('text'):
-                differences.append(f"Stream text differs for output {i}:")
-                differences.append(format_diff(expected.get('text'), actual.get('text')))
-
-        elif expected['output_type'] == 'display_data' or expected['output_type'] == 'execute_result':
+                differences.extend(
+                    (
+                        f"Stream text differs for output {i}:",
+                        format_diff(expected.get('text'), actual.get('text')),
+                    )
+                )
+        elif expected['output_type'] in ['display_data', 'execute_result']:
             # Compare data dictionaries
             expected_data = expected.get('data', {})
             actual_data = actual.get('data', {})
@@ -97,24 +100,36 @@ def compare_outputs(expected_outputs, actual_outputs):
                     # For images, just check if they are identical
                     if expected_data[key] != actual_data[key]:
                         differences.append(f"Image data differs in output {i}")
-                else:
-                    # For other data types
-                    if expected_data[key] != actual_data[key]:
-                        differences.append(f"Data for {key} differs in output {i}:")
-                        differences.append(format_diff(expected_data[key], actual_data[key]))
-
+                elif expected_data[key] != actual_data[key]:
+                    differences.extend(
+                        (
+                            f"Data for {key} differs in output {i}:",
+                            format_diff(
+                                expected_data[key], actual_data[key]
+                            ),
+                        )
+                    )
             # Compare metadata if present
             if expected.get('metadata', {}) != actual.get('metadata', {}):
-                differences.append(f"Metadata differs in output {i}:")
-                differences.append(format_diff(expected.get('metadata', {}), actual.get('metadata', {})))
-
+                differences.extend(
+                    (
+                        f"Metadata differs in output {i}:",
+                        format_diff(
+                            expected.get('metadata', {}),
+                            actual.get('metadata', {}),
+                        ),
+                    )
+                )
         elif expected['output_type'] == 'error':
             # Compare error name, value and traceback
             for attr in ['ename', 'evalue']:
                 if expected.get(attr) != actual.get(attr):
-                    differences.append(f"Error {attr} differs in output {i}:")
-                    differences.append(format_diff(expected.get(attr), actual.get(attr)))
-
+                    differences.extend(
+                        (
+                            f"Error {attr} differs in output {i}:",
+                            format_diff(expected.get(attr), actual.get(attr)),
+                        )
+                    )
             # Compare tracebacks
             if expected.get('traceback') != actual.get('traceback'):
                 differences.append(f"Error traceback differs in output {i}")
@@ -187,7 +202,7 @@ class NotebookExecutionTest(pytest.Item):
         try:
             executor.execute()
         except Exception as e:
-            raise ExecutionError(f"Notebook execution failed: {str(e)}")
+            raise ExecutionError("Notebook execution failed") from e
 
         # Load original notebook to compare outputs
         original_notebook = nbformat.read(self.notebook_path, as_version=4)
