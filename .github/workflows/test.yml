@@ -23,7 +23,7 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest numpy scipy vispy pyqtgraph itk pyqt5 nbformat nbdime nbclient Pillow ipykernel
+        pip install pytest numpy scipy vispy pyqtgraph itk pyqt5 nbformat nbdime nbclient Pillow ipykernel matplotlib
         python -m ipykernel install --user
 
     - name: Run tests
