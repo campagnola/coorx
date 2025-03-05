@@ -311,6 +311,7 @@ class NotebookExecutionTest(pytest.Item):
         if cell_failures:
             # save the new ipynb for comparison
             base, name = os.path.split(self.notebook_path)
+            # if you need to get this file from a github-actions-like env, run `act --bind -j test`
             failure_path = os.path.join(base, f"test-failure-{name}")
             with open(failure_path, "w") as f:
                 nbformat.write(test_notebook, f)
