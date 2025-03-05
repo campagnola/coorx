@@ -47,7 +47,7 @@ class NotebookFile(pytest.File):
 def image_to_ascii(img, width=80, height=40):
     """Convert an image to ASCII art."""
     # Resize image
-    img = img.resize((width, height))
+    img = img.resize((width, height), Image.NEAREST)
     # Convert to grayscale
     img = img.convert('L')
     # Get pixel data
@@ -93,7 +93,7 @@ def do_images_differ(img1_data, img2_data, width=80, height=40):
         diff_img = Image.fromarray(diff.astype(np.uint8))
 
         ascii_diff = image_to_ascii(diff_img, width, height)
-        percent_diff = diff.sum() / (255 * diff.size)
+        percent_diff = 100 * diff.sum() / (255 * diff.size)
 
         return True, f"Normalized difference ({percent_diff:.4f}%):\n{ascii_diff}"
     except Exception as e:
