@@ -65,7 +65,7 @@ def image_to_ascii(img, width=80, height=40):
     return '\n'.join(ascii_img)
 
 
-def create_image_diff(img1_data, img2_data, width=80, height=40):
+def do_images_differ(img1_data, img2_data, width=80, height=40):
     """Create a visual diff between two images in ASCII art."""
     # Decode base64 images
     try:
@@ -75,19 +75,17 @@ def create_image_diff(img1_data, img2_data, width=80, height=40):
         img1 = Image.open(io.BytesIO(img1_bytes))
         img2 = Image.open(io.BytesIO(img2_bytes))
 
-        # Resize to same dimensions
-        size = (min(img1.width, img2.width), min(img1.height, img2.height))
-        img1 = img1.resize(size)
-        img2 = img2.resize(size)
+        if img1.width != img2.width or img1.height != img2.height:
+            return True, f"Image dimensions differ: {img1.size} vs {img2.size}"
 
         # Convert to numpy arrays
         arr1 = np.array(img1.convert('RGB')).astype(float)
         arr2 = np.array(img2.convert('RGB')).astype(float)
 
-        # Calculate difference and normalize to enhance visibility
+        # Calculate difference
         diff = np.abs(arr1 - arr2)
-        if diff.max() == 0:  # Avoid division by zero
-            return "Could not find any reason why these two images were reported as different"
+        if diff.max() == 0:
+            return False, None
 
         diff = diff * 255.0 / diff.max()  # Normalize to enhance subtle differences
 
@@ -97,11 +95,9 @@ def create_image_diff(img1_data, img2_data, width=80, height=40):
         ascii_diff = image_to_ascii(diff_img, width, height)
         percent_diff = diff.sum() / (255 * diff.size)
 
-        return (
-            f"Normalized difference ({percent_diff:.4f}%):\n{ascii_diff}"
-        )
+        return True, f"Normalized difference ({percent_diff:.4f}%):\n{ascii_diff}"
     except Exception as e:
-        return f"Failed to create image diff: {str(e)}"
+        return True, f"Failed to create image diff: {str(e)}"
 
 
 def format_diff(expected, actual):
@@ -161,12 +157,12 @@ def compare_outputs(expected_outputs, actual_outputs):
                 elif key not in actual_data:
                     differences.append(f"Missing key {key} in actual output {i}")
                 elif key == 'image/png':
-                    if expected_data[key] != actual_data[key]:
+                    images_differ, message = do_images_differ(expected_data[key], actual_data[key])
+                    if images_differ:
                         # For images, create an ASCII representation of the diff
-                        image_diff = create_image_diff(expected_data[key], actual_data[key])
                         differences.extend([
                             f"Image data differs in output {i}:",
-                            image_diff
+                            message
                         ])
                 elif expected_data[key] != actual_data[key]:
                     differences.extend(
