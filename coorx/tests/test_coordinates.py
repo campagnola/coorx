@@ -13,7 +13,7 @@ def check_point(pt, arr, sys):
     assert np.all(pt.coordinates == arr)
     assert pt.system.name == sys
 
-    
+
 class PointTests(unittest.TestCase):
     def test_init(self):
         # list / tuple / array of int
@@ -36,19 +36,19 @@ class PointTests(unittest.TestCase):
             Point([[1, 2, 3, 4]], None)
 
         # PointArray from list of int
-        data = [[1,2], [3,4], [5,6]]
+        data = [[1, 2], [3, 4], [5, 6]]
         arr = PointArray(data, 'sys2')
         check_point(arr, np.array(data), 'sys2')
 
         # PointArray from 1d list of Point
-        data = [Point([1.,2.], 'sys2'), Point([3.,4.], 'sys2'), Point([5.,6.], 'sys2')]
+        data = [Point([1., 2.], 'sys2'), Point([3., 4.], 'sys2'), Point([5., 6.], 'sys2')]
         arr = PointArray(data, 'sys2')
         check_point(arr, np.array(data), 'sys2')
 
         # PointArray from 2d list of Point
         data = [
-            [Point([1.,2.], 'sys2'), Point([3.,4.], 'sys2')], 
-            [Point([5.,6.], 'sys2'), Point([7.,8.], 'sys2')],
+            [Point([1., 2.], 'sys2'), Point([3., 4.], 'sys2')],
+            [Point([5., 6.], 'sys2'), Point([7., 8.], 'sys2')],
         ]
         arr = PointArray(data, 'sys2')
         check_point(arr, np.array(data), 'sys2')
@@ -62,12 +62,11 @@ class PointTests(unittest.TestCase):
         # PointArray from 2x2 array of Point
         data = np.empty((2, 2), dtype=object)
         data[:] = [
-            [Point([1.,2.], 'sys2'), Point([3.,4.], 'sys2')], 
-            [Point([5.,6.], 'sys2'), Point([7.,8.], 'sys2')],
+            [Point([1., 2.], 'sys2'), Point([3., 4.], 'sys2')],
+            [Point([5., 6.], 'sys2'), Point([7., 8.], 'sys2')],
         ]
         arr = PointArray(data, 'sys2')
         check_point(arr, np.array(data.tolist()), 'sys2')
         # check that system is carried from Point
         arr = PointArray(data)
         check_point(arr, np.array(data.tolist()), 'sys2')
-        
