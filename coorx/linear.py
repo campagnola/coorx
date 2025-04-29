@@ -1237,7 +1237,6 @@ class BilinearTransform(Transform):
         self._update()
 
 
-
 class Homography2DTransform(Transform):
     """2D homography transform.
 

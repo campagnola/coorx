@@ -17,7 +17,7 @@ class PointArray:
     graph : str | CoordinateSystemGraph
         If *system* is a string, then the coordinate system is looked up from this graph.
     """
-    def __init__(self, coordinates, system:CoordSysOrStr=None, graph:StrOrNone=None):
+    def __init__(self, coordinates, system: CoordSysOrStr=None, graph: StrOrNone=None):
         coord_arr, source_system = self._interpret_input(coordinates)
 
         assert coord_arr.dtype is not np.dtype(object)
@@ -61,12 +61,13 @@ class PointArray:
         return self.coordinates[index]
     
     def __iter__(self):
-        for x in self.coordinates:
-            yield x
+        yield from self.coordinates
 
     def _check_operand(self, a):
-        assert isinstance(a, PointArray)
-        assert a.system is self.system
+        if not isinstance(a, PointArray):
+            raise TypeError(f"Operand must be a PointArray (received {type(a)})")
+        if a.system is not self.system:
+            raise ValueError(f"Operand system {a.system} does not match this PointArray's system {self.system}")
 
     def __add__(self, b):
         self._check_operand(b)
@@ -112,7 +113,7 @@ class PointArray:
         self.set_system(sys, graph)
 
     def __eq__(self, b):
-        if type(b) != type(self):
+        if type(b) is not type(self):
             return False
         if self.coordinates.shape != b.coordinates.shape:
             return False
@@ -141,7 +142,7 @@ class PointArray:
                     raise TypeError(f"Object array with item type {type(first)} not supported as input.")
             else:
                 first = coordinates
-                for i in range(coord_arr.ndim - 1):
+                for _ in range(coord_arr.ndim - 1):
                     first = first[0]
 
             if isinstance(first, Point):
