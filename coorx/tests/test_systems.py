@@ -73,6 +73,7 @@ def test_mapped_to():
     assert np.allclose(pt_cs1.mapped_to("2d-cs1"), pt_cs1)
     assert np.allclose(pt_cs1.mapped_to("2d-cs2"), cs1_to_cs2.map(pt_cs1))
     assert np.allclose(pt_cs1.mapped_to("2d-cs3"), cs2_to_cs3.map(cs1_to_cs2.map(pt_cs1)))
+    assert np.allclose(pt_cs1.mapped_to("2d-cs3").mapped_to("2d-cs1"), pt_cs1)
 
     # inverses, too
     pt_cs3 = Point([0, 0], "2d-cs3")

@@ -77,14 +77,14 @@ class PointArray:
         self._check_operand(b)
         return self.coordinates - b.coordinates
 
-    def mapped_through(self, cs_list):
+    def mapped_through(self, cs_list) -> "PointArray":
         chain = self.system.graph.transform_chain([self.system] + cs_list)
-        return chain.map(self.coordinates)
+        return chain.map(self)
 
-    def mapped_to(self, system):
+    def mapped_to(self, system) -> "PointArray":
         path = self.system.graph.transform_path(self.system, system)
         chain = self.system.graph.transform_chain(path)
-        return chain.map(self.coordinates)
+        return chain.map(self)
 
     def set_system(self, system, graph=None):
         from .systems import get_coordinate_system
