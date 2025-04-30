@@ -352,8 +352,8 @@ class VectorTests(unittest.TestCase):
 
     def test_vector_transform(self):
         # Define systems and transform
-        cs1 = get_coordinate_system("cs1", ndim=2, create=True)
-        cs2 = get_coordinate_system("cs2", ndim=2, create=True)
+        cs1 = get_coordinate_system("cs1_2d", ndim=2, create=True)
+        cs2 = get_coordinate_system("cs2_2d", ndim=2, create=True)
         # Simple scale+translate transform: x' = 2x + 10, y' = 3y + 20
         tr = STTransform(scale=[2, 3], offset=[10, 20], from_cs=cs1, to_cs=cs2)
 
@@ -369,8 +369,8 @@ class VectorTests(unittest.TestCase):
         # Check endpoints were transformed correctly
         p1_cs2_expected = tr.map(p1_cs1)  # [2*1+10, 3*2+20] = [12, 26]
         p2_cs2_expected = tr.map(p2_cs1)  # [2*4+10, 3*6+20] = [18, 38]
-        check_point(v_cs2.p1, p1_cs2_expected.coordinates, "cs2")
-        check_point(v_cs2.p2, p2_cs2_expected.coordinates, "cs2")
+        check_point(v_cs2.p1, p1_cs2_expected.coordinates, "cs2_2d")
+        check_point(v_cs2.p2, p2_cs2_expected.coordinates, "cs2_2d")
 
         # Check displacement in cs2
         # Disp_cs2 = p2_cs2 - p1_cs2 = [18-12, 38-26] = [6, 12]
@@ -389,8 +389,8 @@ class VectorTests(unittest.TestCase):
 
         pa1_cs2_expected = tr.map(pa1_cs1)  # [[12, 26], [10, 20]]
         pa2_cs2_expected = tr.map(pa2_cs1)  # [[18, 38], [12, 23]]
-        check_point(va_cs2.p1, pa1_cs2_expected.coordinates, "cs2")
-        check_point(va_cs2.p2, pa2_cs2_expected.coordinates, "cs2")
+        check_point(va_cs2.p1, pa1_cs2_expected.coordinates, "cs2_2d")
+        check_point(va_cs2.p2, pa2_cs2_expected.coordinates, "cs2_2d")
 
         # Check displacement in cs2
         # Disp_cs2 = pa2_cs2 - pa1_cs2 = [[6, 12], [2, 3]]
