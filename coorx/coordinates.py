@@ -1,7 +1,9 @@
+from __future__ import annotations
 import numpy as np
-from .types import StrOrNone, CoordSysOrStr
+from .types import StrOrNone, CoordSysOrStr, Mappable
+from .systems import CoordinateSystem, CoordinateSystemGraph, get_coordinate_system
 
-    
+
 class PointArray:
     """Represents an N-dimensional array of points. 
 
@@ -70,14 +72,31 @@ class PointArray:
             raise ValueError(f"Operand system {a.system} does not match this PointArray's system {self.system}")
 
     def __add__(self, b):
-        self._check_operand(b)
-        return self.coordinates + b.coordinates
+        if isinstance(b, (Vector, VectorArray)):
+            self._check_vector_operand(b)
+            new_coords = self.coordinates + b.displacement
+            if isinstance(self, Point):
+                return Point(new_coords, system=self.system)
+            else:
+                return PointArray(new_coords, system=self.system)
+        else:
+            self._check_point_operand(b)
+            # This case should likely not return raw coordinates, but maybe another PointArray?
+            # For now, keeping original behavior for PointArray + PointArray.
+            # Consider if PointArray + PointArray should be allowed or raise TypeError.
+            return self.coordinates + b.coordinates
 
-    def __sub__(self, b):
-        self._check_operand(b)
-        return self.coordinates - b.coordinates
+    def __sub__(self, b: PointArray) -> VectorArray:
+        self._check_point_operand(b)
+        if isinstance(self, Point) and isinstance(b, Point):
+            return Vector(b, self)
+        else:
+            # Ensure operands are PointArray if one is Point
+            p1 = b if isinstance(b, PointArray) else PointArray(b.coordinates, system=b.system)
+            p2 = self if isinstance(self, PointArray) else PointArray(self.coordinates, system=self.system)
+            return VectorArray(p1, p2)
 
-    def mapped_through(self, cs_list) -> "PointArray":
+    def mapped_through(self, cs_list) -> PointArray:
         chain = self.system.graph.transform_chain([self.system] + cs_list)
         return chain.map(self)
 
@@ -94,10 +113,26 @@ class PointArray:
         if tr.systems[0] is not self.system:
             raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}")
         mapped = tr.map(self.coordinates)
-        return PointArray(mapped, system=tr.systems[1])
+        if tr.systems[0] is not self.system:
+            raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}")
+        
+        # Map the raw coordinates
+        mapped_coords = tr.map(self.coordinates)
+        
+        # Determine the output type based on the input type
+        output_system = tr.systems[1]
+        if isinstance(self, Point):
+            return Point(mapped_coords, system=output_system)
+        else:
+            return PointArray(mapped_coords, system=output_system)
 
     def __array__(self, dtype=None):
-        return self.coordinates.astype(dtype, copy=False)
+        # Ensure subclasses like Point also work correctly with np.asarray
+        coords = self.coordinates
+        if dtype is None:
+            return coords
+        else:
+            return coords.astype(dtype, copy=False)
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.shape} in {self.system.name}>"
@@ -147,10 +182,26 @@ class PointArray:
 
             if isinstance(first, Point):
                 source_system = first.system
+            # If input was already PointArray, use its system
+            elif isinstance(coordinates, PointArray):
+                source_system = coordinates.system
             else:
                 source_system = None
 
+
         return coord_arr, source_system
+
+    def _check_point_operand(self, a):
+        if not isinstance(a, PointArray):
+            raise TypeError(f"Operand must be a PointArray or Point (received {type(a)})")
+        if a.system is not self.system:
+            raise ValueError(f"Operand system '{a.system}' does not match this PointArray's system '{self.system}'")
+
+    def _check_vector_operand(self, a):
+        if not isinstance(a, (Vector, VectorArray)):
+            raise TypeError(f"Operand must be a VectorArray or Vector (received {type(a)})")
+        if a.system is not self.system:
+            raise ValueError(f"Operand system '{a.system}' does not match this PointArray's system '{self.system}'")
 
 
 class Point(PointArray):
@@ -171,7 +222,12 @@ class Point(PointArray):
         if tr.systems[0] is not self.system:
             raise TypeError(f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'")
         mapped = tr.map(self.coordinates)
-        return Point(mapped, system=tr.systems[1])
+        # This method is now handled by the overridden _coorx_transform in PointArray
+        # which checks the instance type before returning.
+        # We rely on the base class implementation.
+        return super()._coorx_transform(tr)
 
     def __repr__(self):
-        return f"<{type(self).__name__} {tuple(self.coordinates)} in {self.system.name}>"
+        # Ensure coordinates are displayed correctly even if _coordinates is 2D
+        coords_tuple = tuple(self.coordinates)
+        return f"<{type(self).__name__} {coords_tuple} in {self.system.name}>"
