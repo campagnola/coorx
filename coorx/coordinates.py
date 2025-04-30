@@ -242,6 +242,7 @@ class VectorArray:
 
         self._p1 = p1
         self._p2 = p2
+        self._displacement = p2.coordinates - p1.coordinates
         self._system = p1.system
         # Cache displacement? For now, compute on demand.
         # self._displacement = self._p2.coordinates - self._p1.coordinates
@@ -265,7 +266,7 @@ class VectorArray:
     def displacement(self) -> np.ndarray:
         """The displacement array (p2.coordinates - p1.coordinates)."""
         # Ensure coordinates are used for subtraction
-        return self._p2.coordinates - self._p1.coordinates
+        return self._displacement
 
     @property
     def shape(self) -> tuple:
@@ -285,7 +286,7 @@ class VectorArray:
 
     def __len__(self) -> int:
         """The number of vectors in the array (first dimension, like PointArray)."""
-        return len(self._p1)
+        return len(self.displacement)
 
     def __getitem__(self, index) -> np.ndarray:
         """Get the displacement vector(s) at the given index."""
