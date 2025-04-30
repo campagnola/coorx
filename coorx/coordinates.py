@@ -68,12 +68,6 @@ class PointArray:
     def __iter__(self):
         yield from self.coordinates
 
-    def _check_operand(self, a):
-        if not isinstance(a, PointArray):
-            raise TypeError(f"Operand must be a PointArray (received {type(a)})")
-        if a.system is not self.system:
-            raise ValueError(f"Operand system {a.system} does not match this PointArray's system {self.system}")
-
     def __add__(self, b):
         if isinstance(b, (Vector, VectorArray)):
             self._check_vector_operand(b)
