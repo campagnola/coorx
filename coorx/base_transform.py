@@ -416,7 +416,7 @@ class InverseTransform(Transform):
         self._imap = transform._map
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
-        from ._util import DependentTransformError
+        from .util import DependentTransformError
 
         raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
