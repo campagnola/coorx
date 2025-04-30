@@ -337,9 +337,9 @@ class VectorArray:
         # Use PointArray repr for consistency if not Vector subclass
         if type(self) is VectorArray:
             # Show structural shape and system
-            return f"<{type(self).__name__} shape={self.shape[:-1]} dims={self.shape[-1]} system={self.system.name}>"
+            return f"<{type(self).__name__} shape={self.shape} system={self.system.name}>"
         # Fallback for subclasses (like Vector) - this part will be overridden by Vector.__repr__
-        return f"<{type(self).__name__} system={self.system.name} from={self.p1} to={self.p2}>"
+        return f"<{type(self).__name__} from={self.p1} to={self.p2}>"
 
     def __getstate__(self):
         # Store endpoints, system will be derived on load
