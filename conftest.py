@@ -91,7 +91,7 @@ def do_images_differ(img1_data, img2_data, width=80, height=40):
 
         # Calculate difference
         diff = np.abs(arr1 - arr2)
-        if diff.max() == 0:
+        if diff.max() < 2:
             return False, None
 
         diff = diff * 255.0 / diff.max()  # Normalize to enhance subtle differences
