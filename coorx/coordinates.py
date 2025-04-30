@@ -319,19 +319,10 @@ class VectorArray:
         """
         if isinstance(other, (Vector, VectorArray)):
             self._check_vector_operand(other)
-            # Resulting vector starts at self.p1, ends at p1 + combined displacement
-            combined_displacement = self.displacement + other.displacement
-            new_p2_coords = self.p1.coordinates + combined_displacement
 
-            # Determine output type based on input types
             if isinstance(self, Vector) and isinstance(other, Vector):
-                p1_point = self.p1  # Already a Point
-                new_p2_point = Point(new_p2_coords, system=self.system)
-                return Vector(p1_point, new_p2_point)
-            # If either input is VectorArray, output is VectorArray
-            # Ensure p1 is PointArray for the constructor
-            new_p2_array = PointArray(new_p2_coords, system=self.system)
-            return VectorArray(self.p1, new_p2_array)
+                return Vector(self.p1, self.p2 + other)
+            return VectorArray(self.p1, self.p2 + other)
         elif isinstance(other, PointArray):
             # Adding vector to point: Point + Vector = Point
             # Use PointArray._check_vector_operand for system check
@@ -341,24 +332,6 @@ class VectorArray:
                 return Point(new_coords, system=self.system)
             return PointArray(new_coords, system=self.system)
         return NotImplemented  # Let Python try other.__radd__(self)
-
-    def __radd__(self, other: PointArray) -> PointArray:
-        """
-        Handle Point + Vector addition.
-        """
-        # This is called if `other + self` is attempted and `other` doesn't handle it.
-        # We expect `other` to be a PointArray here.
-        if isinstance(other, PointArray):
-            # Delegate back to the logic in __add__ for Point + Vector
-            # Check system match from Point's perspective
-            other._check_vector_operand(self)
-            new_coords = other.coordinates + self.displacement
-            if isinstance(other, Point):
-                return Point(new_coords, system=self.system)
-            else:
-                return PointArray(new_coords, system=self.system)
-        else:
-            return NotImplemented
 
     def mapped_through(self, cs_list) -> VectorArray:
         """Map the vector through a sequence of coordinate systems."""
