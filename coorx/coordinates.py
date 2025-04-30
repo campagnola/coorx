@@ -108,8 +108,6 @@ class PointArray:
             )
         # Map the raw coordinates
         mapped_coords = tr.map(self.coordinates)
-
-        # Determine the output type based on the input type
         output_system = tr.systems[1]
         if isinstance(self, Point):
             return Point(mapped_coords, system=output_system)
@@ -207,17 +205,6 @@ class Point(PointArray):
     @property
     def coordinates(self):
         return self._coordinates[0]
-
-    def _coorx_transform(self, tr):
-        if tr.systems[0] is not self.system:
-            raise TypeError(
-                f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'"
-            )
-        mapped = tr.map(self.coordinates)
-        # This method is now handled by the overridden _coorx_transform in PointArray
-        # which checks the instance type before returning.
-        # We rely on the base class implementation.
-        return super()._coorx_transform(tr)
 
     def __repr__(self):
         # Ensure coordinates are displayed correctly even if _coordinates is 2D
