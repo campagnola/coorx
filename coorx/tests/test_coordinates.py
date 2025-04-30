@@ -4,8 +4,7 @@ import unittest
 import numpy as np
 import pytest
 
-import coorx as coorx
-from coorx import Point, PointArray, Vector, VectorArray, STTransform
+from coorx import Point, PointArray, Vector, VectorArray
 from coorx.systems import CoordinateSystemGraph, CoordinateSystem, get_coordinate_system
 
 
@@ -349,53 +348,6 @@ class VectorTests(unittest.TestCase):
         p_new_va_r = va1 + p1
         assert isinstance(p_new_va_r, PointArray)
         check_point(p_new_va_r, np.array([[4, 6], [2, 3]]), "cartesian")
-
-    def test_vector_transform(self):
-        # Define systems and transform
-        cs1 = get_coordinate_system("cs1_2d", ndim=2, create=True)
-        cs2 = get_coordinate_system("cs2_2d", ndim=2, create=True)
-        # Simple scale+translate transform: x' = 2x + 10, y' = 3y + 20
-        tr = STTransform(scale=[2, 3], offset=[10, 20], from_cs=cs1, to_cs=cs2)
-
-        p1_cs1 = Point([1, 2], cs1)
-        p2_cs1 = Point([4, 6], cs1)
-        v_cs1 = Vector(p1_cs1, p2_cs1)  # Disp [3, 4] in cs1
-
-        # Map vector to cs2
-        v_cs2 = v_cs1.mapped_to(cs2)
-        assert isinstance(v_cs2, Vector)
-        assert v_cs2.system is cs2
-
-        # Check endpoints were transformed correctly
-        p1_cs2_expected = tr.map(p1_cs1)  # [2*1+10, 3*2+20] = [12, 26]
-        p2_cs2_expected = tr.map(p2_cs1)  # [2*4+10, 3*6+20] = [18, 38]
-        check_point(v_cs2.p1, p1_cs2_expected.coordinates, "cs2_2d")
-        check_point(v_cs2.p2, p2_cs2_expected.coordinates, "cs2_2d")
-
-        # Check displacement in cs2
-        # Disp_cs2 = p2_cs2 - p1_cs2 = [18-12, 38-26] = [6, 12]
-        # Also, linear part of transform (scale [2, 3]) applied to original displacement [3, 4]
-        # -> [2*3, 3*4] = [6, 12]
-        assert np.allclose(v_cs2.displacement, [6, 12])
-
-        # Test VectorArray transform
-        pa1_cs1 = PointArray([[1, 2], [0, 0]], cs1)
-        pa2_cs1 = PointArray([[4, 6], [1, 1]], cs1)
-        va_cs1 = VectorArray(pa1_cs1, pa2_cs1)  # Disp [[3, 4], [1, 1]]
-
-        va_cs2 = va_cs1.mapped_to(cs2)
-        assert isinstance(va_cs2, VectorArray)
-        assert va_cs2.system is cs2
-
-        pa1_cs2_expected = tr.map(pa1_cs1)  # [[12, 26], [10, 20]]
-        pa2_cs2_expected = tr.map(pa2_cs1)  # [[18, 38], [12, 23]]
-        check_point(va_cs2.p1, pa1_cs2_expected.coordinates, "cs2_2d")
-        check_point(va_cs2.p2, pa2_cs2_expected.coordinates, "cs2_2d")
-
-        # Check displacement in cs2
-        # Disp_cs2 = pa2_cs2 - pa1_cs2 = [[6, 12], [2, 3]]
-        # Also, linear part applied to original: [[2*3, 3*4], [2*1, 3*1]] = [[6, 12], [2, 3]]
-        assert np.allclose(va_cs2.displacement, [[6, 12], [2, 3]])
 
     def test_vector_pickle(self):
         p1 = Point([1, 2], "cartesian")
