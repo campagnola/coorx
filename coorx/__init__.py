@@ -5,7 +5,7 @@ from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT
 from .nonlinear import LogTransform, PolarTransform
 from .coordinates import Point, PointArray, Vector, VectorArray
 
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 
 def transform_types():
