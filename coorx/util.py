@@ -1,5 +1,14 @@
+from __future__ import division
+
 import numpy as np
+
 from .base_transform import Transform
+
+
+class DependentTransformError(Exception):
+    """Raised when an operation is not allowed on certain dependent transforms."""
+
+    pass
 
 
 class AxisSelectionEmbeddedTransform(Transform):
@@ -22,7 +31,7 @@ class AxisSelectionEmbeddedTransform(Transform):
         out = arr.copy()
         out[:, self.axes] = self.subtr.imap(arr[:, self.axes])
         return out
-    
+
     @property
     def params(self):
         return {'axes': self.axes, 'transform': self.subtr}
@@ -33,10 +42,9 @@ class AxisSelectionEmbeddedTransform(Transform):
         self._update()
 
 
-
 class HomogeneousEmbeddedTransform(Transform):
-    """Wraps any transform that uses homogeneous coordinates, 
-    allowing to operate with nonhomogeneous inputs/outputs instead. 
+    """Wraps any transform that uses homogeneous coordinates,
+    allowing to operate with nonhomogeneous inputs/outputs instead.
     """
     def __init__(self, transform, **kwds):
         expected_dims = (transform.dims[0]-1, transform.dims[1]-1)
@@ -67,7 +75,7 @@ class HomogeneousEmbeddedTransform(Transform):
     @property
     def params(self):
         return {'transform': self.subtr}
-    
+
     def set_params(self, transform):
         self.subtr = transform
         self._update()

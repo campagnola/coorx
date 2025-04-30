@@ -14,9 +14,8 @@ API Issues to work out:
 
 import numpy as np
 
-from ._util import DependentTransformError
 from .systems import CoordinateSystemGraph, CoordinateSystem
-from .types import Dims, StrOrNone, Mappable
+from ._types import Dims, StrOrNone, Mappable
 
 
 class Transform(object):
@@ -417,6 +416,8 @@ class InverseTransform(Transform):
         self._imap = transform._map
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
+        from .util import DependentTransformError
+
         raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
     def as_affine(self):

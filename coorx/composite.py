@@ -1,5 +1,4 @@
-from coorx.types import Mappable
-from ._util import DependentTransformError
+from ._types import Mappable
 
 from .base_transform import Transform
 from .linear import NullTransform
@@ -47,6 +46,8 @@ class CompositeTransform(Transform):
         return self.transforms[0].systems[0], self.transforms[-1].systems[1]
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
+        from .util import DependentTransformError
+
         raise DependentTransformError("Cannot set systems on a CompositeTransform")
 
     def copy(self, from_cs=None, to_cs=None):

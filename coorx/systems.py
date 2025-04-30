@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .types import StrOrNone, CoordSysOrStr, GraphOrGraphName
+from ._types import StrOrNone, CoordSysOrStr, GraphOrGraphName
 
 
 def get_coordinate_system(system: CoordSysOrStr, graph: GraphOrGraphName=None, ndim=None, create=False) -> 'CoordinateSystem':
