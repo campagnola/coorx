@@ -333,36 +333,6 @@ class VectorArray:
             return PointArray(new_coords, system=self.system)
         return NotImplemented  # Let Python try other.__radd__(self)
 
-    def mapped_through(self, cs_list) -> VectorArray:
-        """Map the vector through a sequence of coordinate systems."""
-        chain = self.system.graph.transform_chain([self.system] + cs_list)
-        return self._coorx_transform(chain)
-
-    def mapped_to(self, system: CoordSysOrStr) -> VectorArray:
-        """Map the vector to a target coordinate system."""
-        path = self.system.graph.transform_path(self.system, system)
-        chain = self.system.graph.transform_chain(path)
-        return self._coorx_transform(chain)
-
-    def _coorx_transform(self, tr) -> VectorArray:
-        """Apply a transform to this vector array."""
-        if tr.systems[0] is not self.system:
-            raise TypeError(
-                f"The transform {tr} maps from system {tr.systems[0]}, but this VectorArray is defined in {self.system}"
-            )
-
-        # Transform both endpoints
-        new_p1 = self.p1._coorx_transform(tr)
-        new_p2 = self.p2._coorx_transform(tr)
-
-        # Return new VectorArray of the appropriate type (Vector or VectorArray)
-        if isinstance(self, Vector):
-            # _coorx_transform on Point returns Point, so types should be correct
-            return Vector(new_p1, new_p2)
-        else:
-            # _coorx_transform on PointArray returns PointArray
-            return VectorArray(new_p1, new_p2)
-
     def __repr__(self):
         # Use PointArray repr for consistency if not Vector subclass
         if type(self) is VectorArray:
