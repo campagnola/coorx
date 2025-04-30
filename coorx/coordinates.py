@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 import numpy as np
-from .types import StrOrNone, CoordSysOrStr, Mappable
+
 from .systems import CoordinateSystem, CoordinateSystemGraph, get_coordinate_system
+from .types import StrOrNone, CoordSysOrStr
 
 
 class PointArray:
-    """Represents an N-dimensional array of points. 
+    """Represents an N-dimensional array of points.
 
     Although the array is instantiated with the coordinates of these points in a particular
     coordinate system, one may request the coordinates mapped to any other system.
@@ -19,7 +21,8 @@ class PointArray:
     graph : str | CoordinateSystemGraph
         If *system* is a string, then the coordinate system is looked up from this graph.
     """
-    def __init__(self, coordinates, system: CoordSysOrStr=None, graph: StrOrNone=None):
+
+    def __init__(self, coordinates, system: CoordSysOrStr = None, graph: StrOrNone = None):
         coord_arr, source_system = self._interpret_input(coordinates)
 
         assert coord_arr.dtype is not np.dtype(object)
@@ -30,7 +33,7 @@ class PointArray:
         if system is not None:
             self.set_system(system, graph)
 
-        # if the input came with a coordinate system, use that and 
+        # if the input came with a coordinate system, use that and
         # verify that it does not conflict with the previously specified system
         if source_system is not None:
             if self.system not in (None, source_system):
@@ -61,7 +64,7 @@ class PointArray:
 
     def __getitem__(self, index):
         return self.coordinates[index]
-    
+
     def __iter__(self):
         yield from self.coordinates
 
@@ -75,7 +78,7 @@ class PointArray:
         if isinstance(b, (Vector, VectorArray)):
             self._check_vector_operand(b)
             new_coords = self.coordinates + b.displacement
-            if isinstance(self, Point):
+            if isinstance(self, Point) and isinstance(b, Vector):
                 return Point(new_coords, system=self.system)
             else:
                 return PointArray(new_coords, system=self.system)
@@ -90,11 +93,7 @@ class PointArray:
         self._check_point_operand(b)
         if isinstance(self, Point) and isinstance(b, Point):
             return Vector(b, self)
-        else:
-            # Ensure operands are PointArray if one is Point
-            p1 = b if isinstance(b, PointArray) else PointArray(b.coordinates, system=b.system)
-            p2 = self if isinstance(self, PointArray) else PointArray(self.coordinates, system=self.system)
-            return VectorArray(p1, p2)
+        return VectorArray(b, self)
 
     def mapped_through(self, cs_list) -> PointArray:
         chain = self.system.graph.transform_chain([self.system] + cs_list)
@@ -106,19 +105,22 @@ class PointArray:
         return chain.map(self)
 
     def set_system(self, system, graph=None):
-        from .systems import get_coordinate_system
         self.system = get_coordinate_system(system, graph=graph, ndim=self.shape[-1], create=True)
 
     def _coorx_transform(self, tr):
         if tr.systems[0] is not self.system:
-            raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}")
+            raise TypeError(
+                f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}"
+            )
         mapped = tr.map(self.coordinates)
         if tr.systems[0] is not self.system:
-            raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}")
-        
+            raise TypeError(
+                f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}"
+            )
+
         # Map the raw coordinates
         mapped_coords = tr.map(self.coordinates)
-        
+
         # Determine the output type based on the input type
         output_system = tr.systems[1]
         if isinstance(self, Point):
@@ -136,15 +138,15 @@ class PointArray:
 
     def __repr__(self):
         return f"<{type(self).__name__} {self.shape} in {self.system.name}>"
-        
+
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['system'] = None if self.system is None else (self.system.name, self.system.graph.name)
+        state["system"] = None if self.system is None else (self.system.name, self.system.graph.name)
         return state
 
     def __setstate__(self, state):
-        sys, graph = state.pop('system')
-        self.__dict__.update(state)        
+        sys, graph = state.pop("system")
+        self.__dict__.update(state)
         self.set_system(sys, graph)
 
     def __eq__(self, b):
@@ -159,7 +161,7 @@ class PointArray:
         return True
 
     def _interpret_input(self, coordinates):
-        """Interpret initial coordinates argument, return a numerical array of coordinates 
+        """Interpret initial coordinates argument, return a numerical array of coordinates
         and a coordinate system if it was present in the input.
         """
         # convert coordinates to array
@@ -188,7 +190,6 @@ class PointArray:
             else:
                 source_system = None
 
-
         return coord_arr, source_system
 
     def _check_point_operand(self, a):
@@ -205,10 +206,11 @@ class PointArray:
 
 
 class Point(PointArray):
-    """Represents a single point in space; one may request the coordinates of this point 
+    """Represents a single point in space; one may request the coordinates of this point
     in any coordinate system.
     """
-    def __init__(self, coordinates, system:CoordSysOrStr=None, graph:StrOrNone=None):
+
+    def __init__(self, coordinates, system: CoordSysOrStr = None, graph: StrOrNone = None):
         coordinates = np.asarray(coordinates)
         if coordinates.ndim != 1:
             raise TypeError("Point coordinates must be 1D")
@@ -220,7 +222,9 @@ class Point(PointArray):
 
     def _coorx_transform(self, tr):
         if tr.systems[0] is not self.system:
-            raise TypeError(f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'")
+            raise TypeError(
+                f"The transform {tr} maps from system '{tr.systems[0]}', but this Point is defined in '{self.system}'"
+            )
         mapped = tr.map(self.coordinates)
         # This method is now handled by the overridden _coorx_transform in PointArray
         # which checks the instance type before returning.
@@ -233,8 +237,6 @@ class Point(PointArray):
         return f"<{type(self).__name__} {coords_tuple} in {self.system.name}>"
 
 
-# ==== Vector Classes ====
-
 class VectorArray:
     """
     Represents an N-dimensional array of vectors (displacements).
@@ -245,22 +247,23 @@ class VectorArray:
     Parameters
     ----------
     p1 : PointArray
-        The starting points of the vectors.
+        The starting point(s) of the vector(s).
     p2 : PointArray
-        The ending points of the vectors.
+        The ending point(s) of the vector(s).
     """
+
     def __init__(self, p1: PointArray, p2: PointArray):
-        if not isinstance(p1, PointArray) or not isinstance(p2, PointArray):
-            # Allow Point instances as they are subclasses of PointArray
-            if not (isinstance(p1, Point) and isinstance(p2, Point)):
-                 raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
+        if not isinstance(p1, (PointArray, Point)) or not isinstance(p2, (PointArray, Point)):
+            raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
             raise ValueError(f"Vector endpoints must share the same coordinate system ({p1.system} != {p2.system}).")
         # Shape check needs to compare the structural shape, ignoring the last coord dim
-        if p1.shape[:-1] != p2.shape[:-1]:
-             # Special case: if one is Point (shape[0]=1), allow broadcasting-like init?
-             # For now, require matching structural shape.
-            raise ValueError(f"Vector endpoints must have the same structural shape ({p1.shape[:-1]} != {p2.shape[:-1]}).")
+        if p1.shape[-1:] != p2.shape[-1:]:
+            # Special case: if one is Point (shape[0]=1), allow broadcasting-like init?
+            # For now, require matching structural shape.
+            raise ValueError(
+                f"Vector endpoints must have the same structural shape ({p1.shape[-1:]} != {p2.shape[-1:]})."
+            )
 
         self._p1 = p1
         self._p2 = p2
@@ -292,12 +295,12 @@ class VectorArray:
     @property
     def shape(self) -> tuple:
         """The shape of the array structure (like PointArray)."""
-        return self._p1.shape
+        return self.displacement.shape
 
     @property
     def ndim(self) -> int:
         """The number of dimensions of the array structure (like PointArray)."""
-        return self._p1.ndim
+        return self.displacement.ndim
 
     @property
     def dtype(self) -> np.dtype:
@@ -323,14 +326,13 @@ class VectorArray:
         if not isinstance(other, (Vector, VectorArray)):
             raise TypeError(f"Operand must be a VectorArray or Vector (received {type(other)})")
         if self.system is not other.system:
-            raise ValueError(f"Operand system '{other.system}' does not match this VectorArray's system '{self.system}'")
+            raise ValueError(
+                f"Operand system '{other.system}' does not match this VectorArray's system '{self.system}'"
+            )
         # Shape check for addition requires broadcast compatibility or equality
         # Simple equality check for now, consider broadcasting later if needed.
-        if self.shape[:-1] != other.shape[:-1]:
-             # Allow adding a single Vector to a VectorArray
-             if not (isinstance(other, Vector) and self.ndim > 1):
-                 raise ValueError(f"Operand shapes {self.shape} and {other.shape} are not compatible for addition.")
-
+        if self.shape[-1] != other.shape[-1]:
+            raise ValueError(f"Operand shapes {self.shape} and {other.shape} are not compatible.")
 
     def __add__(self, other: VectorArray | PointArray) -> VectorArray | PointArray:
         """
@@ -347,27 +349,22 @@ class VectorArray:
 
             # Determine output type based on input types
             if isinstance(self, Vector) and isinstance(other, Vector):
-                # Ensure endpoints are Point if inputs were Point
-                p1_point = self.p1 # Already a Point
+                p1_point = self.p1  # Already a Point
                 new_p2_point = Point(new_p2_coords, system=self.system)
                 return Vector(p1_point, new_p2_point)
-            else:
-                # If either input is VectorArray, output is VectorArray
-                # Ensure p1 is PointArray for the constructor
-                p1_array = self.p1 if isinstance(self.p1, PointArray) else PointArray(self.p1.coordinates, system=self.system)
-                new_p2_array = PointArray(new_p2_coords, system=self.system)
-                return VectorArray(p1_array, new_p2_array)
+            # If either input is VectorArray, output is VectorArray
+            # Ensure p1 is PointArray for the constructor
+            new_p2_array = PointArray(new_p2_coords, system=self.system)
+            return VectorArray(self.p1, new_p2_array)
         elif isinstance(other, PointArray):
             # Adding vector to point: Point + Vector = Point
             # Use PointArray._check_vector_operand for system check
-            other._check_vector_operand(self) # Check system match from Point's perspective
+            other._check_vector_operand(self)  # Check system match from Point's perspective
             new_coords = other.coordinates + self.displacement
-            if isinstance(other, Point):
+            if isinstance(other, Point) and isinstance(self, Vector):
                 return Point(new_coords, system=self.system)
-            else:
-                return PointArray(new_coords, system=self.system)
-        else:
-            return NotImplemented # Let Python try other.__radd__(self)
+            return PointArray(new_coords, system=self.system)
+        return NotImplemented  # Let Python try other.__radd__(self)
 
     def __radd__(self, other: PointArray) -> PointArray:
         """
@@ -401,7 +398,9 @@ class VectorArray:
     def _coorx_transform(self, tr) -> VectorArray:
         """Apply a transform to this vector array."""
         if tr.systems[0] is not self.system:
-            raise TypeError(f"The transform {tr} maps from system {tr.systems[0]}, but this VectorArray is defined in {self.system}")
+            raise TypeError(
+                f"The transform {tr} maps from system {tr.systems[0]}, but this VectorArray is defined in {self.system}"
+            )
 
         # Transform both endpoints
         new_p1 = self.p1._coorx_transform(tr)
@@ -412,55 +411,41 @@ class VectorArray:
             # _coorx_transform on Point returns Point, so types should be correct
             return Vector(new_p1, new_p2)
         else:
-             # _coorx_transform on PointArray returns PointArray
+            # _coorx_transform on PointArray returns PointArray
             return VectorArray(new_p1, new_p2)
 
     def __repr__(self):
         # Use PointArray repr for consistency if not Vector subclass
         if type(self) is VectorArray:
-             # Show structural shape and system
-             return f"<{type(self).__name__} shape={self.shape[:-1]} dims={self.shape[-1]} system={self.system.name}>"
+            # Show structural shape and system
+            return f"<{type(self).__name__} shape={self.shape[:-1]} dims={self.shape[-1]} system={self.system.name}>"
         # Fallback for subclasses (like Vector) - this part will be overridden by Vector.__repr__
         return f"<{type(self).__name__} system={self.system.name} from={self.p1} to={self.p2}>"
-
 
     def __getstate__(self):
         # Store endpoints, system will be derived on load
         state = self.__dict__.copy()
         # Store system name/graph name like PointArray
-        state['_system'] = None if self.system is None else (self.system.name, self.system.graph.name)
+        state["_system"] = None if self.system is None else (self.system.name, self.system.graph.name)
         # Store p1 and p2 directly
-        state['_p1'] = self._p1
-        state['_p2'] = self._p2
+        state["_p1"] = self._p1
+        state["_p2"] = self._p2
         return state
 
     def __setstate__(self, state):
         # Restore system first
-        sys_info = state.pop('_system', None)
+        sys_info = state.pop("_system", None)
+        state["_system"] = get_coordinate_system(sys_info[0], graph=sys_info[1])
         self.__dict__.update(state)
-        if sys_info is not None:
-            sys_name, graph_name = sys_info
-            # We get the system from the endpoints, but store name/graph for potential future use
-            # The system will be set correctly during __init__ called implicitly or explicitly if needed
-            pass
-        # Re-run init checks if necessary, though endpoints should already be correct type
-        # self.__init__(self._p1, self._p2) # This might re-raise errors if state is inconsistent
 
     def __eq__(self, b):
-        # Use np.allclose for displacement comparison due to potential float issues
-        if not isinstance(b, (Vector, VectorArray)):
+        if not isinstance(b, type(self)):
             return False
-
-        # Check system
         if self.system is not b.system:
             return False
         # Check shapes of underlying points match structurally
-        if self.shape[:-1] != b.shape[:-1]:
+        if self.shape != b.shape:
             return False
-
-        # Check endpoints are equivalent using PointArray/Point equality (which uses np.all)
-        # Alternatively, compare displacements directly with tolerance
-        # return self.p1 == b.p1 and self.p2 == b.p2
         # Let's compare displacements for robustness with floats
         return np.allclose(self.displacement, b.displacement)
 
@@ -472,6 +457,7 @@ class Vector(VectorArray):
     Defined by two Point endpoints, p1 (start) and p2 (end).
     Inherits transformation and addition logic from VectorArray.
     """
+
     def __init__(self, p1: Point, p2: Point):
         if not isinstance(p1, Point) or not isinstance(p2, Point):
             raise TypeError("Vector endpoints (p1, p2) must be Point instances.")
@@ -484,28 +470,28 @@ class Vector(VectorArray):
     @property
     def p1(self) -> Point:
         """The starting point of the vector."""
-        return self._p1 # Should already be a Point due to __init__ check
+        return self._p1  # Should already be a Point due to __init__ check
 
     @property
     def p2(self) -> Point:
         """The ending point of the vector."""
-        return self._p2 # Should already be a Point due to __init__ check
+        return self._p2  # Should already be a Point due to __init__ check
 
     # Override shape/ndim/len to reflect single vector nature (like Point)
     @property
     def shape(self) -> tuple:
         """The shape of the coordinate array for the vector (e.g., (3,))."""
         # Return shape of the 1D coordinate array
-        return self.p1.shape # Same as p1.coordinates.shape
+        return self.p1.shape  # Same as p1.coordinates.shape
 
     @property
     def ndim(self) -> int:
         """The number of dimensions of the coordinate array (always 1 for Vector)."""
-        return 1 # A single vector is 1D in terms of coordinates
+        return 1  # A single vector is 1D in terms of coordinates
 
     def __len__(self) -> int:
         """The number of coordinate dimensions."""
-        return self.shape[0] # Length of the 1D coordinate array
+        return self.shape[0]  # Length of the 1D coordinate array
 
     def __repr__(self):
         disp_tuple = tuple(self.displacement)
