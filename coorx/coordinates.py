@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from .systems import CoordinateSystem, CoordinateSystemGraph, get_coordinate_system
-from .types import StrOrNone, CoordSysOrStr
+from ._types import StrOrNone, CoordSysOrStr
 
 
 class PointArray:

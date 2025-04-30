@@ -1,6 +1,7 @@
 import unittest
 import inspect
 import numpy as np
+
 import coorx as coorx
 
 
@@ -32,7 +33,7 @@ class InitTests(unittest.TestCase):
                     self.list_types(coorx.linear) + 
                     self.list_types(coorx.nonlinear) +
                     self.list_types(coorx.composite) +
-                    self.list_types(coorx.util)
+                    self.list_types(coorx._util)
                 ))
         types.remove(coorx.Transform)
         
@@ -57,8 +58,8 @@ class InitTests(unittest.TestCase):
 
             kwargs = {
                 coorx.nonlinear.LensDistortionTransform: {'dims': (2, 2)},
-                coorx.util.AxisSelectionEmbeddedTransform: {'dims': (3, 3), 'axes': [0, 1], 'transform': coorx.NullTransform(dims=(2, 2))},
-                coorx.util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
+                coorx._util.AxisSelectionEmbeddedTransform: {'dims': (3, 3), 'axes': [0, 1], 'transform': coorx.NullTransform(dims=(2, 2))},
+                coorx._util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
                 coorx.linear.BilinearTransform: {'dims': (2, 2)},
                 coorx.linear.TransposeTransform: {'axis_order': [1, 0, 2]},
                 coorx.linear.Homography2DTransform: {'dims': (2, 2)},
