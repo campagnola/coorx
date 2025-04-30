@@ -243,7 +243,6 @@ class VectorArray:
         self._p1 = p1
         self._p2 = p2
         self._displacement = p2.coordinates - p1.coordinates
-        self._system = p1.system
         # Cache displacement? For now, compute on demand.
         # self._displacement = self._p2.coordinates - self._p1.coordinates
 
@@ -260,7 +259,7 @@ class VectorArray:
     @property
     def system(self) -> CoordinateSystem:
         """The coordinate system of the vector endpoints."""
-        return self._system
+        return self._p1.system
 
     @property
     def displacement(self) -> np.ndarray:
@@ -342,19 +341,9 @@ class VectorArray:
         return f"<{type(self).__name__} from={self.p1} to={self.p2}>"
 
     def __getstate__(self):
-        # Store endpoints, system will be derived on load
-        state = self.__dict__.copy()
-        # Store system name/graph name like PointArray
-        state["_system"] = None if self.system is None else (self.system.name, self.system.graph.name)
-        # Store p1 and p2 directly
-        state["_p1"] = self._p1
-        state["_p2"] = self._p2
-        return state
+        return self.__dict__.copy()
 
     def __setstate__(self, state):
-        # Restore system first
-        sys_info = state.pop("_system", None)
-        state["_system"] = get_coordinate_system(sys_info[0], graph=sys_info[1])
         self.__dict__.update(state)
 
     def __eq__(self, b):
