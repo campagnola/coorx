@@ -769,8 +769,19 @@ class SRT2DTransform:
 
 
 class SRT3DTransform(Transform):
-    """Transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
+    """3D transform implemented as 4x4 affine that can always be represented as a combination of 3 matrices: scale * rotate * translate
     This transform has no shear; angles are always preserved.
+
+    Parameters
+    ----------
+    offset : array-like | None
+        Translation distances. Default is (0, 0, 0).
+    scale : array-like | None
+        Scale factors. Default is (1, 1, 1).
+    angle : float | None
+        Rotation angle in degrees. Default is 0.
+    axis : array-like | None
+        Rotation axis. Default is (0, 0, 1).
     """
 
     state_keys = ["_state"]
