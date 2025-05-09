@@ -391,8 +391,8 @@ class VectorTests(unittest.TestCase):
         """Test initializing Vector/VectorArray with ndarray and system."""
         # Simple 1D vector from displacement array
         disp = np.array([3, 4])
-        v = VectorArray(disp, "cartesian")
-        assert isinstance(v, VectorArray)
+        v = Vector(disp, "cartesian")
+        assert isinstance(v, Vector)
         
         # Verify p1 is at origin and p2 is at the displacement
         check_vector(v, np.zeros_like(disp), disp, "cartesian")

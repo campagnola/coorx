@@ -152,29 +152,29 @@ class PointArray:
         """
         # convert coordinates to array
         coord_arr = np.asarray(coordinates)
+        if coord_arr.size == 0:
+            raise ValueError("Coordinates cannot be empty.")
 
-        # if input contains Point instances, carry their system forward
-        if coord_arr.size > 0:
-            # if input is an object array, it might need extra help
-            if coord_arr.dtype is np.dtype(object):
-                first = coord_arr.ravel()[0]
-                if isinstance(first, Point):
-                    # this will cause Points to be unpacked into numerical array
-                    coord_arr = np.array(coord_arr.tolist())
-                else:
-                    raise TypeError(f"Object array with item type {type(first)} not supported as input.")
-            else:
-                first = coordinates
-                for _ in range(coord_arr.ndim - 1):
-                    first = first[0]
-
+        # if input is an object array, it might need extra help
+        if coord_arr.dtype is np.dtype(object):
+            first = coord_arr.ravel()[0]
             if isinstance(first, Point):
-                source_system = first.system
-            # If input was already PointArray, use its system
-            elif isinstance(coordinates, PointArray):
-                source_system = coordinates.system
+                # this will cause Points to be unpacked into numerical array
+                coord_arr = np.array(coord_arr.tolist())
             else:
-                source_system = None
+                raise TypeError(f"Object array with item type {type(first)} not supported as input.")
+        else:
+            first = coordinates
+            for _ in range(coord_arr.ndim - 1):
+                first = first[0]
+
+        if isinstance(first, Point):
+            source_system = first.system
+        # If input was already PointArray, use its system
+        elif isinstance(coordinates, PointArray):
+            source_system = coordinates.system
+        else:
+            source_system = None
 
         return coord_arr, source_system
 
@@ -219,15 +219,14 @@ class VectorArray:
     A vector is defined by two endpoints, p1 (start) and p2 (end),
     within the same coordinate system. The displacement is p2 - p1.
 
-    Parameters
-    ----------
-    p1 : PointArray
-        The starting point(s) of the vector(s).
-    p2 : PointArray
-        The ending point(s) of the vector(s).
+    Initialization:
+      - two PointArrays gives you the vector from the first to the second
+      - an ndarray and an optional coordinate system gives you the displacement described by the array
     """
 
-    def __init__(self, p1: PointArray, p2: PointArray):
+    def __init__(self, p1: PointArray | np.ndarray, p2: PointArray | CoordSysOrStr | None = None):
+        if isinstance(p1, np.ndarray):
+            p1, p2 = PointArray(np.zeros_like(p1), system=(p2)), PointArray(p1, system=(p2))
         if not isinstance(p1, (PointArray, Point)) or not isinstance(p2, (PointArray, Point)):
             raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
@@ -366,7 +365,9 @@ class Vector(VectorArray):
     Inherits transformation and addition logic from VectorArray.
     """
 
-    def __init__(self, p1: Point, p2: Point):
+    def __init__(self, p1: Point | np.ndarray, p2: Point | CoordSysOrStr | None = None):
+        if isinstance(p1, np.ndarray):
+            p1, p2 = Point(np.zeros_like(p1), system=p2), Point(p1, system=p2)
         if not isinstance(p1, Point) or not isinstance(p2, Point):
             raise TypeError("Vector endpoints (p1, p2) must be Point instances.")
         # Base class init handles system and shape checks
