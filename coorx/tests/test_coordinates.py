@@ -386,3 +386,46 @@ class VectorTests(unittest.TestCase):
         assert v1 != v5  # Different system via endpoints
         assert v1 != va1  # Different type
         assert v1 != [2, 2]  # Different type (displacement)
+        
+    def test_vector_ndarray_init(self):
+        """Test initializing Vector/VectorArray with ndarray and system."""
+        # Simple 1D vector from displacement array
+        disp = np.array([3, 4])
+        v = VectorArray(disp, "cartesian")
+        assert isinstance(v, VectorArray)
+        
+        # Verify p1 is at origin and p2 is at the displacement
+        check_vector(v, np.zeros_like(disp), disp, "cartesian")
+        
+        # Check internal structure
+        assert isinstance(v.p1, PointArray)
+        assert isinstance(v.p2, PointArray)
+        assert np.allclose(v.p1.coordinates, np.zeros_like(disp))
+        assert np.allclose(v.p2.coordinates, disp)
+        assert np.allclose(v.displacement, disp)
+        
+        # Multi-dimensional displacement array
+        multi_disp = np.array([[1, 2], [3, 4], [5, 6]])
+        va = VectorArray(multi_disp, "cartesian")
+        assert isinstance(va, VectorArray)
+        
+        # Verify points and displacement
+        zeros = np.zeros_like(multi_disp)
+        check_vector(va, zeros, multi_disp, "cartesian")
+        assert np.allclose(va.displacement, multi_disp)
+        
+        # Test with float dtype
+        float_disp = np.array([1.5, 2.5])
+        vf = VectorArray(float_disp, "cartesian")
+        assert vf.dtype == float_disp.dtype
+        check_vector(vf, np.zeros_like(float_disp), float_disp, "cartesian")
+        
+        # Test with 3D coordinate space
+        disp3d = np.array([1, 2, 3])
+        v3d = VectorArray(disp3d, "cartesian3d")
+        check_vector(v3d, np.zeros_like(disp3d), disp3d, "cartesian3d")
+        
+        # Edge case: empty array
+        empty_disp = np.array([[]])
+        with pytest.raises(ValueError):  # Should fail gracefully
+            VectorArray(empty_disp, "cartesian")
