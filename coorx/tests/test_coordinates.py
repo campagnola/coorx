@@ -349,6 +349,61 @@ class VectorTests(unittest.TestCase):
         assert isinstance(p_new_va_r, PointArray)
         check_point(p_new_va_r, np.array([[4, 6], [2, 3]]), "cartesian")
 
+    def test_point_vector_subtraction(self):
+        # Setup common points and vectors
+        p_start = Point([10, 20], "cartesian")
+        v_disp_p1 = Point([1, 2], "cartesian")
+        v_disp_p2 = Point([4, 6], "cartesian") # Displacement [3, 4]
+        vector = Vector(v_disp_p1, v_disp_p2)
+
+        pa_start = PointArray([[10, 20], [30, 40]], "cartesian")
+        va_disp_p1 = PointArray([[1, 2], [0, 0]], "cartesian")
+        va_disp_p2 = PointArray([[4, 6], [1, 1]], "cartesian") # Displacements [[3,4], [1,1]]
+        vector_array = VectorArray(va_disp_p1, va_disp_p2)
+
+        p_polar = Point([0,0], "polar")
+        v_polar_disp_p1 = Point([0,0], "polar")
+        v_polar_disp_p2 = Point([1,1], "polar")
+        vector_polar = Vector(v_polar_disp_p1, v_polar_disp_p2)
+
+        # Case 1: Point - Vector
+        result_pv = p_start - vector
+        assert isinstance(result_pv, Point)
+        # Expected coords: [10, 20] - [3, 4] = [7, 16]
+        check_point(result_pv, np.array([7, 16]), "cartesian")
+
+        # Case 2: Point - VectorArray
+        result_pva = p_start - vector_array
+        assert isinstance(result_pva, PointArray)
+        # Expected coords: [[10, 20], [10, 20]] - [[3, 4], [1, 1]] = [[7, 16], [9, 19]]
+        check_point(result_pva, np.array([[7, 16], [9, 19]]), "cartesian")
+
+        # Case 3: PointArray - Vector
+        result_pav = pa_start - vector
+        assert isinstance(result_pav, PointArray)
+        # Expected coords: [[10, 20], [30, 40]] - [[3, 4], [3, 4]] = [[7, 16], [27, 36]]
+        check_point(result_pav, np.array([[7, 16], [27, 36]]), "cartesian")
+
+        # Case 4: PointArray - VectorArray
+        result_pava = pa_start - vector_array
+        assert isinstance(result_pava, PointArray)
+        # Expected coords: [[10, 20], [30, 40]] - [[3, 4], [1, 1]] = [[7, 16], [29, 39]]
+        check_point(result_pava, np.array([[7, 16], [29, 39]]), "cartesian")
+
+        # Error handling: Mismatched systems
+        with self.assertRaisesRegex(ValueError, "does not match this PointArray's system"):
+            p_start - vector_polar
+        with self.assertRaisesRegex(ValueError, "does not match this PointArray's system"):
+            pa_start - vector_polar
+        
+        # Error handling: Type errors (subtracting non-vector from point)
+        # This should be caught by PointArray.__sub__ if the operand is not PointArray or VectorArray
+        with self.assertRaisesRegex(TypeError, "Unsupported operand type"): # Or similar, depending on implementation
+            p_start - np.array([1,2])
+        with self.assertRaisesRegex(TypeError, "Unsupported operand type"):
+            pa_start - np.array([[1,2]])
+
+
     def test_vector_pickle(self):
         p1 = Point([1, 2], "cartesian")
         p2 = Point([4, 6], "cartesian")
