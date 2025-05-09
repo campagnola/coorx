@@ -83,11 +83,15 @@ class PointArray:
             # Consider if PointArray + PointArray should be allowed or raise TypeError.
             return self.coordinates + b.coordinates
 
-    def __sub__(self, b: PointArray) -> VectorArray:
-        self._check_point_operand(b)
-        if isinstance(self, Point) and isinstance(b, Point):
-            return Vector(b, self)
-        return VectorArray(b, self)
+    def __sub__(self, b: PointArray | VectorArray) -> VectorArray | PointArray:
+        if isinstance(b, PointArray):
+            self._check_point_operand(b)
+            return VectorArray(b, self)
+        elif isinstance(b, VectorArray):
+            self._check_vector_operand(b)
+            new_coords = self.coordinates - b.displacement
+            return PointArray(new_coords, system=self.system)
+        raise TypeError("Unsupported operand type")
 
     def mapped_through(self, cs_list) -> PointArray:
         chain = self.system.graph.transform_chain([self.system] + cs_list)
@@ -205,6 +209,16 @@ class Point(PointArray):
     @property
     def coordinates(self):
         return self._coordinates[0]
+
+    def __sub__(self, b: PointArray | VectorArray) -> VectorArray | PointArray:
+        if isinstance(b, Point):
+            self._check_point_operand(b)
+            return Vector(b, self)
+        elif isinstance(b, Vector):
+            self._check_vector_operand(b)
+            new_coords = self.coordinates - b.displacement
+            return Point(new_coords, system=self.system)
+        return super().__sub__(b)
 
     def __repr__(self):
         # Ensure coordinates are displayed correctly even if _coordinates is 2D
