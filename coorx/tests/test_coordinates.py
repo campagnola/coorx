@@ -353,17 +353,17 @@ class VectorTests(unittest.TestCase):
         # Setup common points and vectors
         p_start = Point([10, 20], "cartesian")
         v_disp_p1 = Point([1, 2], "cartesian")
-        v_disp_p2 = Point([4, 6], "cartesian") # Displacement [3, 4]
+        v_disp_p2 = Point([4, 6], "cartesian")  # Displacement [3, 4]
         vector = Vector(v_disp_p1, v_disp_p2)
 
         pa_start = PointArray([[10, 20], [30, 40]], "cartesian")
         va_disp_p1 = PointArray([[1, 2], [0, 0]], "cartesian")
-        va_disp_p2 = PointArray([[4, 6], [1, 1]], "cartesian") # Displacements [[3,4], [1,1]]
+        va_disp_p2 = PointArray([[4, 6], [1, 1]], "cartesian")  # Displacements [[3,4], [1,1]]
         vector_array = VectorArray(va_disp_p1, va_disp_p2)
 
-        p_polar = Point([0,0], "polar")
-        v_polar_disp_p1 = Point([0,0], "polar")
-        v_polar_disp_p2 = Point([1,1], "polar")
+        p_polar = Point([0, 0], "polar")
+        v_polar_disp_p1 = Point([0, 0], "polar")
+        v_polar_disp_p2 = Point([1, 1], "polar")
         vector_polar = Vector(v_polar_disp_p1, v_polar_disp_p2)
 
         # Case 1: Point - Vector
@@ -395,14 +395,13 @@ class VectorTests(unittest.TestCase):
             p_start - vector_polar
         with self.assertRaisesRegex(ValueError, "does not match this PointArray's system"):
             pa_start - vector_polar
-        
+
         # Error handling: Type errors (subtracting non-vector from point)
         # This should be caught by PointArray.__sub__ if the operand is not PointArray or VectorArray
-        with self.assertRaisesRegex(TypeError, "Unsupported operand type"): # Or similar, depending on implementation
-            p_start - np.array([1,2])
+        with self.assertRaisesRegex(TypeError, "Unsupported operand type"):  # Or similar, depending on implementation
+            p_start - np.array([1, 2])
         with self.assertRaisesRegex(TypeError, "Unsupported operand type"):
-            pa_start - np.array([[1,2]])
-
+            pa_start - np.array([[1, 2]])
 
     def test_vector_pickle(self):
         p1 = Point([1, 2], "cartesian")
@@ -441,45 +440,45 @@ class VectorTests(unittest.TestCase):
         assert v1 != v5  # Different system via endpoints
         assert v1 != va1  # Different type
         assert v1 != [2, 2]  # Different type (displacement)
-        
+
     def test_vector_ndarray_init(self):
         """Test initializing Vector/VectorArray with ndarray and system."""
         # Simple 1D vector from displacement array
         disp = np.array([3, 4])
         v = Vector(disp, "cartesian")
         assert isinstance(v, Vector)
-        
+
         # Verify p1 is at origin and p2 is at the displacement
         check_vector(v, np.zeros_like(disp), disp, "cartesian")
-        
+
         # Check internal structure
         assert isinstance(v.p1, PointArray)
         assert isinstance(v.p2, PointArray)
         assert np.allclose(v.p1.coordinates, np.zeros_like(disp))
         assert np.allclose(v.p2.coordinates, disp)
         assert np.allclose(v.displacement, disp)
-        
+
         # Multi-dimensional displacement array
         multi_disp = np.array([[1, 2], [3, 4], [5, 6]])
         va = VectorArray(multi_disp, "cartesian")
         assert isinstance(va, VectorArray)
-        
+
         # Verify points and displacement
         zeros = np.zeros_like(multi_disp)
         check_vector(va, zeros, multi_disp, "cartesian")
         assert np.allclose(va.displacement, multi_disp)
-        
+
         # Test with float dtype
         float_disp = np.array([1.5, 2.5])
         vf = VectorArray(float_disp, "cartesian")
         assert vf.dtype == float_disp.dtype
         check_vector(vf, np.zeros_like(float_disp), float_disp, "cartesian")
-        
+
         # Test with 3D coordinate space
         disp3d = np.array([1, 2, 3])
         v3d = VectorArray(disp3d, "cartesian3d")
         check_vector(v3d, np.zeros_like(disp3d), disp3d, "cartesian3d")
-        
+
         # Edge case: empty array
         empty_disp = np.array([[]])
         with pytest.raises(ValueError):  # Should fail gracefully
