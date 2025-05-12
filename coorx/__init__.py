@@ -4,6 +4,7 @@ from .composite import CompositeTransform, SimplifiedCompositeTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform, TransposeTransform
 from .nonlinear import LogTransform, PolarTransform
 from .coordinates import Point, PointArray, Vector, VectorArray
+from .image import Image
 
 __version__ = "1.0.5"
 
