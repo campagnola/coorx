@@ -21,10 +21,10 @@ Basic use pattern:
     cropped = rotated[10:-10, 10:-10]
 
     # map coordinates from the original image to the cropped image
-    pt2 = img.point([row, col]).mapped_to(cropped.cs)
+    pt2 = img.point([row, col]).mapped_to(cropped.system)
 
     # maybe add a physical coordinate system
-    frame_tr = Transform(from_cs='physical', to_cs=img.cs)
+    frame_tr = Transform(from_cs='physical', to_cs=img.system)
     pt3 = cropped.point([row, col]).mapped_to('physical')
 
     
@@ -87,7 +87,7 @@ class Image:
                 if cs_name not in self.graph.systems:
                     break
                 index += 1
-        self.cs = self.graph.add_system(cs_name, 2)
+        self.system = self.graph.add_system(cs_name, 2)
 
     @property
     def shape(self):
@@ -107,7 +107,7 @@ class Image:
         coords = np.asarray(coords)
         if coords.ndim != 1:
             raise ValueError("Point coordinates must be 1D")
-        return Point(coords, system=self.cs)
+        return Point(coords, system=self.system)
     
     def point_array(self, coords):
         """Return a PointArray object with the given (row, col) coordinates.
@@ -117,7 +117,7 @@ class Image:
             raise ValueError("coords array must be at least 2D")
         if coords.shape[-1] != 2:
             raise ValueError("coords.shape[-1] must be 2")
-        return PointArray(coords, system=self.cs)
+        return PointArray(coords, system=self.system)
 
     def rotate(self, angle, **kwds):
         img = self.image
@@ -125,7 +125,7 @@ class Image:
         img2 = self.copy(image=rotated_img)
         shape1 = (self.shape[self.axes[0]], self.shape[self.axes[1]])
         shape2 = (rotated_img.shape[self.axes[0]], rotated_img.shape[self.axes[1]])
-        img2._parent_tr = make_rotation_transform(angle, shape1, shape2, from_cs=self.cs, to_cs=img2.cs)
+        img2._parent_tr = make_rotation_transform(angle, shape1, shape2, from_cs=self.system, to_cs=img2.system)
         return img2
 
     def __getitem__(self, item):
@@ -139,7 +139,7 @@ class Image:
         slices[self.axes[1]] = cols
         cropped_img = self.image[tuple(slices)]
         img2 = self.copy(image=cropped_img)
-        img2._parent_tr = make_crop_transform((rows, cols), self.image, from_cs=self.cs, to_cs=img2.cs)
+        img2._parent_tr = make_crop_transform((rows, cols), self.image, from_cs=self.system, to_cs=img2.system)
         return img2
 
     def zoom(self, factor, **kwds):
@@ -153,7 +153,7 @@ class Image:
         scaled_img = scipy.ndimage.zoom(img, ax_scale_factors, **kwds)
 
         img2 = self.copy(image=scaled_img)
-        tr = AffineTransform(dims=(2, 2), from_cs=self.cs, to_cs=img2.cs)
+        tr = AffineTransform(dims=(2, 2), from_cs=self.system, to_cs=img2.system)
         tr.scale(factor)
         img2._parent_tr = tr
         return img2
