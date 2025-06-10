@@ -66,7 +66,7 @@ class PointTests(unittest.TestCase):
         # System ndim check during creation
         sys3 = get_coordinate_system("sys3", ndim=3, create=True)
         assert sys3.ndim == 3
-        with self.assertRaisesRegex(TypeError, "System ndim is 3, but coordinate data is 4D"):
+        with self.assertRaisesRegex(TypeError, "System 'sys3' is 3D \\(expected 4D\\)"):
             Point([1, 2, 3, 4], "sys3")  # Now checks against existing system
 
         # Point must be 1d coordinate array
