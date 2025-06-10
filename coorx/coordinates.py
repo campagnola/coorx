@@ -245,12 +245,14 @@ class VectorArray:
             raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
             raise ValueError(f"Vector endpoints must share the same coordinate system ({p1.system} != {p2.system}).")
-        # Shape check needs to compare the structural shape, ignoring the last coord dim
-        if p1.shape[-1:] != p2.shape[-1:]:
-            # Special case: if one is Point (shape[0]=1), allow broadcasting-like init?
-            # For now, require matching structural shape.
+
+        # Shape check needs to compare the structural shape, ignoring the last coord dim.
+        # Allow one operand to be a Point (ndim==1) to broadcast against a PointArray.
+        p1_struct_shape = p1.shape[:-1]
+        p2_struct_shape = p2.shape[:-1]
+        if p1_struct_shape != p2_struct_shape and p1_struct_shape and p2_struct_shape:
             raise ValueError(
-                f"Vector endpoints must have the same structural shape ({p1.shape[-1:]} != {p2.shape[-1:]})."
+                f"Vector endpoints must have the same structural shape ({p1.shape[:-1]} != {p2.shape[:-1]})."
             )
 
         self._p1 = p1
@@ -344,6 +346,32 @@ class VectorArray:
                 return Point(new_coords, system=self.system)
             return PointArray(new_coords, system=self.system)
         return NotImplemented  # Let Python try other.__radd__(self)
+
+    def mapped_to(self, system) -> "VectorArray":
+        """
+        Map this vector/vector array to a new coordinate system.
+
+        This is done by mapping the start and end points of the vector(s)
+        to the target system. The new vector(s) are defined by these
+        newly mapped points.
+
+        Parameters
+        ----------
+        system : str | CoordinateSystem
+            The target coordinate system.
+
+        Returns
+        -------
+        Vector | VectorArray
+            A new vector or vector array in the target coordinate system.
+            The type of the returned object will match the type of `self`.
+        """
+        p1_mapped = self.p1.mapped_to(system)
+        p2_mapped = self.p2.mapped_to(system)
+        if isinstance(self, Vector):
+            return Vector(p1_mapped, p2_mapped)
+        else:
+            return VectorArray(p1_mapped, p2_mapped)
 
     def __repr__(self):
         # Use PointArray repr for consistency if not Vector subclass

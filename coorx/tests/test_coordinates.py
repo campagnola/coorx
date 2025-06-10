@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import pytest
 
-from coorx import Point, PointArray, Vector, VectorArray
+from coorx import Point, PointArray, Vector, VectorArray, STTransform
 from coorx.systems import CoordinateSystemGraph, CoordinateSystem, get_coordinate_system
 
 
@@ -66,7 +66,7 @@ class PointTests(unittest.TestCase):
         # System ndim check during creation
         sys3 = get_coordinate_system("sys3", ndim=3, create=True)
         assert sys3.ndim == 3
-        with self.assertRaisesRegex(TypeError, "expected 4D"):
+        with self.assertRaisesRegex(TypeError, "System ndim is 3, but coordinate data is 4D"):
             Point([1, 2, 3, 4], "sys3")  # Now checks against existing system
 
         # Point must be 1d coordinate array
@@ -182,8 +182,8 @@ class VectorTests(unittest.TestCase):
 
         # Mismatched shapes
         pa4 = PointArray([[0, 0]], "cartesian")
-        va_mismatched = VectorArray(pa1, pa4)
-        check_vector(va_mismatched, np.array([[1, 2], [0, 0]]), np.array([[0, 0], [0, 0]]), "cartesian")
+        with self.assertRaisesRegex(ValueError, "must have the same structural shape"):
+            VectorArray(pa1, pa4)
 
         # Wrong types
         with self.assertRaisesRegex(TypeError, "must be PointArray or Point instances"):
@@ -432,7 +432,7 @@ class VectorTests(unittest.TestCase):
         v4 = Vector(p1, p4)  # Different end point
         v5 = Vector(p5, p6)  # Different system
 
-        va1 = VectorArray(PointArray([p1.coordinates]), PointArray([p2.coordinates]))
+        va1 = VectorArray(PointArray([p1.coordinates], "sys"), PointArray([p2.coordinates], "sys"))
 
         assert v1 == v2
         assert v1 == v3  # Equality based on endpoint values
@@ -452,8 +452,8 @@ class VectorTests(unittest.TestCase):
         check_vector(v, np.zeros_like(disp), disp, "cartesian")
 
         # Check internal structure
-        assert isinstance(v.p1, PointArray)
-        assert isinstance(v.p2, PointArray)
+        assert isinstance(v.p1, Point)
+        assert isinstance(v.p2, Point)
         assert np.allclose(v.p1.coordinates, np.zeros_like(disp))
         assert np.allclose(v.p2.coordinates, disp)
         assert np.allclose(v.displacement, disp)
@@ -483,3 +483,56 @@ class VectorTests(unittest.TestCase):
         empty_disp = np.array([[]])
         with pytest.raises(ValueError):  # Should fail gracefully
             VectorArray(empty_disp, "cartesian")
+
+    def test_vector_mapped_to(self):
+        # Setup a graph with a transform
+        graph = CoordinateSystemGraph.get_graph("test_graph", create=True)
+        graph.add_system("sys_a", ndim=2)
+        graph.add_system("sys_b", ndim=2)
+
+        # A transform that scales by 2 and translates by (10, 20)
+        tr = STTransform(scale=[2, 2], offset=[10, 20])
+        graph.add_transform(tr, "sys_a", "sys_b")
+
+        # 1. Test Vector.mapped_to
+        p1 = Point([1, 2], "sys_a", graph="test_graph")
+        p2 = Point([4, 6], "sys_a", graph="test_graph")
+        v = Vector(p1, p2)
+
+        # The displacement in sys_a is [3, 4]
+        assert np.allclose(v.displacement, [3, 4])
+
+        # Map the vector to sys_b
+        v_mapped = v.mapped_to("sys_b")
+
+        # Check the mapped vector
+        assert isinstance(v_mapped, Vector)
+        assert v_mapped.system.name == "sys_b"
+
+        p1_mapped_coords = np.array([1, 2]) * 2 + [10, 20]  # [12, 24]
+        p2_mapped_coords = np.array([4, 6]) * 2 + [10, 20]  # [18, 32]
+
+        check_vector(v_mapped, p1_mapped_coords, p2_mapped_coords, "sys_b")
+        assert np.allclose(v_mapped.displacement, [6, 8])
+
+        # 2. Test VectorArray.mapped_to
+        pa1 = PointArray([[1, 2], [0, 0]], "sys_a", graph="test_graph")
+        pa2 = PointArray([[4, 6], [1, 1]], "sys_a", graph="test_graph")
+        va = VectorArray(pa1, pa2)
+
+        # Displacements in sys_a are [[3, 4], [1, 1]]
+        assert np.allclose(va.displacement, [[3, 4], [1, 1]])
+
+        # Map the vector array to sys_b
+        va_mapped = va.mapped_to("sys_b")
+
+        assert isinstance(va_mapped, VectorArray)
+        assert not isinstance(va_mapped, Vector)
+        assert va_mapped.system.name == "sys_b"
+
+        # Map endpoints for VectorArray
+        pa1_mapped_coords = np.array([[1, 2], [0, 0]]) * 2 + [10, 20]  # [[12, 24], [10, 20]]
+        pa2_mapped_coords = np.array([[4, 6], [1, 1]]) * 2 + [10, 20]  # [[18, 32], [12, 22]]
+
+        check_vector(va_mapped, pa1_mapped_coords, pa2_mapped_coords, "sys_b")
+        assert np.allclose(va_mapped.displacement, [[6, 8], [2, 2]])
