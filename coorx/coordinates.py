@@ -233,14 +233,10 @@ class VectorArray:
     A vector is defined by two endpoints, p1 (start) and p2 (end),
     within the same coordinate system. The displacement is p2 - p1.
 
-    Initialization:
-      - two PointArrays gives you the vector from the first to the second
-      - an ndarray and an optional coordinate system gives you the displacement described by the array
+    Initialization only accepts two PointArray/Point instances as endpoints.
     """
 
-    def __init__(self, p1: PointArray | np.ndarray, p2: PointArray | CoordSysOrStr | None = None):
-        if isinstance(p1, np.ndarray):
-            p1, p2 = PointArray(np.zeros_like(p1), system=(p2)), PointArray(p1, system=(p2))
+    def __init__(self, p1: PointArray | Point, p2: PointArray | Point):
         if not isinstance(p1, (PointArray, Point)) or not isinstance(p2, (PointArray, Point)):
             raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
@@ -407,9 +403,7 @@ class Vector(VectorArray):
     Inherits transformation and addition logic from VectorArray.
     """
 
-    def __init__(self, p1: Point | np.ndarray, p2: Point | CoordSysOrStr | None = None):
-        if isinstance(p1, np.ndarray):
-            p1, p2 = Point(np.zeros_like(p1), system=p2), Point(p1, system=p2)
+    def __init__(self, p1: Point, p2: Point):
         if not isinstance(p1, Point) or not isinstance(p2, Point):
             raise TypeError("Vector endpoints (p1, p2) must be Point instances.")
         # Base class init handles system and shape checks
