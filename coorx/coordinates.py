@@ -244,9 +244,7 @@ class VectorArray:
 
         # Shape check needs to compare the structural shape, ignoring the last coord dim.
         # Allow one operand to be a Point (ndim==1) to broadcast against a PointArray.
-        p1_struct_shape = p1.shape[:-1]
-        p2_struct_shape = p2.shape[:-1]
-        if p1_struct_shape != p2_struct_shape and p1_struct_shape and p2_struct_shape:
+        if p1.ndim == p2.ndim and p1.shape[0] != p2.shape[0]:
             raise ValueError(
                 f"Vector endpoints must have the same structural shape ({p1.shape[:-1]} != {p2.shape[:-1]})."
             )

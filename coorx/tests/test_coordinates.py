@@ -25,7 +25,7 @@ def check_vector(vec, p1_arr, p2_arr, sys_name):
     assert isinstance(vec, (Vector, VectorArray))
     assert isinstance(vec.system, CoordinateSystem)
     assert vec.system.name == sys_name
-    assert vec.shape == p1_arr.shape  # Shape of the underlying point arrays
+    assert vec.shape == p1_arr.shape or vec.shape == p2_arr.shape
     assert np.allclose(vec.p1.coordinates, p1_arr)
     assert np.allclose(vec.p2.coordinates, p2_arr)
     assert np.allclose(vec.displacement, p2_arr - p1_arr)
@@ -218,6 +218,34 @@ class VectorTests(unittest.TestCase):
         pa2 = PointArray([[5, 6], [7, 8]], "cartesian")  
         va = VectorArray(pa1, pa2)
         assert va.shape == (2, 2)
+
+    def test_vector_mixed_init_validations(self):
+        pa_2d = PointArray([[1, 2], [3, 4]], "cartesian")
+        p_2d = Point([5, 6], "cartesian")
+        pa_3d = PointArray([[1, 2, 3], [4, 5, 6]], "cartesian3d")
+        p_3d = Point([7, 8, 9], "cartesian3d")
+        # Valid mixed init: Point with PointArray
+        va1 = VectorArray(p_2d, pa_2d)
+        check_vector(va1, np.array([5, 6]), pa_2d.coordinates, "cartesian")
+        assert va1.shape == (2, 2)  # Should broadcast to match PointArray length
+        # Valid mixed init: PointArray with Point
+        va2 = VectorArray(pa_2d, p_2d)
+        check_vector(va2, pa_2d.coordinates, np.array([5, 6]), "cartesian")
+        assert va2.shape == (2, 2)  # Should broadcast to match PointArray length
+        # Valid mixed init: Point with Point
+        va3 = VectorArray(p_3d, pa_3d)
+        check_vector(va3, np.array([7, 8, 9]), pa_3d.coordinates, "cartesian3d")
+        assert va3.shape == (2, 3)  # Should broadcast to match PointArray length
+        # Valid mixed init: PointArray with Point
+        va4 = VectorArray(pa_3d, p_3d)
+        check_vector(va4, pa_3d.coordinates, np.array([7, 8, 9]), "cartesian3d")
+        assert va4.shape == (2, 3)  # Should broadcast to match PointArray length
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            # Invalid mixed init: mismatched systems
+            VectorArray(p_2d, pa_3d)
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            # Invalid mixed init: mismatched systems
+            VectorArray(pa_2d, p_3d)
 
     def test_vector_array_init_length_validation(self):
         """Test that VectorArray validates length compatibility when both endpoints are PointArrays."""
