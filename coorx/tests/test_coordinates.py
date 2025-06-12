@@ -195,6 +195,62 @@ class VectorTests(unittest.TestCase):
         va_from_points = VectorArray(p1, p2)  # Technically allowed, but Vector is preferred
         check_vector(va_from_points, np.array([1, 2]), np.array([4, 6]), "cartesian")
 
+    def test_vector_array_init_dimension_validation(self):
+        """Test that VectorArray validates dimension compatibility between endpoints."""
+        # Mismatched coordinate dimensions should fail when systems differ
+        pa_2d = PointArray([[1, 2], [3, 4]], "cartesian")  # 2D coordinates
+        pa_3d = PointArray([[1, 2, 3], [4, 5, 6]], "cartesian3d")  # 3D coordinates
+        
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            VectorArray(pa_2d, pa_3d)  # Different systems will catch this first
+        
+        # Test what happens when trying to create PointArrays with mismatched dimensions
+        # in the same system. This should fail at PointArray creation time.
+        try:
+            # This should fail - cartesian is 2D, can't give it 3D coordinates  
+            invalid_pa = PointArray([[1, 2, 3]], "cartesian")
+            assert False, "Should have failed with dimension mismatch"
+        except TypeError as e:
+            assert "is 2D (expected 3D)" in str(e)
+        
+        # Valid case: same dimensions in same system should work
+        pa1 = PointArray([[1, 2], [3, 4]], "cartesian")  
+        pa2 = PointArray([[5, 6], [7, 8]], "cartesian")  
+        va = VectorArray(pa1, pa2)
+        assert va.shape == (2, 2)
+
+    def test_vector_array_init_length_validation(self):
+        """Test that VectorArray validates length compatibility when both endpoints are PointArrays."""
+        # PointArrays with different lengths should fail
+        pa_short = PointArray([[1, 2]], "cartesian")  # Length 1
+        pa_long = PointArray([[3, 4], [5, 6], [7, 8]], "cartesian")  # Length 3
+        
+        with self.assertRaisesRegex(ValueError, "must have the same structural shape"):
+            VectorArray(pa_short, pa_long)
+        
+        # Point with PointArray should work (broadcasting)
+        p = Point([1, 2], "cartesian")
+        pa = PointArray([[3, 4], [5, 6]], "cartesian")
+        va = VectorArray(p, pa)
+        assert va.shape == (2, 2)  # Should broadcast to match PointArray length
+        
+        # PointArray with Point should also work
+        va2 = VectorArray(pa, p)
+        assert va2.shape == (2, 2)
+        
+        # Same length PointArrays should work
+        pa1 = PointArray([[1, 2], [3, 4]], "cartesian")
+        pa2 = PointArray([[5, 6], [7, 8]], "cartesian")
+        va3 = VectorArray(pa1, pa2)
+        assert va3.shape == (2, 2)
+        
+        # Test verification that the validation requested is already working
+        # Verify: PointArrays must have same coordinate dimensionality (enforced by system check)
+        pa_2d = PointArray([[1, 2]], "cartesian")  # 2D
+        pa_3d = PointArray([[1, 2, 3]], "cartesian3d")  # 3D
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            VectorArray(pa_2d, pa_3d)  # Different coordinate systems (2D vs 3D)
+
     def test_point_subtraction(self):
         p1 = Point([1, 2], "cartesian")
         p2 = Point([4, 6], "cartesian")
