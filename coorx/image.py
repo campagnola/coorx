@@ -8,8 +8,9 @@ and also output coorx transforms that map from one end of the pipeline to the ot
 - get a cropped region that includes a specific point(s) with padding
 - add padding to an image
 - get an interpolated region
-- given two partially overlapping images, give the region of overlap (and use this region to automatically slice from either image)
-- resample / downscale with averging
+- given two partially overlapping images, give the region of overlap (and use this region to automatically slice from
+  either image)
+- resample / downscale with averaging
 
 
 Basic use pattern:
@@ -20,10 +21,10 @@ Basic use pattern:
     cropped = rotated[10:-10, 10:-10]
 
     # map coordinates from the original image to the cropped image
-    pt2 = img.point([row, col]).mapped_to(cropped.cs)
+    pt2 = img.point([row, col]).mapped_to(cropped.system)
 
     # maybe add a physical coordinate system
-    frame_tr = Transform(from_cs='physical', to_cs=img.cs)
+    frame_tr = Transform(from_cs='physical', to_cs=img.system)
     pt3 = cropped.point([row, col]).mapped_to('physical')
 
     
@@ -36,10 +37,14 @@ Things to work out:
 - garbage collection of transforms and coordinate systems attached to images
     - ask graph to keep transforms/systems in weak references
 """
+from __future__ import annotations
+
 import numpy as np
 import scipy
-import coorx
-from coorx.systems import CoordinateSystemGraph
+
+from .coordinates import Point, PointArray
+from .linear import AffineTransform
+from .systems import CoordinateSystemGraph
 
 
 class Image:
@@ -59,7 +64,8 @@ class Image:
         Optional graph to use for the coordinate system.
     """
     _image_graph_n = 0
-    def __init__(self, image, axes: tuple|None = None, cs_name=None, graph=None):
+
+    def __init__(self, image, axes: tuple | None = None, cs_name=None, graph=None):
         self.image = image
         self._parent_tr = None
         if axes is None:
@@ -70,7 +76,7 @@ class Image:
         self.axes = axes
 
         if graph is None:
-            graph = f'image_graph'
+            graph = 'image_graph'
             Image._image_graph_n += 1
         self.graph = CoordinateSystemGraph.get_graph(graph, create=True)
 
@@ -81,7 +87,7 @@ class Image:
                 if cs_name not in self.graph.systems:
                     break
                 index += 1
-        self.cs = self.graph.add_system(cs_name, 2)
+        self.system = self.graph.add_system(cs_name, 2)
 
     @property
     def shape(self):
@@ -101,7 +107,7 @@ class Image:
         coords = np.asarray(coords)
         if coords.ndim != 1:
             raise ValueError("Point coordinates must be 1D")
-        return coorx.Point(coords, system=self.cs)
+        return Point(coords, system=self.system)
     
     def point_array(self, coords):
         """Return a PointArray object with the given (row, col) coordinates.
@@ -111,7 +117,7 @@ class Image:
             raise ValueError("coords array must be at least 2D")
         if coords.shape[-1] != 2:
             raise ValueError("coords.shape[-1] must be 2")
-        return coorx.PointArray(coords, system=self.cs)
+        return PointArray(coords, system=self.system)
 
     def rotate(self, angle, **kwds):
         img = self.image
@@ -119,7 +125,7 @@ class Image:
         img2 = self.copy(image=rotated_img)
         shape1 = (self.shape[self.axes[0]], self.shape[self.axes[1]])
         shape2 = (rotated_img.shape[self.axes[0]], rotated_img.shape[self.axes[1]])
-        img2._parent_tr = make_rotation_transform(angle, shape1, shape2, from_cs=self.cs, to_cs=img2.cs)
+        img2._parent_tr = make_rotation_transform(angle, shape1, shape2, from_cs=self.system, to_cs=img2.system)
         return img2
 
     def __getitem__(self, item):
@@ -133,7 +139,7 @@ class Image:
         slices[self.axes[1]] = cols
         cropped_img = self.image[tuple(slices)]
         img2 = self.copy(image=cropped_img)
-        img2._parent_tr = make_crop_transform((rows, cols), self.image, from_cs=self.cs, to_cs=img2.cs)
+        img2._parent_tr = make_crop_transform((rows, cols), self.image, from_cs=self.system, to_cs=img2.system)
         return img2
 
     def zoom(self, factor, **kwds):
@@ -147,7 +153,7 @@ class Image:
         scaled_img = scipy.ndimage.zoom(img, ax_scale_factors, **kwds)
 
         img2 = self.copy(image=scaled_img)
-        tr = coorx.AffineTransform(dims=(2, 2), from_cs=self.cs, to_cs=img2.cs)
+        tr = AffineTransform(dims=(2, 2), from_cs=self.system, to_cs=img2.system)
         tr.scale(factor)
         img2._parent_tr = tr
         return img2
@@ -162,7 +168,7 @@ class Image:
 def make_rotation_transform(angle, shape1, shape2, **kwds):
     center1 = (np.array(shape1) + 0) / 2
     center2 = (np.array(shape2) + 0) / 2
-    tr = coorx.AffineTransform(dims=(2, 2), **kwds)
+    tr = AffineTransform(dims=(2, 2), **kwds)
     tr.translate(-center1)
     tr.rotate(-angle)
     tr.translate(center2)
@@ -170,7 +176,7 @@ def make_rotation_transform(angle, shape1, shape2, **kwds):
 
 
 def make_crop_transform(crop, img, **kwds):
-    tr = coorx.AffineTransform(dims=(2, 2), **kwds)
+    tr = AffineTransform(dims=(2, 2), **kwds)
     tr.translate([
         -crop[0].indices(img.shape[-2])[0], 
         -crop[1].indices(img.shape[-1])[0], 

@@ -4,8 +4,9 @@ from .composite import CompositeTransform, SimplifiedCompositeTransform
 from .linear import NullTransform, TTransform, STTransform, AffineTransform, SRT3DTransform, TransposeTransform
 from .nonlinear import LogTransform, PolarTransform
 from .coordinates import Point, PointArray, Vector, VectorArray
+from .image import Image
 
-__version__ = "1.0.6"
+__version__ = "1.1.0"
 
 
 def transform_types():

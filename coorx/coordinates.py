@@ -83,11 +83,15 @@ class PointArray:
             # Consider if PointArray + PointArray should be allowed or raise TypeError.
             return self.coordinates + b.coordinates
 
-    def __sub__(self, b: PointArray) -> VectorArray:
-        self._check_point_operand(b)
-        if isinstance(self, Point) and isinstance(b, Point):
-            return Vector(b, self)
-        return VectorArray(b, self)
+    def __sub__(self, b: PointArray | VectorArray) -> VectorArray | PointArray:
+        if isinstance(b, PointArray):
+            self._check_point_operand(b)
+            return VectorArray(b, self)
+        elif isinstance(b, VectorArray):
+            self._check_vector_operand(b)
+            new_coords = self.coordinates - b.displacement
+            return PointArray(new_coords, system=self.system)
+        raise TypeError("Unsupported operand type")
 
     def mapped_through(self, cs_list) -> PointArray:
         chain = self.system.graph.transform_chain([self.system] + cs_list)
@@ -152,29 +156,29 @@ class PointArray:
         """
         # convert coordinates to array
         coord_arr = np.asarray(coordinates)
+        if coord_arr.size == 0:
+            raise ValueError("Coordinates cannot be empty.")
 
-        # if input contains Point instances, carry their system forward
-        if coord_arr.size > 0:
-            # if input is an object array, it might need extra help
-            if coord_arr.dtype is np.dtype(object):
-                first = coord_arr.ravel()[0]
-                if isinstance(first, Point):
-                    # this will cause Points to be unpacked into numerical array
-                    coord_arr = np.array(coord_arr.tolist())
-                else:
-                    raise TypeError(f"Object array with item type {type(first)} not supported as input.")
-            else:
-                first = coordinates
-                for _ in range(coord_arr.ndim - 1):
-                    first = first[0]
-
+        # if input is an object array, it might need extra help
+        if coord_arr.dtype is np.dtype(object):
+            first = coord_arr.ravel()[0]
             if isinstance(first, Point):
-                source_system = first.system
-            # If input was already PointArray, use its system
-            elif isinstance(coordinates, PointArray):
-                source_system = coordinates.system
+                # this will cause Points to be unpacked into numerical array
+                coord_arr = np.array(coord_arr.tolist())
             else:
-                source_system = None
+                raise TypeError(f"Object array with item type {type(first)} not supported as input.")
+        else:
+            first = coordinates
+            for _ in range(coord_arr.ndim - 1):
+                first = first[0]
+
+        if isinstance(first, Point):
+            source_system = first.system
+        # If input was already PointArray, use its system
+        elif isinstance(coordinates, PointArray):
+            source_system = coordinates.system
+        else:
+            source_system = None
 
         return coord_arr, source_system
 
@@ -206,6 +210,16 @@ class Point(PointArray):
     def coordinates(self):
         return self._coordinates[0]
 
+    def __sub__(self, b: PointArray | VectorArray) -> VectorArray | PointArray:
+        if isinstance(b, Point):
+            self._check_point_operand(b)
+            return Vector(b, self)
+        elif isinstance(b, Vector):
+            self._check_vector_operand(b)
+            new_coords = self.coordinates - b.displacement
+            return Point(new_coords, system=self.system)
+        return super().__sub__(b)
+
     def __repr__(self):
         # Ensure coordinates are displayed correctly even if _coordinates is 2D
         coords_tuple = tuple(self.coordinates)
@@ -219,25 +233,20 @@ class VectorArray:
     A vector is defined by two endpoints, p1 (start) and p2 (end),
     within the same coordinate system. The displacement is p2 - p1.
 
-    Parameters
-    ----------
-    p1 : PointArray
-        The starting point(s) of the vector(s).
-    p2 : PointArray
-        The ending point(s) of the vector(s).
+    Initialization only accepts two PointArray/Point instances as endpoints.
     """
 
-    def __init__(self, p1: PointArray, p2: PointArray):
+    def __init__(self, p1: PointArray | Point, p2: PointArray | Point):
         if not isinstance(p1, (PointArray, Point)) or not isinstance(p2, (PointArray, Point)):
             raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
             raise ValueError(f"Vector endpoints must share the same coordinate system ({p1.system} != {p2.system}).")
-        # Shape check needs to compare the structural shape, ignoring the last coord dim
-        if p1.shape[-1:] != p2.shape[-1:]:
-            # Special case: if one is Point (shape[0]=1), allow broadcasting-like init?
-            # For now, require matching structural shape.
+
+        # Shape check needs to compare the structural shape, ignoring the last coord dim.
+        # Allow one operand to be a Point (ndim==1) to broadcast against a PointArray.
+        if p1.ndim == p2.ndim and p1.shape[0] != p2.shape[0]:
             raise ValueError(
-                f"Vector endpoints must have the same structural shape ({p1.shape[-1:]} != {p2.shape[-1:]})."
+                f"Vector endpoints must have the same structural shape ({p1.shape[:-1]} != {p2.shape[:-1]})."
             )
 
         self._p1 = p1
@@ -331,6 +340,32 @@ class VectorArray:
                 return Point(new_coords, system=self.system)
             return PointArray(new_coords, system=self.system)
         return NotImplemented  # Let Python try other.__radd__(self)
+
+    def mapped_to(self, system) -> "VectorArray":
+        """
+        Map this vector/vector array to a new coordinate system.
+
+        This is done by mapping the start and end points of the vector(s)
+        to the target system. The new vector(s) are defined by these
+        newly mapped points.
+
+        Parameters
+        ----------
+        system : str | CoordinateSystem
+            The target coordinate system.
+
+        Returns
+        -------
+        Vector | VectorArray
+            A new vector or vector array in the target coordinate system.
+            The type of the returned object will match the type of `self`.
+        """
+        p1_mapped = self.p1.mapped_to(system)
+        p2_mapped = self.p2.mapped_to(system)
+        if isinstance(self, Vector):
+            return Vector(p1_mapped, p2_mapped)
+        else:
+            return VectorArray(p1_mapped, p2_mapped)
 
     def __repr__(self):
         # Use PointArray repr for consistency if not Vector subclass
