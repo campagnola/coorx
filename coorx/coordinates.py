@@ -233,24 +233,20 @@ class VectorArray:
     A vector is defined by two endpoints, p1 (start) and p2 (end),
     within the same coordinate system. The displacement is p2 - p1.
 
-    Initialization:
-      - two PointArrays gives you the vector from the first to the second
-      - an ndarray and an optional coordinate system gives you the displacement described by the array
+    Initialization only accepts two PointArray/Point instances as endpoints.
     """
 
-    def __init__(self, p1: PointArray | np.ndarray, p2: PointArray | CoordSysOrStr | None = None):
-        if isinstance(p1, np.ndarray):
-            p1, p2 = PointArray(np.zeros_like(p1), system=(p2)), PointArray(p1, system=(p2))
+    def __init__(self, p1: PointArray | Point, p2: PointArray | Point):
         if not isinstance(p1, (PointArray, Point)) or not isinstance(p2, (PointArray, Point)):
             raise TypeError("Vector endpoints (p1, p2) must be PointArray or Point instances.")
         if p1.system is not p2.system:
             raise ValueError(f"Vector endpoints must share the same coordinate system ({p1.system} != {p2.system}).")
-        # Shape check needs to compare the structural shape, ignoring the last coord dim
-        if p1.shape[-1:] != p2.shape[-1:]:
-            # Special case: if one is Point (shape[0]=1), allow broadcasting-like init?
-            # For now, require matching structural shape.
+
+        # Shape check needs to compare the structural shape, ignoring the last coord dim.
+        # Allow one operand to be a Point (ndim==1) to broadcast against a PointArray.
+        if p1.ndim == p2.ndim and p1.shape[0] != p2.shape[0]:
             raise ValueError(
-                f"Vector endpoints must have the same structural shape ({p1.shape[-1:]} != {p2.shape[-1:]})."
+                f"Vector endpoints must have the same structural shape ({p1.shape[:-1]} != {p2.shape[:-1]})."
             )
 
         self._p1 = p1
@@ -345,6 +341,32 @@ class VectorArray:
             return PointArray(new_coords, system=self.system)
         return NotImplemented  # Let Python try other.__radd__(self)
 
+    def mapped_to(self, system) -> "VectorArray":
+        """
+        Map this vector/vector array to a new coordinate system.
+
+        This is done by mapping the start and end points of the vector(s)
+        to the target system. The new vector(s) are defined by these
+        newly mapped points.
+
+        Parameters
+        ----------
+        system : str | CoordinateSystem
+            The target coordinate system.
+
+        Returns
+        -------
+        Vector | VectorArray
+            A new vector or vector array in the target coordinate system.
+            The type of the returned object will match the type of `self`.
+        """
+        p1_mapped = self.p1.mapped_to(system)
+        p2_mapped = self.p2.mapped_to(system)
+        if isinstance(self, Vector):
+            return Vector(p1_mapped, p2_mapped)
+        else:
+            return VectorArray(p1_mapped, p2_mapped)
+
     def __repr__(self):
         # Use PointArray repr for consistency if not Vector subclass
         if type(self) is VectorArray:
@@ -379,9 +401,7 @@ class Vector(VectorArray):
     Inherits transformation and addition logic from VectorArray.
     """
 
-    def __init__(self, p1: Point | np.ndarray, p2: Point | CoordSysOrStr | None = None):
-        if isinstance(p1, np.ndarray):
-            p1, p2 = Point(np.zeros_like(p1), system=p2), Point(p1, system=p2)
+    def __init__(self, p1: Point, p2: Point):
         if not isinstance(p1, Point) or not isinstance(p2, Point):
             raise TypeError("Vector endpoints (p1, p2) must be Point instances.")
         # Base class init handles system and shape checks

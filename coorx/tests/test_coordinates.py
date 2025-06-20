@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import pytest
 
-from coorx import Point, PointArray, Vector, VectorArray
+from coorx import Point, PointArray, Vector, VectorArray, STTransform
 from coorx.systems import CoordinateSystemGraph, CoordinateSystem, get_coordinate_system
 
 
@@ -25,7 +25,7 @@ def check_vector(vec, p1_arr, p2_arr, sys_name):
     assert isinstance(vec, (Vector, VectorArray))
     assert isinstance(vec.system, CoordinateSystem)
     assert vec.system.name == sys_name
-    assert vec.shape == p1_arr.shape  # Shape of the underlying point arrays
+    assert vec.shape == p1_arr.shape or vec.shape == p2_arr.shape
     assert np.allclose(vec.p1.coordinates, p1_arr)
     assert np.allclose(vec.p2.coordinates, p2_arr)
     assert np.allclose(vec.displacement, p2_arr - p1_arr)
@@ -66,7 +66,7 @@ class PointTests(unittest.TestCase):
         # System ndim check during creation
         sys3 = get_coordinate_system("sys3", ndim=3, create=True)
         assert sys3.ndim == 3
-        with self.assertRaisesRegex(TypeError, "expected 4D"):
+        with self.assertRaisesRegex(TypeError, "System 'sys3' is 3D \\(expected 4D\\)"):
             Point([1, 2, 3, 4], "sys3")  # Now checks against existing system
 
         # Point must be 1d coordinate array
@@ -182,8 +182,8 @@ class VectorTests(unittest.TestCase):
 
         # Mismatched shapes
         pa4 = PointArray([[0, 0]], "cartesian")
-        va_mismatched = VectorArray(pa1, pa4)
-        check_vector(va_mismatched, np.array([[1, 2], [0, 0]]), np.array([[0, 0], [0, 0]]), "cartesian")
+        with self.assertRaisesRegex(ValueError, "must have the same structural shape"):
+            VectorArray(pa1, pa4)
 
         # Wrong types
         with self.assertRaisesRegex(TypeError, "must be PointArray or Point instances"):
@@ -194,6 +194,90 @@ class VectorTests(unittest.TestCase):
         p2 = Point([4, 6], "cartesian")
         va_from_points = VectorArray(p1, p2)  # Technically allowed, but Vector is preferred
         check_vector(va_from_points, np.array([1, 2]), np.array([4, 6]), "cartesian")
+
+    def test_vector_array_init_dimension_validation(self):
+        """Test that VectorArray validates dimension compatibility between endpoints."""
+        # Mismatched coordinate dimensions should fail when systems differ
+        pa_2d = PointArray([[1, 2], [3, 4]], "cartesian")  # 2D coordinates
+        pa_3d = PointArray([[1, 2, 3], [4, 5, 6]], "cartesian3d")  # 3D coordinates
+        
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            VectorArray(pa_2d, pa_3d)  # Different systems will catch this first
+        
+        # Test what happens when trying to create PointArrays with mismatched dimensions
+        # in the same system. This should fail at PointArray creation time.
+        try:
+            # This should fail - cartesian is 2D, can't give it 3D coordinates  
+            invalid_pa = PointArray([[1, 2, 3]], "cartesian")
+            assert False, "Should have failed with dimension mismatch"
+        except TypeError as e:
+            assert "is 2D (expected 3D)" in str(e)
+        
+        # Valid case: same dimensions in same system should work
+        pa1 = PointArray([[1, 2], [3, 4]], "cartesian")  
+        pa2 = PointArray([[5, 6], [7, 8]], "cartesian")  
+        va = VectorArray(pa1, pa2)
+        assert va.shape == (2, 2)
+
+    def test_vector_mixed_init_validations(self):
+        pa_2d = PointArray([[1, 2], [3, 4]], "cartesian")
+        p_2d = Point([5, 6], "cartesian")
+        pa_3d = PointArray([[1, 2, 3], [4, 5, 6]], "cartesian3d")
+        p_3d = Point([7, 8, 9], "cartesian3d")
+        # Valid mixed init: Point with PointArray
+        va1 = VectorArray(p_2d, pa_2d)
+        check_vector(va1, np.array([5, 6]), pa_2d.coordinates, "cartesian")
+        assert va1.shape == (2, 2)  # Should broadcast to match PointArray length
+        # Valid mixed init: PointArray with Point
+        va2 = VectorArray(pa_2d, p_2d)
+        check_vector(va2, pa_2d.coordinates, np.array([5, 6]), "cartesian")
+        assert va2.shape == (2, 2)  # Should broadcast to match PointArray length
+        # Valid mixed init: Point with Point
+        va3 = VectorArray(p_3d, pa_3d)
+        check_vector(va3, np.array([7, 8, 9]), pa_3d.coordinates, "cartesian3d")
+        assert va3.shape == (2, 3)  # Should broadcast to match PointArray length
+        # Valid mixed init: PointArray with Point
+        va4 = VectorArray(pa_3d, p_3d)
+        check_vector(va4, pa_3d.coordinates, np.array([7, 8, 9]), "cartesian3d")
+        assert va4.shape == (2, 3)  # Should broadcast to match PointArray length
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            # Invalid mixed init: mismatched systems
+            VectorArray(p_2d, pa_3d)
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            # Invalid mixed init: mismatched systems
+            VectorArray(pa_2d, p_3d)
+
+    def test_vector_array_init_length_validation(self):
+        """Test that VectorArray validates length compatibility when both endpoints are PointArrays."""
+        # PointArrays with different lengths should fail
+        pa_short = PointArray([[1, 2]], "cartesian")  # Length 1
+        pa_long = PointArray([[3, 4], [5, 6], [7, 8]], "cartesian")  # Length 3
+        
+        with self.assertRaisesRegex(ValueError, "must have the same structural shape"):
+            VectorArray(pa_short, pa_long)
+        
+        # Point with PointArray should work (broadcasting)
+        p = Point([1, 2], "cartesian")
+        pa = PointArray([[3, 4], [5, 6]], "cartesian")
+        va = VectorArray(p, pa)
+        assert va.shape == (2, 2)  # Should broadcast to match PointArray length
+        
+        # PointArray with Point should also work
+        va2 = VectorArray(pa, p)
+        assert va2.shape == (2, 2)
+        
+        # Same length PointArrays should work
+        pa1 = PointArray([[1, 2], [3, 4]], "cartesian")
+        pa2 = PointArray([[5, 6], [7, 8]], "cartesian")
+        va3 = VectorArray(pa1, pa2)
+        assert va3.shape == (2, 2)
+        
+        # Test verification that the validation requested is already working
+        # Verify: PointArrays must have same coordinate dimensionality (enforced by system check)
+        pa_2d = PointArray([[1, 2]], "cartesian")  # 2D
+        pa_3d = PointArray([[1, 2, 3]], "cartesian3d")  # 3D
+        with self.assertRaisesRegex(ValueError, "must share the same coordinate system"):
+            VectorArray(pa_2d, pa_3d)  # Different coordinate systems (2D vs 3D)
 
     def test_point_subtraction(self):
         p1 = Point([1, 2], "cartesian")
@@ -432,7 +516,7 @@ class VectorTests(unittest.TestCase):
         v4 = Vector(p1, p4)  # Different end point
         v5 = Vector(p5, p6)  # Different system
 
-        va1 = VectorArray(PointArray([p1.coordinates]), PointArray([p2.coordinates]))
+        va1 = VectorArray(PointArray([p1.coordinates], "sys"), PointArray([p2.coordinates], "sys"))
 
         assert v1 == v2
         assert v1 == v3  # Equality based on endpoint values
@@ -441,45 +525,80 @@ class VectorTests(unittest.TestCase):
         assert v1 != va1  # Different type
         assert v1 != [2, 2]  # Different type (displacement)
 
-    def test_vector_ndarray_init(self):
-        """Test initializing Vector/VectorArray with ndarray and system."""
-        # Simple 1D vector from displacement array
-        disp = np.array([3, 4])
-        v = Vector(disp, "cartesian")
+    def test_vector_simplified_init_only_points(self):
+        """Test that VectorArray only accepts two Point/PointArray instances, not arrays."""
+        # VectorArray should only accept Point/PointArray instances
+        p1 = Point([1, 2], "cartesian")
+        p2 = Point([4, 6], "cartesian")
+        v = Vector(p1, p2)
         assert isinstance(v, Vector)
+        check_vector(v, np.array([1, 2]), np.array([4, 6]), "cartesian")
 
-        # Verify p1 is at origin and p2 is at the displacement
-        check_vector(v, np.zeros_like(disp), disp, "cartesian")
-
-        # Check internal structure
-        assert isinstance(v.p1, PointArray)
-        assert isinstance(v.p2, PointArray)
-        assert np.allclose(v.p1.coordinates, np.zeros_like(disp))
-        assert np.allclose(v.p2.coordinates, disp)
-        assert np.allclose(v.displacement, disp)
-
-        # Multi-dimensional displacement array
-        multi_disp = np.array([[1, 2], [3, 4], [5, 6]])
-        va = VectorArray(multi_disp, "cartesian")
+        # VectorArray with PointArrays should work
+        pa1 = PointArray([[1, 2], [3, 4]], "cartesian")
+        pa2 = PointArray([[5, 6], [7, 8]], "cartesian")
+        va = VectorArray(pa1, pa2)
         assert isinstance(va, VectorArray)
+        check_vector(va, np.array([[1, 2], [3, 4]]), np.array([[5, 6], [7, 8]]), "cartesian")
 
-        # Verify points and displacement
-        zeros = np.zeros_like(multi_disp)
-        check_vector(va, zeros, multi_disp, "cartesian")
-        assert np.allclose(va.displacement, multi_disp)
+        # Array + system initialization should no longer be supported
+        disp = np.array([3, 4])
+        with self.assertRaisesRegex(TypeError, "must be Point instances"):
+            Vector(disp, "cartesian")
+        
+        multi_disp = np.array([[1, 2], [3, 4]])
+        with self.assertRaisesRegex(TypeError, "must be PointArray or Point instances"):
+            VectorArray(multi_disp, "cartesian")
 
-        # Test with float dtype
-        float_disp = np.array([1.5, 2.5])
-        vf = VectorArray(float_disp, "cartesian")
-        assert vf.dtype == float_disp.dtype
-        check_vector(vf, np.zeros_like(float_disp), float_disp, "cartesian")
+    def test_vector_mapped_to(self):
+        # Setup a graph with a transform
+        graph = CoordinateSystemGraph.get_graph("test_graph", create=True)
+        graph.add_system("sys_a", ndim=2)
+        graph.add_system("sys_b", ndim=2)
 
-        # Test with 3D coordinate space
-        disp3d = np.array([1, 2, 3])
-        v3d = VectorArray(disp3d, "cartesian3d")
-        check_vector(v3d, np.zeros_like(disp3d), disp3d, "cartesian3d")
+        # A transform that scales by 2 and translates by (10, 20)
+        tr = STTransform(scale=[2, 2], offset=[10, 20])
+        graph.add_transform(tr, "sys_a", "sys_b")
 
-        # Edge case: empty array
-        empty_disp = np.array([[]])
-        with pytest.raises(ValueError):  # Should fail gracefully
-            VectorArray(empty_disp, "cartesian")
+        # 1. Test Vector.mapped_to
+        p1 = Point([1, 2], "sys_a", graph="test_graph")
+        p2 = Point([4, 6], "sys_a", graph="test_graph")
+        v = Vector(p1, p2)
+
+        # The displacement in sys_a is [3, 4]
+        assert np.allclose(v.displacement, [3, 4])
+
+        # Map the vector to sys_b
+        v_mapped = v.mapped_to("sys_b")
+
+        # Check the mapped vector
+        assert isinstance(v_mapped, Vector)
+        assert v_mapped.system.name == "sys_b"
+
+        p1_mapped_coords = np.array([1, 2]) * 2 + [10, 20]  # [12, 24]
+        p2_mapped_coords = np.array([4, 6]) * 2 + [10, 20]  # [18, 32]
+
+        check_vector(v_mapped, p1_mapped_coords, p2_mapped_coords, "sys_b")
+        assert np.allclose(v_mapped.displacement, [6, 8])
+
+        # 2. Test VectorArray.mapped_to
+        pa1 = PointArray([[1, 2], [0, 0]], "sys_a", graph="test_graph")
+        pa2 = PointArray([[4, 6], [1, 1]], "sys_a", graph="test_graph")
+        va = VectorArray(pa1, pa2)
+
+        # Displacements in sys_a are [[3, 4], [1, 1]]
+        assert np.allclose(va.displacement, [[3, 4], [1, 1]])
+
+        # Map the vector array to sys_b
+        va_mapped = va.mapped_to("sys_b")
+
+        assert isinstance(va_mapped, VectorArray)
+        assert not isinstance(va_mapped, Vector)
+        assert va_mapped.system.name == "sys_b"
+
+        # Map endpoints for VectorArray
+        pa1_mapped_coords = np.array([[1, 2], [0, 0]]) * 2 + [10, 20]  # [[12, 24], [10, 20]]
+        pa2_mapped_coords = np.array([[4, 6], [1, 1]]) * 2 + [10, 20]  # [[18, 32], [12, 22]]
+
+        check_vector(va_mapped, pa1_mapped_coords, pa2_mapped_coords, "sys_b")
+        assert np.allclose(va_mapped.displacement, [[6, 8], [2, 2]])
