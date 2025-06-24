@@ -55,9 +55,6 @@ class Image:
     ----------
     image : ndarray
         The image data. Must be 2D or higher.
-    axes : tuple | None
-        The axis indices of the row and column dimensions in the image data.
-        If *image* is 2D, then *axes* defaults to (0, 1).
     cs_name : str | None
         Optional name of the coordinate system to attach to the image.
     graph : str | CoordinateSystemGraph | None
@@ -65,15 +62,9 @@ class Image:
     """
     _image_graph_n = 0
 
-    def __init__(self, image, axes: tuple | None = None, cs_name=None, graph=None):
+    def __init__(self, image, cs_name=None, graph=None):
         self.image = image
         self._parent_tr = None
-        if axes is None:
-            if image.ndim == 2:
-                axes = (0, 1)
-            else:
-                raise ValueError("Must specify (row, col) axes for image data with more than 2 dimensions")
-        self.axes = axes
 
         if graph is None:
             graph = 'image_graph'
@@ -93,14 +84,6 @@ class Image:
     def shape(self):
         return self.image.shape
     
-    @property
-    def n_rows(self):
-        return self.shape[self.axes[0]]
-    
-    @property
-    def n_cols(self):
-        return self.shape[self.axes[1]]
-
     def point(self, coords):
         """Return a Point object with the given (row, col) coordinates.
         """
@@ -119,66 +102,76 @@ class Image:
             raise ValueError("coords.shape[-1] must be 2")
         return PointArray(coords, system=self.system)
 
-    def rotate(self, angle, **kwds):
+    def rotate(self, angle, axes=(0, 1), **kwds):
+        """Rotate the image by the given angle around the specified axes.
+
+        Parameters
+        ----------
+        angle : float
+            The angle in degrees to rotate the image.
+        axes : (int, int), optional
+            The axes around which to rotate the image. Default is (0, 1)
+        kwds : keyword arguments
+            Additional keyword arguments to pass to `scipy.ndimage.rotate`.
+        """
         img = self.image
-        rotated_img = scipy.ndimage.rotate(img, angle, axes=self.axes, **kwds)
+        rotated_img = scipy.ndimage.rotate(img, angle, axes=axes, **kwds)
         img2 = self.copy(image=rotated_img)
-        shape1 = (self.shape[self.axes[0]], self.shape[self.axes[1]])
-        shape2 = (rotated_img.shape[self.axes[0]], rotated_img.shape[self.axes[1]])
-        img2._parent_tr = make_rotation_transform(angle, shape1, shape2, from_cs=self.system, to_cs=img2.system)
+        shape1 = (self.shape[axes[0]], self.shape[axes[1]])
+        shape2 = (rotated_img.shape[axes[0]], rotated_img.shape[axes[1]])
+        img2._parent_tr = self.make_rotation_transform(angle, axes, shape1, shape2, from_cs=self.system, to_cs=img2.system)
         return img2
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):
             item = (item,)
-        if len(item) != 2:
-            raise ValueError("Only 2D slices are supported")
-        rows, cols = item
-        slices = [slice(None)] * self.image.ndim
-        slices[self.axes[0]] = rows
-        slices[self.axes[1]] = cols
-        cropped_img = self.image[tuple(slices)]
+        if len(item) != self.image.ndim:
+            item = item + (slice(None),) * (self.image.ndim - len(item))
+        cropped_img = self.image[item]
         img2 = self.copy(image=cropped_img)
-        img2._parent_tr = make_crop_transform((rows, cols), self.image, from_cs=self.system, to_cs=img2.system)
+        img2._parent_tr = make_crop_transform(item, self.image, from_cs=self.system, to_cs=img2.system)
         return img2
 
-    def zoom(self, factor, **kwds):
-        if np.isscalar(factor):
-            factor = [factor, factor]
+    def zoom(self, factors, **kwds):
+        if np.isscalar(factors):
+            factors = [factors] * self.image.ndim
         img = self.image
-        # only zoom row/column axes
-        ax_scale_factors = [1] * img.ndim
-        ax_scale_factors[self.axes[0]] = factor[0]
-        ax_scale_factors[self.axes[1]] = factor[1]
-        scaled_img = scipy.ndimage.zoom(img, ax_scale_factors, **kwds)
+        scaled_img = scipy.ndimage.zoom(img, factors, **kwds)
 
         img2 = self.copy(image=scaled_img)
-        tr = AffineTransform(dims=(2, 2), from_cs=self.system, to_cs=img2.system)
-        tr.scale(factor)
+        tr = AffineTransform(dims=(self.image.ndim, self.image.ndim), from_cs=self.system, to_cs=img2.system)
+        tr.scale(factors)
         img2._parent_tr = tr
         return img2
 
     def copy(self, **updates):
-        kwds = {'axes': self.axes, 'graph': self.graph}
+        kwds = {'graph': self.graph}
         kwds.update(updates)
         return Image(**kwds)
 
+    def make_rotation_transform(self, angle, axes, shape1, shape2, **kwds):
+        # Make transform mapping unrotated to rotated coordinates
+        center1 = np.array(shape1) / 2
+        center2 = np.array(shape2) / 2
+        tr = AffineTransform(dims=(self.image.ndim, self.image.ndim), **kwds)
+        tr.translate(-center1)
+        if self.image.ndim == 2:
+            tr.rotate(-angle)
+        elif self.image.ndim == 3:
+            ax1 = np.zeros(self.image.ndim)
+            ax1[axes[0]] = 1
+            ax2 = np.zeros(self.image.ndim)
+            ax2[axes[1]] = 1
+            axis = np.cross(ax1, ax2)
+            tr.rotate(-angle, axis=axis)
+        else:
+            raise ValueError("Image must be 2D or 3D for rotation")
+        tr.translate(center2)
+        return tr
 
-# Make transform mapping unrotated to rotated coordinates
-def make_rotation_transform(angle, shape1, shape2, **kwds):
-    center1 = (np.array(shape1) + 0) / 2
-    center2 = (np.array(shape2) + 0) / 2
-    tr = AffineTransform(dims=(2, 2), **kwds)
-    tr.translate(-center1)
-    tr.rotate(-angle)
-    tr.translate(center2)
-    return tr
-
-
-def make_crop_transform(crop, img, **kwds):
-    tr = AffineTransform(dims=(2, 2), **kwds)
-    tr.translate([
-        -crop[0].indices(img.shape[-2])[0], 
-        -crop[1].indices(img.shape[-1])[0], 
-    ])
-    return tr
+    def make_crop_transform(self, crop, img, **kwds):
+        tr = AffineTransform(dims=(self.image.ndim, self.image.ndim), **kwds)
+        tr.translate([
+            -crop[i].indices(img.shape[i])[0] for i in range(self.image.ndim)
+        ])
+        return tr
