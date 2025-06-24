@@ -130,10 +130,9 @@ class Image:
         img = self.image
         rotated_img = scipy.ndimage.rotate(img, angle, axes=axes, **kwds)
         img2 = self.copy(image=rotated_img)
-        tr = self.make_rotation_transform(
+        img2._parent_tr = self.make_rotation_transform(
             angle, axes, self.shape, img2.shape, from_cs=self.system, to_cs=img2.system
         )
-        img2._parent_tr = tr
         return img2
 
     def __getitem__(self, item):
