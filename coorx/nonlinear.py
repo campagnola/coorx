@@ -51,7 +51,9 @@ class LogTransform(Transform):
         self._base[:] = s
 
     def _map(self, coords, base=None):
-        ret = np.empty(coords.shape, coords.dtype)
+        # Ensure output dtype can handle floating point values including NaN
+        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
+        ret = np.empty(coords.shape, output_dtype)
         if base is None:
             base = self.base
         with warnings.catch_warnings():
@@ -106,7 +108,7 @@ class PolarTransform(Transform):
 
     def _imap(self, coords):
         ret = np.empty(coords.shape, coords.dtype)
-        ret[..., 0] = np.arctan2(coords[..., 0], coords[..., 1])
+        ret[..., 0] = np.arctan2(coords[..., 1], coords[..., 0])  # arctan2(y, x) for correct quadrant
         ret[..., 1] = (coords[..., 0]**2 + coords[..., 1]**2) ** 0.5
         for i in range(2, coords.shape[-1]):  # copy any further axes
             ret[..., i] = coords[..., i]
@@ -167,6 +169,61 @@ class LensDistortionTransform(Transform):
         out[:, 1] += 2 * p2 * xy + p1 * (r2 + 2 * y**2)
 
         return out
+
+    def _imap(self, arr):
+        """Inverse lens distortion mapping using iterative numerical method.
+        
+        Since lens distortion is nonlinear, we use Newton-Raphson iteration
+        to find the undistorted coordinates that would map to the given distorted ones.
+        """
+        k1, k2, p1, p2, k3 = self.coeff
+        
+        # If all coefficients are zero, it's identity transform
+        if all(c == 0 for c in self.coeff):
+            return arr.copy()
+        
+        # Initial guess: use input as starting point
+        undistorted = arr.copy()
+        
+        # Newton-Raphson iteration for inverse mapping
+        for iteration in range(10):  # Maximum 10 iterations
+            # Compute forward mapping of current guess
+            forward = self._map(undistorted)
+            
+            # Compute residual (error)
+            residual = forward - arr
+            
+            # Check convergence
+            if np.allclose(residual, 0, atol=1e-8):
+                break
+                
+            # Compute Jacobian matrix numerically
+            eps = 1e-6
+            jac = np.zeros((arr.shape[0], 2, 2))
+            
+            for i in range(2):
+                perturbed = undistorted.copy()
+                perturbed[:, i] += eps
+                forward_perturbed = self._map(perturbed)
+                jac[:, :, i] = (forward_perturbed - forward) / eps
+            
+            # Solve Jacobian * delta = -residual for delta
+            try:
+                # Use np.linalg.solve for each point
+                delta = np.zeros_like(undistorted)
+                for i in range(arr.shape[0]):
+                    delta[i] = np.linalg.solve(jac[i], -residual[i])
+                
+                # Update guess
+                undistorted += delta
+                
+            except np.linalg.LinAlgError:
+                # If Jacobian is singular, use pseudo-inverse
+                for i in range(arr.shape[0]):
+                    delta[i] = np.linalg.pinv(jac[i]) @ (-residual[i])
+                undistorted += delta
+        
+        return undistorted
 
     @property
     def params(self):
