@@ -161,6 +161,7 @@ class Image:
             dims=(self.ndim, self.ndim),
             from_cs=self.system,
             to_cs=img2.system,
+            cs_graph=self.graph,
         )
         tr.scale(factors)
         img2._parent_tr = tr
@@ -175,7 +176,7 @@ class Image:
         # Make transform mapping unrotated to rotated coordinates
         from_center = np.array(from_shape) / 2
         to_center = np.array(to_shape) / 2
-        tr = AffineTransform(dims=(self.ndim, self.ndim), **kwds)
+        tr = AffineTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
         tr.translate(-from_center)
         if self.ndim == 2:
             tr.rotate(-angle)
@@ -192,6 +193,6 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        tr = AffineTransform(dims=(self.ndim, self.ndim), **kwds)
+        tr = AffineTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
         tr.translate([-crop[i].indices(img.shape[i])[0] for i in range(self.ndim)])
         return tr
