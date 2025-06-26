@@ -63,8 +63,6 @@ class Image:
         Optional graph to use for the coordinate system.
     """
 
-    _image_graph_n = 0
-
     def __init__(self, image, axes=None, cs_name=None, graph=None):
         if axes is None:
             axes = tuple(range(image.ndim))
@@ -75,7 +73,6 @@ class Image:
 
         if graph is None:
             graph = 'image_graph'
-            Image._image_graph_n += 1
         self.graph = CoordinateSystemGraph.get_graph(graph, create=True)
 
         if isinstance(cs_name, CoordinateSystem):
@@ -125,13 +122,13 @@ class Image:
         angle : float
             The angle in degrees to rotate the image.
         axes : (int, int), optional
-            The two axes involved in the rotation. Defaults to (0, 1). Beware: this is different from how
-            AffineTransform's rotations work.
+            The two spatial axes involved in the rotation. Defaults to (0, 1). Beware: this is different from how
+            AffineTransform's rotations work, and different from how Image.__init__ axes work.
         kwds : keyword arguments
             Additional keyword arguments to pass to `scipy.ndimage.rotate`.
         """
         img = self.image
-        rotated_img = scipy.ndimage.rotate(img, angle, axes=axes, **kwds)
+        rotated_img = scipy.ndimage.rotate(img, angle, axes=tuple(self.axes[i] for i in axes), **kwds)
         img2 = self.copy(image=rotated_img)
         img2._parent_tr = self.make_rotation_transform(
             angle, axes, self.shape, img2.shape, from_cs=self.system, to_cs=img2.system
