@@ -437,16 +437,16 @@ class TransposeTransformTest(unittest.TestCase):
 
 class LogTransformTest(unittest.TestCase):
     def test_log(self):
-        lt = LogTransform((12, 0))
+        lt = LogTransform((12, None))  # None is now the identity value
         data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
         output = lt.map(data)
         self.assertAlmostEqual(output[0][0], 1)
         self.assertAlmostEqual(output[1][0], 2)
-        self.assertAlmostEqual(output[1][1], 13.2)
+        self.assertAlmostEqual(output[1][1], 13.2)  # None = identity, so unchanged
         self.assertTrue(math.isnan(output[2][0]))
         self.assertTrue(math.isnan(output[3][0]))
         self.assertTrue(math.isnan(output[4][0]))
-        self.assertAlmostEqual(output[4][1], 0)
+        self.assertAlmostEqual(output[4][1], 0)  # None = identity, so unchanged
 
 
 class SRT3DTransformTest(unittest.TestCase):

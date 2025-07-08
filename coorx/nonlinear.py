@@ -4,19 +4,22 @@ from .base_transform import Transform
 
 
 class LogTransform(Transform):
-    """ND transform perfoming logarithmic transformation.
+    """ND transform performing logarithmic transformation.
 
     Maps (x, y, z) => (log(base_x, x), log(base_y, y), log(base_z, z))
 
-    No transformation is applied for axes with base == 0.
-
-    If base < 0, then the inverse function is applied: x => base.x ** x
+    Special base values:
+    - None: Identity transformation (no change to that axis)
+    - Negative values: Inverse exponential transformation (x => -base^x)
+    - 1 or 0: Mathematically nonsensical but allowed (may produce inf/nan)
+    - Fractional values: Standard logarithm (log(x)/log(base))
 
     Parameters
     ----------
     base : array-like
         Base values for each axis; length must be the same as the dimensionality of the transform. 
-        A base value of 0 disables the transform for that axis.
+        A base value of None provides identity transformation for that axis.
+        Negative bases apply inverse exponential transformation.
     """
     Linear = False
     Orthogonal = True
@@ -33,16 +36,16 @@ class LogTransform(Transform):
         
         super().__init__(dims, **kwargs)
         
-        self._base = np.zeros(self.dims[0], dtype=np.float32)
+        self._base = [None] * self.dims[0]
         if base is not None:
             self.base = base
 
     @property
-    def base(self):
+    def base(self) -> list[float | None]:
         """
         *base* is a tuple containing the log base values that should be
-        applied to each axis of the input vector. If any axis has a base == 0,
-        then that axis is not affected.
+        applied to each axis of the input vector. If any axis has a base == None,
+        then that axis is not affected (identity transformation).
         """
         return self._base.copy()
 
@@ -64,13 +67,13 @@ class LogTransform(Transform):
                 elif base[i] > 0.0:
                     ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
                 else:  # base < 0 treated as inverse
-                    ret[..., i] = -base[i] ** coords[..., i]
+                    ret[..., i] = (-base[i]) ** coords[..., i]
 
         ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
     def _imap(self, coords):
-        return self._map(coords, -self.base)
+        return self._map(coords, [b if b is None else -b for b in self.base])
 
     @property
     def params(self):
@@ -80,7 +83,7 @@ class LogTransform(Transform):
         self.base = base
 
     def __repr__(self):
-        return "<LogTransform base=%s>" % (self.base)
+        return f"<LogTransform base={self.base}>"
 
 
 class PolarTransform(Transform):
