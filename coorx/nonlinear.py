@@ -59,12 +59,13 @@ class LogTransform(Transform):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)  # divide-by-zeros and invalid values
             for i in range(min(ret.shape[-1], 3)):
-                if base[i] > 1.0:
-                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
-                elif base[i] < -1.0:
-                    ret[..., i] = -base[i] ** coords[..., i]
-                else:
+                if base[i] is None:
                     ret[..., i] = coords[..., i]
+                elif base[i] > 0.0:
+                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
+                else:  # base < 0 treated as inverse
+                    ret[..., i] = -base[i] ** coords[..., i]
+
         ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
