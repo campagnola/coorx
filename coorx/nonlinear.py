@@ -111,7 +111,8 @@ class PolarTransform(Transform):
         return ret
 
     def _imap(self, coords):
-        ret = np.empty(coords.shape, coords.dtype)
+        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
+        ret = np.empty(coords.shape, output_dtype)
         ret[..., 0] = np.arctan2(coords[..., 1], coords[..., 0])  # arctan2(y, x) for correct quadrant
         ret[..., 1] = (coords[..., 0]**2 + coords[..., 1]**2) ** 0.5
         for i in range(2, coords.shape[-1]):  # copy any further axes
