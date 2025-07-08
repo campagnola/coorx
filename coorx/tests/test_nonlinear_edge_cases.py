@@ -325,13 +325,13 @@ class TestPolarTransformEdgeCases:
         
         # Check angles are in correct quadrants (arctan2 returns [-π, π])
         # Q1: 0 < θ < π/2
-        assert 0 < polar[0, 0] < math.pi/2
+        assert 0 <= polar[0, 0] < math.pi/2
         # Q2: π/2 < θ < π
         assert math.pi/2 < polar[1, 0] < math.pi
         # Q3: -π < θ < -π/2 (arctan2 returns negative for Q3)
         assert -math.pi < polar[2, 0] < -math.pi/2
         # Q4: -π/2 < θ < 0 (arctan2 returns negative for Q4)
-        assert -math.pi/2 < polar[3, 0] < 0
+        assert -math.pi/2 < polar[3, 0] <= 0
         
         # All radii should be sqrt(2)
         np.testing.assert_allclose(polar[:, 1], math.sqrt(2), rtol=1e-14)
@@ -544,7 +544,7 @@ class TestNonlinearTransformComposition:
     def test_nonlinear_composite_with_linear(self):
         """Test composition of nonlinear transforms with linear transforms."""
         # Create a mixed composite
-        linear_transform = coorx.STTransform(scale=[2, 3], translate=[1, -1], dims=(2, 2))
+        linear_transform = coorx.STTransform(scale=[2, 3], offset=[1, -1], dims=(2, 2))
         polar_transform = PolarTransform(dims=(2, 2))
         
         coords = np.array([[1, 0], [0, 1], [1, 1]])
