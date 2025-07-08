@@ -103,7 +103,8 @@ class PolarTransform(Transform):
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
-        ret = np.empty(coords.shape, coords.dtype)
+        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
+        ret = np.empty(coords.shape, output_dtype)
         ret[..., 0] = coords[..., 1] * np.cos(coords[..., 0])
         ret[..., 1] = coords[..., 1] * np.sin(coords[..., 0])
         for i in range(2, coords.shape[-1]):  # copy any further axes

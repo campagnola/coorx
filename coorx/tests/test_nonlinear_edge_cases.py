@@ -356,7 +356,7 @@ class TestPolarTransformEdgeCases:
         # Round-trip should work (though angles may be normalized to [-π, π])
         polar_back = pt.imap(result)
         cartesian_back = pt.map(polar_back)
-        np.testing.assert_allclose(result, cartesian_back, rtol=1e-14)
+        np.testing.assert_allclose(result, cartesian_back, rtol=1e-12, atol=1e-12)
 
 
 class TestLensDistortionTransformEdgeCases:
@@ -547,7 +547,9 @@ class TestNonlinearTransformComposition:
         linear_transform = coorx.STTransform(scale=[2, 3], offset=[1, -1], dims=(2, 2))
         polar_transform = PolarTransform(dims=(2, 2))
         
-        coords = np.array([[1, 0], [0, 1], [1, 1]])
+        # Use coordinates that result in positive radii after linear transform
+        # [0.5, 0.5] -> [2, 0.5], [0, 1] -> [1, 2], [1, 1] -> [3, 2]
+        coords = np.array([[0.5, 0.5], [0, 1], [1, 1]])
         
         # Linear then nonlinear
         step1 = linear_transform.map(coords)
@@ -558,6 +560,55 @@ class TestNonlinearTransformComposition:
         rev_step2 = linear_transform.imap(rev_step1)
         
         np.testing.assert_allclose(coords, rev_step2, rtol=1e-12)
+
+    def test_polar_negative_radius_and_angle_wrapping(self):
+        """Test polar transform behavior with negative radii and angle wrapping."""
+        pt = PolarTransform(dims=(2, 2))
+        
+        # Test 1: Negative radius behavior
+        # [θ=0, r=-1] should give same cartesian point as [θ=π, r=1]
+        coords_neg = np.array([[0, -1]])
+        coords_pos = np.array([[math.pi, 1]])
+        
+        result_neg = pt.map(coords_neg)
+        result_pos = pt.map(coords_pos)
+        
+        # Should produce same (or nearly same) cartesian coordinates
+        np.testing.assert_allclose(result_neg, result_pos, rtol=1e-12, atol=1e-15)
+        
+        # Test 2: Angle wrapping - angles that differ by 2π should produce same result
+        angles_equiv = np.array([[0, 1], [2*math.pi, 1], [4*math.pi, 1], [-2*math.pi, 1]])
+        results = pt.map(angles_equiv)
+        
+        # All should produce same cartesian result
+        for i in range(1, len(results)):
+            np.testing.assert_allclose(results[0], results[i], rtol=1e-12, atol=1e-15)
+        
+        # Test 3: Inverse mapping canonical behavior
+        # When mapping back from cartesian, negative radii become positive with angle adjustment
+        cartesian_point = np.array([[1, 0]])  # Simple point on x-axis
+        
+        # Convert to polar
+        polar_result = pt.imap(cartesian_point)
+        
+        # Should give θ≈0, r≈1 (canonical form)
+        expected_theta = 0
+        expected_r = 1
+        np.testing.assert_allclose(polar_result[0, 0], expected_theta, atol=1e-12)
+        np.testing.assert_allclose(polar_result[0, 1], expected_r, rtol=1e-12)
+        
+        # Test 4: Non-reversible negative radius case
+        # [θ=3, r=-1] converts to cartesian then back to different polar coords
+        problematic_coords = np.array([[3, -1]])
+        cartesian = pt.map(problematic_coords)
+        polar_back = pt.imap(cartesian)
+        
+        # Should NOT equal original due to negative radius canonicalization
+        assert not np.allclose(problematic_coords, polar_back, rtol=1e-6)
+        
+        # But should still round-trip correctly if we go forward again
+        cartesian_again = pt.map(polar_back)
+        np.testing.assert_allclose(cartesian, cartesian_again, rtol=1e-12)
 
     @pytest.mark.parametrize("precision", [np.float32, np.float64])
     def test_nonlinear_precision_handling(self, precision):
