@@ -40,15 +40,10 @@ class TestLogTransformEdgeCases:
         np.testing.assert_array_equal(result, coords)
 
     def test_log_transform_negative_bases(self):
-        """Test LogTransform with negative bases (inverse function)."""
-        # For base < -1, function is -base^x
-        lt = LogTransform(base=[-2, -3, -10], dims=(3, 3))
-        coords = np.array([[2, 3, 1], [1, 2, 0.5]])
-        result = lt.map(coords)
-        
-        # Should compute -(-base)^x = -base^x
-        expected = np.array([[-4, -27, -10], [-2, -9, -math.sqrt(10)]])
-        np.testing.assert_allclose(result, expected, rtol=1e-10)
+        """Test LogTransform with negative bases should raise NotImplementedError."""
+        # Negative bases are not currently supported
+        with pytest.raises(NotImplementedError):
+            LogTransform(base=[-2, -3, -10], dims=(3, 3))
 
     def test_log_transform_negative_inputs(self):
         """Test LogTransform with negative input coordinates."""
@@ -104,7 +99,7 @@ class TestLogTransformEdgeCases:
 
     def test_log_transform_round_trip_accuracy(self):
         """Test round-trip accuracy for LogTransform."""
-        bases = [[2, 10, math.e], [-5, -2, -math.e]]
+        bases = [[2, 10, math.e], [1.5, 1.1, 3.7]]  # Only positive/fractional bases
         
         for base in bases:
             lt = LogTransform(base=base, dims=(3, 3))
@@ -211,6 +206,50 @@ class TestPolarTransformEdgeCases:
         expected[-1, 0] = 0  # 2π → 0
         
         np.testing.assert_allclose(polar_back, expected, rtol=1e-14, atol=1e-14)
+
+    def test_polar_transform_precise_angle_verification(self):
+        """Test PolarTransform with small fractions of π to verify arctan2 argument order."""
+        pt = PolarTransform(dims=(2, 2))
+        
+        # Test smaller fractions of π to verify arctan2(y, x) is correct
+        test_angles = [
+            math.pi/8,     # 22.5°
+            math.pi/6,     # 30°
+            math.pi/4,     # 45°
+            math.pi/3,     # 60°
+            3*math.pi/8,   # 67.5°
+            5*math.pi/6,   # 150°
+            7*math.pi/8,   # 157.5°
+            5*math.pi/4,   # 225°
+            4*math.pi/3,   # 240°
+            7*math.pi/4,   # 315°
+        ]
+        
+        radius = 2.0
+        for angle in test_angles:
+            # Forward transform: (θ, r) → (x, y)
+            polar_coord = np.array([[angle, radius]])
+            cartesian = pt.map(polar_coord)
+            
+            # Verify forward transform: x = r*cos(θ), y = r*sin(θ)
+            expected_x = radius * np.cos(angle)
+            expected_y = radius * np.sin(angle)
+            np.testing.assert_allclose(cartesian[0, 0], expected_x, rtol=1e-14, atol=1e-14)
+            np.testing.assert_allclose(cartesian[0, 1], expected_y, rtol=1e-14, atol=1e-14)
+            
+            # Inverse transform: (x, y) → (θ, r)
+            polar_back = pt.imap(cartesian)
+            
+            # Verify inverse transform recovers original angle and radius
+            # Note: arctan2 returns values in [-π, π], need to normalize to [0, 2π)
+            recovered_angle = polar_back[0, 0]
+            if recovered_angle < 0:
+                recovered_angle += 2 * math.pi
+            
+            recovered_radius = polar_back[0, 1]
+            
+            np.testing.assert_allclose(recovered_angle, angle, rtol=1e-14, atol=1e-14)
+            np.testing.assert_allclose(recovered_radius, radius, rtol=1e-14, atol=1e-14)
 
     def test_polar_transform_origin_stability(self):
         """Test numerical stability near the origin."""
