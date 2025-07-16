@@ -85,15 +85,15 @@ class Image:
                     if system not in self.graph.systems:
                         break
                     index += 1
-            self.system = self.graph.add_system(system, ndim=self.ndim)
+            self.system = self.graph.add_system(system, ndim=self.spatial_ndim)
 
     @property
-    def ndim(self):
+    def spatial_ndim(self):
         """Return the number of spatial dimensions of the image."""
         return len(self.spatial_to_image_axes)
 
     @property
-    def shape(self):
+    def spatial_shape(self):
         return tuple(self.image.shape[i] for i in self.spatial_to_image_axes)
 
     def point(self, coords):
@@ -123,7 +123,7 @@ class Image:
         rotated_img = scipy.ndimage.rotate(img, angle, axes=tuple(self.spatial_to_image_axes[i] for i in axes), **kwds)
         img2 = self.copy(image=rotated_img)
         img2._parent_tr = self.make_rotation_transform(
-            angle, axes, self.shape, img2.shape, from_cs=self.system, to_cs=img2.system
+            angle, axes, self.spatial_shape, img2.spatial_shape, from_cs=self.system, to_cs=img2.system
         )
         return img2
 
@@ -134,8 +134,8 @@ class Image:
             raise ValueError(
                 f"Image.__getitem__ requires a tuple of slices, got {item}"
             )
-        if len(item) != self.ndim:
-            item = item + (slice(None),) * (self.ndim - len(item))
+        if len(item) != self.spatial_ndim:
+            item = item + (slice(None),) * (self.spatial_ndim - len(item))
         cropped_img = self.image[item]
         img2 = self.copy(image=cropped_img)
         img2._parent_tr = self.make_crop_transform(
@@ -146,7 +146,7 @@ class Image:
     def zoom(self, factors, **kwds):
         # fill in missing image axes with 1
         if np.isscalar(factors):
-            factors = [factors] * self.ndim
+            factors = [factors] * self.spatial_ndim
         actual = np.ones(self.image.ndim, dtype=float)
         for i, ax in enumerate(self.spatial_to_image_axes):
             actual[ax] = factors[i]
@@ -154,7 +154,7 @@ class Image:
 
         img2 = self.copy(image=scaled_img)
         tr = STTransform(
-            dims=(self.ndim, self.ndim),
+            dims=(self.spatial_ndim, self.spatial_ndim),
             from_cs=self.system,
             to_cs=img2.system,
             cs_graph=self.graph,
@@ -172,14 +172,14 @@ class Image:
         # Make transform mapping unrotated to rotated coordinates
         from_center = np.array(from_shape) / 2
         to_center = np.array(to_shape) / 2
-        tr = AffineTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
+        tr = AffineTransform(dims=(self.spatial_ndim, self.spatial_ndim), cs_graph=self.graph, **kwds)
         tr.translate(-from_center)
-        if self.ndim == 2:
+        if self.spatial_ndim == 2:
             tr.rotate(-angle)
-        elif self.ndim == 3:
-            ax1 = np.zeros(self.ndim)
+        elif self.spatial_ndim == 3:
+            ax1 = np.zeros(self.spatial_ndim)
             ax1[axes[0]] = 1
-            ax2 = np.zeros(self.ndim)
+            ax2 = np.zeros(self.spatial_ndim)
             ax2[axes[1]] = 1
             axis = np.cross(ax1, ax2)
             tr.rotate(-angle, axis=axis)
@@ -190,4 +190,4 @@ class Image:
 
     def make_crop_transform(self, crop, img, **kwds):
         offset = [-crop[i].indices(img.shape[i])[0] for i in self.spatial_to_image_axes]
-        return TTransform(offset=offset, dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
+        return TTransform(offset=offset, dims=(self.spatial_ndim, self.spatial_ndim), cs_graph=self.graph, **kwds)

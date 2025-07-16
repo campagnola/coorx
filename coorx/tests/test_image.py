@@ -16,17 +16,17 @@ class TestImageSlicing:
         
         # Single slice - only spatial dimensions count for shape
         result = img[slice(10, 20)]
-        assert result.shape == (10, 100)  # Only spatial axes in shape
+        assert result.spatial_shape == (10, 100)  # Only spatial axes in shape
         assert result.image.shape == (10, 100, 3)  # Full image shape
         
         # Multiple slices
         result = img[slice(10, 20), slice(30, 40)]
-        assert result.shape == (10, 10)  # Only spatial axes in shape
+        assert result.spatial_shape == (10, 10)  # Only spatial axes in shape
         assert result.image.shape == (10, 10, 3)  # Full image shape
         
         # Full slice tuple
         result = img[slice(10, 20), slice(30, 40), slice(None)]
-        assert result.shape == (10, 10)  # Only spatial axes in shape
+        assert result.spatial_shape == (10, 10)  # Only spatial axes in shape
         assert result.image.shape == (10, 10, 3)  # Full image shape
 
     def test_invalid_non_slice_indexing_raises_error(self):
@@ -68,12 +68,12 @@ class TestImageSlicing:
         
         # Should pad with slice(None) for remaining dimensions
         result = img[slice(10, 20)]
-        assert result.shape == (10, 100)  # Only spatial axes in shape
+        assert result.spatial_shape == (10, 100)  # Only spatial axes in shape
         assert result.image.shape == (10, 100, 3)  # Full image shape
         
         # Should work with explicit padding
         result = img[slice(10, 20), slice(None), slice(None)]
-        assert result.shape == (10, 100)  # Only spatial axes in shape
+        assert result.spatial_shape == (10, 100)  # Only spatial axes in shape
         assert result.image.shape == (10, 100, 3)  # Full image shape
 
     def test_3d_image_slicing(self):
@@ -83,7 +83,7 @@ class TestImageSlicing:
         
         # Valid 3D slicing
         result = img[slice(2, 4), slice(10, 20), slice(30, 40)]
-        assert result.shape == (2, 10, 10)
+        assert result.spatial_shape == (2, 10, 10)
         
         # Invalid 3D slicing with integers
         with pytest.raises(ValueError, match="Image.__getitem__ requires a tuple of slices"):
