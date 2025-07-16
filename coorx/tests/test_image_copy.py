@@ -224,7 +224,7 @@ class TestImageCopyEdgeCases:
         # Copy without providing new image data
         img2 = img1.copy()
         
-        # Should be independent copies, not sharing the same object
+        # Should be independent copies when no image provided
         assert img1.image is not img2.image
         # But data content should be identical
         np.testing.assert_array_equal(img1.image, original_data)

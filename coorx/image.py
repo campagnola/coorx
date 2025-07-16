@@ -159,7 +159,9 @@ class Image:
         return img2
 
     def copy(self, **updates):
-        kwds = {'image': self.image.copy(), 'axes': self.axes, 'graph': self.graph}
+        kwds = {'axes': self.axes, 'graph': self.graph}
+        if 'image' not in updates:
+            kwds['image'] = self.image.copy()
         kwds.update(updates)
         return Image(**kwds)
 
