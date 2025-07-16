@@ -138,6 +138,10 @@ class Image:
     def __getitem__(self, item):
         if not isinstance(item, tuple):
             item = (item,)
+        if not all(isinstance(i, slice) for i in item):
+            raise ValueError(
+                f"Image.__getitem__ requires a tuple of slices, got {item}"
+            )
         if len(item) != self.ndim:
             item = item + (slice(None),) * (self.ndim - len(item))
         cropped_img = self.image[item]
