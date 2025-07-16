@@ -43,8 +43,8 @@ class TestImageCopyMetadataPreservation:
         # Image data should be identical
         np.testing.assert_array_equal(img1.image, img2.image)
         
-        # Should share the same image object unless new image is provided
-        assert img1.image is img2.image
+        # Should be independent copies, not sharing the same object
+        assert img1.image is not img2.image
 
     def test_copy_preserves_axes_configuration(self, sample_3d_image_data):
         """Test that copy preserves axes configuration."""
@@ -121,17 +121,17 @@ class TestImageCopyIndependence:
             assert name.startswith('image_')
 
     def test_copy_independence_data_modification(self, sample_image_data):
-        """Test that copied images share image data reference."""
+        """Test that copied images have independent image data."""
         img1 = Image(sample_image_data.copy())  # Copy to avoid modifying fixture
         img2 = img1.copy()
         
-        # Images should share the same data object
-        assert img1.image is img2.image
+        # Images should be independent copies
+        assert img1.image is not img2.image
         
-        # Modifying one affects the other (shared reference)
+        # Modifying one should not affect the other (independent copies)
         original_value = img1.image[0, 0]
         img2.image[0, 0] = 999.0
-        assert img1.image[0, 0] == 999.0
+        assert img1.image[0, 0] == original_value
         
         # But when new image is provided, they're independent
         new_data = np.zeros_like(sample_image_data)
@@ -224,8 +224,11 @@ class TestImageCopyEdgeCases:
         # Copy without providing new image data
         img2 = img1.copy()
         
-        # Should share the same image data object (reference)
-        assert img1.image is img2.image is original_data
+        # Should be independent copies, not sharing the same object
+        assert img1.image is not img2.image
+        # But data content should be identical
+        np.testing.assert_array_equal(img1.image, original_data)
+        np.testing.assert_array_equal(img2.image, original_data)
 
     def test_copy_with_new_image_creates_new_reference(self):
         """Test that copy with new image creates proper reference."""
@@ -303,9 +306,11 @@ class TestImageCopyIntegration:
         large_data = np.random.rand(100, 100, 50)  # ~4MB
         img1 = Image(large_data, axes=(0, 1))
         
-        # Copy without new data should share memory
+        # Copy without new data should create independent copies
         img2 = img1.copy()
-        assert img1.image is img2.image
+        assert img1.image is not img2.image
+        # But data content should be identical
+        np.testing.assert_array_equal(img1.image, img2.image)
         
         # Copy with new data should not share memory
         new_data = np.zeros((10, 10, 5))
