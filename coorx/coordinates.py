@@ -25,7 +25,7 @@ class PointArray:
     def __init__(self, coordinates, system: CoordSysOrStr = None, graph: StrOrNone = None):
         coord_arr, source_system = self._interpret_input(coordinates)
 
-        if coord_arr.dtype is np.dtype(object):
+        if not np.issubdtype(coord_arr.dtype, np.number):
             raise TypeError("Coordinates must be numerical or Point instances, not an object array.")
         self._coordinates = coord_arr
 
