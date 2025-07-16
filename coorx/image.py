@@ -57,13 +57,13 @@ class Image:
         The image data. Must be 2D or higher.
     axes : tuple, optional
         The axes of the image that correspond to spatial dimensions. Defaults to all axes.
-    cs_name : str | CoordinateSystem | None
+    system : str | CoordinateSystem | None
         Optional name of the coordinate system to attach to the image.
     graph : str | CoordinateSystemGraph | None
         Optional graph to use for the coordinate system.
     """
 
-    def __init__(self, image, axes=None, cs_name=None, graph=None):
+    def __init__(self, image, axes=None, system=None, graph=None):
         if axes is None:
             axes = tuple(range(image.ndim))
         self.axes = axes
@@ -75,17 +75,17 @@ class Image:
             graph = 'image_graph'
         self.graph = CoordinateSystemGraph.get_graph(graph, create=True)
 
-        if isinstance(cs_name, CoordinateSystem):
-            self.system = cs_name
+        if isinstance(system, CoordinateSystem):
+            self.system = system
         else:
-            if cs_name is None:
+            if system is None:
                 index = 0
                 while True:
-                    cs_name = f'image_{index}'
-                    if cs_name not in self.graph.systems:
+                    system = f'image_{index}'
+                    if system not in self.graph.systems:
                         break
                     index += 1
-            self.system = self.graph.add_system(cs_name, ndim=self.ndim)
+            self.system = self.graph.add_system(system, ndim=self.ndim)
 
     @property
     def ndim(self):
