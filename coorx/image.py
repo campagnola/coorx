@@ -66,13 +66,13 @@ class Image:
     def __init__(self, image, axes=None, system=None, graph=None):
         if axes is None:
             axes = tuple(range(image.ndim))
-        self.axes = axes
+        self.spatial_to_image_axes = axes
 
         self.image = image
         self._parent_tr = None
 
         if graph is None:
-            graph = 'image_graph'
+            graph = system.graph if system is not None else 'image_graph'
         self.graph = CoordinateSystemGraph.get_graph(graph, create=True)
 
         if isinstance(system, CoordinateSystem):
@@ -90,11 +90,11 @@ class Image:
     @property
     def ndim(self):
         """Return the number of spatial dimensions of the image."""
-        return len(self.axes)
+        return len(self.spatial_to_image_axes)
 
     @property
     def shape(self):
-        return tuple(self.image.shape[i] for i in self.axes)
+        return tuple(self.image.shape[i] for i in self.spatial_to_image_axes)
 
     def point(self, coords):
         """Return a Point object with the given (row, col) coordinates in the CS of this image."""
@@ -120,7 +120,7 @@ class Image:
             Additional keyword arguments to pass to `scipy.ndimage.rotate`.
         """
         img = self.image
-        rotated_img = scipy.ndimage.rotate(img, angle, axes=tuple(self.axes[i] for i in axes), **kwds)
+        rotated_img = scipy.ndimage.rotate(img, angle, axes=tuple(self.spatial_to_image_axes[i] for i in axes), **kwds)
         img2 = self.copy(image=rotated_img)
         img2._parent_tr = self.make_rotation_transform(
             angle, axes, self.shape, img2.shape, from_cs=self.system, to_cs=img2.system
@@ -148,7 +148,7 @@ class Image:
         if np.isscalar(factors):
             factors = [factors] * self.ndim
         actual = np.ones(self.image.ndim, dtype=float)
-        for i, ax in enumerate(self.axes):
+        for i, ax in enumerate(self.spatial_to_image_axes):
             actual[ax] = factors[i]
         scaled_img = scipy.ndimage.zoom(self.image, actual, **kwds)
 
@@ -164,7 +164,7 @@ class Image:
         return img2
 
     def copy(self, **updates):
-        kwds = {'axes': self.axes, 'graph': self.graph}
+        kwds = {'axes': self.spatial_to_image_axes, 'graph': self.graph}
         kwds.update(updates)
         return Image(**kwds)
 
@@ -189,5 +189,5 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        offset = [-crop[i].indices(img.shape[i])[0] for i in self.axes]
+        offset = [-crop[i].indices(img.shape[i])[0] for i in self.spatial_to_image_axes]
         return TTransform(offset=offset, dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
