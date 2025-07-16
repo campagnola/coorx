@@ -94,7 +94,7 @@ class Image:
 
     @property
     def shape(self):
-        return [self.image.shape[i] for i in self.axes]
+        return tuple(self.image.shape[i] for i in self.axes)
 
     def point(self, coords):
         """Return a Point object with the given (row, col) coordinates."""
