@@ -97,14 +97,14 @@ class Image:
         return tuple(self.image.shape[i] for i in self.axes)
 
     def point(self, coords):
-        """Return a Point object with the given (row, col) coordinates."""
+        """Return a Point object with the given (row, col) coordinates in the CS of this image."""
         coords = np.asarray(coords)
         if coords.ndim != 1:
             raise ValueError("Point coordinates must be 1D")
         return Point(coords, system=self.system)
 
     def point_array(self, coords):
-        """Return a PointArray object with the given (row, col) coordinates."""
+        """Return a PointArray object with the given (row, col) coordinates in the CS of this image."""
         coords = np.asarray(coords)
         if coords.ndim < 2:
             raise ValueError("coords array must be at least 2D")
