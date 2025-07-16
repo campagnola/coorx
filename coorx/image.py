@@ -193,6 +193,5 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        tr = TTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
-        tr.translate([-crop[i].indices(img.shape[i])[0] for i in range(self.ndim)])
-        return tr
+        offset = [-crop[i].indices(img.shape[i])[0] for i in self.axes]
+        return TTransform(offset=offset, dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
