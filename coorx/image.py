@@ -43,7 +43,7 @@ import numpy as np
 import scipy
 
 from .coordinates import Point, PointArray
-from .linear import AffineTransform
+from .linear import AffineTransform, TTransform, STTransform
 from .systems import CoordinateSystemGraph, CoordinateSystem
 
 
@@ -157,13 +157,13 @@ class Image:
         scaled_img = scipy.ndimage.zoom(self.image, actual, **kwds)
 
         img2 = self.copy(image=scaled_img)
-        tr = AffineTransform(
+        tr = STTransform(
             dims=(self.ndim, self.ndim),
             from_cs=self.system,
             to_cs=img2.system,
             cs_graph=self.graph,
         )
-        tr.scale(factors)
+        tr.scale = factors
         img2._parent_tr = tr
         return img2
 
@@ -193,6 +193,6 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        tr = AffineTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
+        tr = TTransform(dims=(self.ndim, self.ndim), cs_graph=self.graph, **kwds)
         tr.translate([-crop[i].indices(img.shape[i])[0] for i in range(self.ndim)])
         return tr
