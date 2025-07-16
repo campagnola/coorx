@@ -66,7 +66,7 @@ class Image:
     def __init__(self, image, axes=None, system=None, graph=None):
         if axes is None:
             axes = tuple(range(image.ndim))
-        self.spatial_to_image_axes = axes
+        self.spatial_to_image_axes = np.asarray(axes)
 
         self.image = image
         self._parent_tr = None
@@ -120,7 +120,7 @@ class Image:
             Additional keyword arguments to pass to `scipy.ndimage.rotate`.
         """
         img = self.image
-        rotated_img = scipy.ndimage.rotate(img, angle, axes=tuple(self.spatial_to_image_axes[i] for i in axes), **kwds)
+        rotated_img = scipy.ndimage.rotate(img, angle, axes=self.spatial_to_image_axes[list(axes)], **kwds)
         img2 = self.copy(image=rotated_img)
         img2._parent_tr = self.make_rotation_transform(
             angle, axes, self.spatial_shape, img2.spatial_shape, from_cs=self.system, to_cs=img2.system
