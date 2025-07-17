@@ -26,7 +26,7 @@ class PointArray:
         coord_arr, source_system = self._interpret_input(coordinates)
 
         if not np.issubdtype(coord_arr.dtype, np.number):
-            raise TypeError("Coordinates must be numerical or Point instances, not an object array.")
+            raise TypeError(f"Coordinates must be numerical or Point instances, not {coord_arr.dtype}")
         self._coordinates = coord_arr
 
         # get the requested coordinate system
