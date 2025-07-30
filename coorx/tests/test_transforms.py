@@ -437,7 +437,7 @@ class TransposeTransformTest(unittest.TestCase):
 
 class LogTransformTest(unittest.TestCase):
     def test_log(self):
-        lt = LogTransform((12, None))  # None is now the identity value
+        lt = LogTransform((12, None))  # None is the identity value
         data = [(12, -6), (144, 13.2), (float("inf"), 21), (-7, 44), (0, 0)]
         output = lt.map(data)
         self.assertAlmostEqual(output[0][0], 1)
