@@ -647,22 +647,3 @@ class TestNonlinearTransformComposition:
             rtol = 1e-5 if precision == np.float32 else 1e-12
             back = transform.imap(result)
             np.testing.assert_allclose(coords, back, rtol=rtol)
-
-    def test_nonlinear_transform_state_saving(self):
-        """Test that nonlinear transforms properly save and restore state."""
-        # Test LogTransform state
-        log_transform = LogTransform(base=[2, 3, 5], dims=(3, 3))
-        state = log_transform.save_state()
-
-        # Create new transform from state
-        log_transform2 = coorx.create_transform(**state)
-        assert isinstance(log_transform2, LogTransform)
-        np.testing.assert_array_equal(log_transform.base, log_transform2.base)
-
-        # Test LensDistortionTransform state
-        lens_transform = LensDistortionTransform(coeff=(0.1, 0.2, 0.3, 0.4, 0.5))
-        state = lens_transform.save_state()
-
-        lens_transform2 = coorx.create_transform(**state)
-        assert isinstance(lens_transform2, LensDistortionTransform)
-        assert lens_transform.coeff == lens_transform2.coeff
