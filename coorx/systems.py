@@ -141,20 +141,28 @@ class CoordinateSystemGraph:
         else:
             raise TypeError("system must be str or CoordinateSystem instance")
 
-    def transform(self, cs1: CoordSysOrStr, cs2: CoordSysOrStr) -> "Transform":
+    def transform(self, from_cs: CoordSysOrStr, to_cs: CoordSysOrStr) -> "Transform":
+        """Return the transform linking from_cs to to_cs, or raise TypeError if no linking path exists."""
+        try:
+            return self._direct_transform(from_cs, to_cs)
+        except TypeError:
+            # if no direct transform exists, try to find a path
+            return self.transform_chain(self.transform_path(from_cs, to_cs))
+
+    def _direct_transform(self, from_cs: CoordSysOrStr, to_cs: CoordSysOrStr) -> "Transform":
         """Return the transform linking cs1 to cs2, or raise KeyError if none is defined.
         """
         # check that coordinate systems exist
-        cs1, cs2 = self.system(cs1), self.system(cs2)
+        from_cs, to_cs = self.system(from_cs), self.system(to_cs)
 
-        fwd = self.transforms.get(cs1, {}).get(cs2, None)
+        fwd = self.transforms.get(from_cs, {}).get(to_cs, None)
         if fwd is not None:
             return fwd
-        inv = self.transforms.get(cs2, {}).get(cs1, None)
+        inv = self.transforms.get(to_cs, {}).get(from_cs, None)
         if inv is not None:
             return inv.inverse
 
-        raise TypeError(f"No transform defined linking '{cs1}' to '{cs2}'")
+        raise TypeError(f"No transform defined linking '{from_cs}' to '{to_cs}'")
 
     def transform_path(self, start, end) -> list:
         """Return a list of transforms needed to map from start to end."""
@@ -190,7 +198,7 @@ class CoordinateSystemGraph:
         transforms = []
         for i in range(1, len(systems)):
             cs1, cs2 = systems[i - 1 : i + 1]
-            transforms.append(self.transform(cs1, cs2))
+            transforms.append(self._direct_transform(cs1, cs2))
         return CompositeTransform(transforms)
 
 
@@ -212,6 +220,10 @@ class CoordinateSystem:
 
     def save_state(self):
         return {"type": type(self).__name__, "name": self.name, "ndim": self.ndim, "graph": self.graph.name}
+
+    def get_transform_to(self, to_cs: CoordSysOrStr) -> "Transform":
+        """Return the transform linking this coordinate system to another."""
+        return self.graph.transform(self, to_cs)
 
 
 default_cs_graph = CoordinateSystemGraph(name='default', unique_transforms=False)
