@@ -4,20 +4,24 @@ from .base_transform import Transform
 
 
 class LogTransform(Transform):
-    """ND transform perfoming logarithmic transformation.
+    """ND transform performing logarithmic transformation.
 
     Maps (x, y, z) => (log(base_x, x), log(base_y, y), log(base_z, z))
 
-    No transformation is applied for axes with base == 0.
-
-    If base < 0, then the inverse function is applied: x => base.x ** x
+    Special base values:
+    - None: Identity transformation (no change to that axis)
+    - Negative values: Inverse (exponential) transformation (x => -base^x)
+    - 1 or 0: Mathematically nonsensical but allowed (may produce inf/nan)
+    - Fractional values: Standard logarithm (log(x)/log(base))
 
     Parameters
     ----------
     base : array-like
-        Base values for each axis; length must be the same as the dimensionality of the transform. 
-        A base value of 0 disables the transform for that axis.
+        Base values for each axis; length must be the same as the dimensionality of the transform.
+        A base value of None provides identity transformation for that axis.
+        Negative bases apply inverse (exponential) transformation.
     """
+
     Linear = False
     Orthogonal = True
     NonScaling = False
@@ -30,19 +34,19 @@ class LogTransform(Transform):
             if base.ndim != 1:
                 raise TypeError("Base must be 1-D array-like")
         dims = self._dims_from_params(dims=dims, params={'base': base})
-        
+
         super().__init__(dims, **kwargs)
-        
-        self._base = np.zeros(self.dims[0], dtype=np.float32)
+
+        self._base = [None] * self.dims[0]
         if base is not None:
             self.base = base
 
     @property
-    def base(self):
+    def base(self) -> list[float | None]:
         """
         *base* is a tuple containing the log base values that should be
-        applied to each axis of the input vector. If any axis has a base == 0,
-        then that axis is not affected.
+        applied to each axis of the input vector. If any axis has a base == None,
+        then that axis is not affected (identity transformation).
         """
         return self._base.copy()
 
@@ -51,33 +55,42 @@ class LogTransform(Transform):
         self._base[:] = s
 
     def _map(self, coords, base=None):
-        ret = np.empty(coords.shape, coords.dtype)
+        # Ensure output dtype can handle floating point values including NaN
+        ret = _empty_array_like(coords)
         if base is None:
             base = self.base
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)  # divide-by-zeros and invalid values
+            warnings.simplefilter(
+                "ignore", RuntimeWarning
+            )  # divide-by-zeros and invalid values
             for i in range(min(ret.shape[-1], 3)):
-                if base[i] > 1.0:
-                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
-                elif base[i] < -1.0:
-                    ret[..., i] = -base[i] ** coords[..., i]
-                else:
+                if base[i] is None:
                     ret[..., i] = coords[..., i]
+                elif base[i] > 0.0:
+                    ret[..., i] = np.log(coords[..., i]) / np.log(base[i])
+                else:  # base < 0 treated as inverse
+                    ret[..., i] = (-base[i]) ** coords[..., i]
+
         ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
     def _imap(self, coords):
-        return self._map(coords, -self.base)
+        return self._map(coords, [b if b is None else -b for b in self.base])
 
     @property
     def params(self):
         return {'base': self.base}
-    
+
     def set_params(self, base):
         self.base = base
 
     def __repr__(self):
-        return "<LogTransform base=%s>" % (self.base)
+        return f"<LogTransform base={self.base}>"
+
+
+def _empty_array_like(data):
+    output_dtype = data.dtype if data.dtype.kind == 'f' else np.float64
+    return np.empty(data.shape, output_dtype)
 
 
 class PolarTransform(Transform):
@@ -86,6 +99,7 @@ class PolarTransform(Transform):
     Maps (theta, r, z) to (x, y, z), where `x = r*cos(theta)`
     and `y = r*sin(theta)`.
     """
+
     Linear = False
     Orthogonal = False
     NonScaling = False
@@ -97,7 +111,7 @@ class PolarTransform(Transform):
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
-        ret = np.empty(coords.shape, coords.dtype)
+        ret = _empty_array_like(coords)
         ret[..., 0] = coords[..., 1] * np.cos(coords[..., 0])
         ret[..., 1] = coords[..., 1] * np.sin(coords[..., 0])
         for i in range(2, coords.shape[-1]):  # copy any further axes
@@ -105,9 +119,11 @@ class PolarTransform(Transform):
         return ret
 
     def _imap(self, coords):
-        ret = np.empty(coords.shape, coords.dtype)
-        ret[..., 0] = np.arctan2(coords[..., 0], coords[..., 1])
-        ret[..., 1] = (coords[..., 0]**2 + coords[..., 1]**2) ** 0.5
+        ret = _empty_array_like(coords)
+        ret[..., 0] = np.arctan2(
+            coords[..., 1], coords[..., 0]
+        )  # arctan2(y, x) for correct quadrant
+        ret[..., 1] = (coords[..., 0] ** 2 + coords[..., 1] ** 2) ** 0.5
         for i in range(2, coords.shape[-1]):  # copy any further axes
             ret[..., i] = coords[..., i]
         return ret
@@ -115,17 +131,17 @@ class PolarTransform(Transform):
     @property
     def params(self):
         return {}
-    
+
     def set_params(self):
         return
 
 
-#class SphericalTransform(Transform):
+# class SphericalTransform(Transform):
 #    # TODO
 #    pass
 
 
-#class WarpTransform(Transform):
+# class WarpTransform(Transform):
 #    """ Multiple bilinear transforms in a grid arrangement.
 #    """
 #    # TODO
@@ -138,6 +154,7 @@ class LensDistortionTransform(Transform):
     Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
     and p1, p2 are tangential distortion coefficients.
     """
+
     state_keys = ["coeff"]
 
     def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
@@ -155,7 +172,7 @@ class LensDistortionTransform(Transform):
 
         # radial distortion
         r = np.linalg.norm(arr, axis=1)
-        dist = (1 + k1 * r**2 + k2 * r**4 + k3 * r**6)
+        dist = 1 + k1 * r**2 + k2 * r**4 + k3 * r**6
         out = arr * dist[:, None]
 
         # tangential distortion
@@ -167,6 +184,61 @@ class LensDistortionTransform(Transform):
         out[:, 1] += 2 * p2 * xy + p1 * (r2 + 2 * y**2)
 
         return out
+
+    def _imap(self, arr):
+        """Inverse lens distortion mapping using iterative numerical method.
+
+        Since lens distortion is nonlinear, we use Newton-Raphson iteration
+        to find the undistorted coordinates that would map to the given distorted ones.
+        """
+        k1, k2, p1, p2, k3 = self.coeff
+
+        # If all coefficients are zero, it's identity transform
+        if all(c == 0 for c in self.coeff):
+            return arr.copy()
+
+        # Initial guess: use input as starting point
+        undistorted = arr.copy()
+
+        # Newton-Raphson iteration for inverse mapping
+        for iteration in range(10):  # Maximum 10 iterations
+            # Compute forward mapping of current guess
+            forward = self._map(undistorted)
+
+            # Compute residual (error)
+            residual = forward - arr
+
+            # Check convergence
+            if np.allclose(residual, 0, atol=1e-8):
+                break
+
+            # Compute Jacobian matrix numerically
+            eps = 1e-6
+            jac = np.zeros((arr.shape[0], 2, 2))
+
+            for i in range(2):
+                perturbed = undistorted.copy()
+                perturbed[:, i] += eps
+                forward_perturbed = self._map(perturbed)
+                jac[:, :, i] = (forward_perturbed - forward) / eps
+
+            # Solve Jacobian * delta = -residual for delta
+            try:
+                # Use np.linalg.solve for each point
+                delta = np.zeros_like(undistorted)
+                for i in range(arr.shape[0]):
+                    delta[i] = np.linalg.solve(jac[i], -residual[i])
+
+                # Update guess
+                undistorted += delta
+
+            except np.linalg.LinAlgError:
+                # If Jacobian is singular, use pseudo-inverse
+                for i in range(arr.shape[0]):
+                    delta[i] = np.linalg.pinv(jac[i]) @ (-residual[i])
+                undistorted += delta
+
+        return undistorted
 
     @property
     def params(self):
