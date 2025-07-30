@@ -81,6 +81,113 @@ def test_mapped_to():
     assert np.allclose(pt_cs3.mapped_to("2d-cs1"), cs1_to_cs2.inverse.map(cs2_to_cs3.inverse.map(pt_cs3)))
 
 
+def test_coordinate_system_get_transform_to():
+    """Test CoordinateSystem.get_transform_to method"""
+    # Create transforms, which automatically creates coordinate systems in default graph
+    cs1_to_cs2 = STTransform(scale=[2, 3], offset=[5, 10], from_cs="test_cs1", to_cs="test_cs2")
+    cs2_to_cs3 = STTransform(scale=[1, 1], offset=[1, 1], from_cs="test_cs2", to_cs="test_cs3")
+    
+    # Get default graph and coordinate system objects
+    default_graph = CoordinateSystemGraph.get_graph(None)
+    cs1 = default_graph.system("test_cs1")
+    cs2 = default_graph.system("test_cs2")
+    cs3 = default_graph.system("test_cs3")
+    
+    # Test direct transform
+    transform = cs1.get_transform_to(cs2)
+    assert transform is cs1_to_cs2
+    
+    # Test inverse transform
+    transform = cs2.get_transform_to(cs1)
+    assert transform is cs1_to_cs2.inverse
+    
+    # Test pathfinding through intermediate coordinate system
+    transform = cs1.get_transform_to(cs3)
+    assert isinstance(transform, CompositeTransform)
+    
+    # Test transform from coordinate system to itself
+    transform = cs1.get_transform_to(cs1)
+    pt = Point([1, 2], cs1)
+    mapped_pt = transform.map(pt)
+    assert np.allclose(mapped_pt.coordinates, pt.coordinates)
+    
+    # Test with string coordinate system names
+    transform = cs1.get_transform_to("test_cs2")
+    assert transform is cs1_to_cs2
+    
+    # Test error when no path exists
+    cs4 = default_graph.add_system("test_cs4", ndim=2)
+    with raises(TypeError, match="No transform path from"):
+        cs1.get_transform_to(cs4)
+
+
+def test_coordinate_system_graph_transform():
+    """Test CoordinateSystemGraph.transform method including pathfinding"""
+    # Create transforms, which automatically creates coordinate systems in default graph
+    cs1_to_cs2 = STTransform(scale=[2, 2, 2], offset=[1, 2, 3], from_cs="graph_cs1", to_cs="graph_cs2")
+    cs2_to_cs3 = STTransform(scale=[0.5, 0.5, 0.5], offset=[0, 0, 0], from_cs="graph_cs2", to_cs="graph_cs3")
+    cs3_to_cs4 = STTransform(scale=[1, 1, 1], offset=[10, 20, 30], from_cs="graph_cs3", to_cs="graph_cs4")
+    
+    # Get default graph and coordinate system objects
+    default_graph = CoordinateSystemGraph.get_graph(None)
+    cs1 = default_graph.system("graph_cs1")
+    cs2 = default_graph.system("graph_cs2")
+    cs3 = default_graph.system("graph_cs3")
+    cs4 = default_graph.system("graph_cs4")
+    
+    # Test direct transform
+    transform = default_graph.transform(cs1, cs2)
+    assert transform is cs1_to_cs2
+    
+    # Test inverse transform
+    transform = default_graph.transform(cs2, cs1)
+    assert transform is cs1_to_cs2.inverse
+    
+    # Test pathfinding through one intermediate coordinate system
+    transform = default_graph.transform(cs1, cs3)
+    assert isinstance(transform, CompositeTransform)
+    pt = Point([1, 2, 3], cs1)
+    expected = cs2_to_cs3.map(cs1_to_cs2.map(pt))
+    actual = transform.map(pt)
+    assert np.allclose(actual.coordinates, expected.coordinates)
+    assert actual.system is cs3
+    
+    # Test pathfinding through multiple intermediate coordinate systems
+    transform = default_graph.transform(cs1, cs4)
+    assert isinstance(transform, CompositeTransform)
+    pt = Point([1, 2, 3], cs1)
+    expected = cs3_to_cs4.map(cs2_to_cs3.map(cs1_to_cs2.map(pt)))
+    actual = transform.map(pt)
+    assert np.allclose(actual.coordinates, expected.coordinates)
+    assert actual.system is cs4
+    
+    # Test identity transform (same coordinate system)
+    transform = default_graph.transform(cs1, cs1)
+    pt = Point([1, 2, 3], cs1)
+    mapped_pt = transform.map(pt)
+    assert np.allclose(mapped_pt.coordinates, pt.coordinates)
+    assert mapped_pt.system is cs1
+    
+    # Test with string coordinate system names
+    transform = default_graph.transform("graph_cs1", "graph_cs2")
+    assert transform is cs1_to_cs2
+    
+    # Test mixed string and CoordinateSystem objects
+    transform = default_graph.transform(cs1, "graph_cs2")
+    assert transform is cs1_to_cs2
+    transform = default_graph.transform("graph_cs1", cs2)
+    assert transform is cs1_to_cs2
+    
+    # Test error when no path exists
+    isolated_cs = default_graph.add_system("isolated_cs", ndim=3)
+    with raises(TypeError, match="No transform path from"):
+        default_graph.transform(cs1, isolated_cs)
+    
+    # Test error with nonexistent coordinate system
+    with raises(NameError, match=missing_cs):
+        default_graph.transform(cs1, "nonexistent_cs")
+
+
 PARAMS = {
     "NullTransform": {},
     "TTransform": {"offset": (1, 1, 1)},
