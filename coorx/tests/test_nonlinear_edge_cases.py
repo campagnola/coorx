@@ -526,6 +526,7 @@ class TestNonlinearTransformComposition:
         # Create a composite of different nonlinear transforms
         log_transform = LogTransform(base=[2, 10], dims=(2, 2))
         polar_transform = PolarTransform(dims=(2, 2))
+        comp_transform = polar_transform * log_transform  # Composite transform
 
         # Note: Direct composition of these may not be mathematically meaningful
         # but we test the mechanism works
@@ -534,15 +535,13 @@ class TestNonlinearTransformComposition:
         coords = np.array([[2, 10], [4, 100]])
 
         # Apply transforms in sequence
-        step1 = log_transform.map(coords)  # Log transform
-        step2 = polar_transform.map(step1)  # Then polar
+        xformed_coords = comp_transform.map(coords)
 
         # Reverse the sequence
-        rev_step1 = polar_transform.imap(step2)
-        rev_step2 = log_transform.imap(rev_step1)
+        reversed_coords = comp_transform.imap(xformed_coords)
 
         # Should recover original coordinates with relaxed tolerance
-        np.testing.assert_allclose(coords, rev_step2, rtol=1e-6)
+        np.testing.assert_allclose(coords, reversed_coords, rtol=1e-6)
 
     def test_nonlinear_as_affine_error(self):
         """Test that nonlinear transforms correctly raise NotImplementedError for as_affine."""
