@@ -56,8 +56,7 @@ class LogTransform(Transform):
 
     def _map(self, coords, base=None):
         # Ensure output dtype can handle floating point values including NaN
-        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
-        ret = np.empty(coords.shape, output_dtype)
+        ret = _empty_array_like(coords)
         if base is None:
             base = self.base
         with warnings.catch_warnings():
@@ -89,6 +88,11 @@ class LogTransform(Transform):
         return f"<LogTransform base={self.base}>"
 
 
+def _empty_array_like(data):
+    output_dtype = data.dtype if data.dtype.kind == 'f' else np.float64
+    return np.empty(data.shape, output_dtype)
+
+
 class PolarTransform(Transform):
     """Polar transform
 
@@ -107,8 +111,7 @@ class PolarTransform(Transform):
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
-        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
-        ret = np.empty(coords.shape, output_dtype)
+        ret = _empty_array_like(coords)
         ret[..., 0] = coords[..., 1] * np.cos(coords[..., 0])
         ret[..., 1] = coords[..., 1] * np.sin(coords[..., 0])
         for i in range(2, coords.shape[-1]):  # copy any further axes
@@ -116,8 +119,7 @@ class PolarTransform(Transform):
         return ret
 
     def _imap(self, coords):
-        output_dtype = coords.dtype if coords.dtype.kind == 'f' else np.float64
-        ret = np.empty(coords.shape, output_dtype)
+        ret = _empty_array_like(coords)
         ret[..., 0] = np.arctan2(
             coords[..., 1], coords[..., 0]
         )  # arctan2(y, x) for correct quadrant
