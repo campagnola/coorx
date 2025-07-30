@@ -10,7 +10,7 @@ class LogTransform(Transform):
 
     Special base values:
     - None: Identity transformation (no change to that axis)
-    - Negative values: Inverse exponential transformation (x => -base^x)
+    - Negative values: Inverse (exponential) transformation (x => -base^x)
     - 1 or 0: Mathematically nonsensical but allowed (may produce inf/nan)
     - Fractional values: Standard logarithm (log(x)/log(base))
 
@@ -19,7 +19,7 @@ class LogTransform(Transform):
     base : array-like
         Base values for each axis; length must be the same as the dimensionality of the transform.
         A base value of None provides identity transformation for that axis.
-        Negative bases apply inverse exponential transformation.
+        Negative bases apply inverse (exponential) transformation.
     """
 
     Linear = False
