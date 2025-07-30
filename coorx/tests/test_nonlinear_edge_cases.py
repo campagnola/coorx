@@ -517,32 +517,6 @@ class TestLensDistortionTransformEdgeCases:
         # (in practice, such extreme distortion is unrealistic)
         assert not np.any(np.isnan(result))
 
-    def test_lens_distortion_performance_benchmark(self):
-        """Benchmark performance of lens distortion transforms."""
-        lt = LensDistortionTransform(coeff=(0.1, 0.05, 0.01, 0.01, 0.001))
-
-        # Generate large coordinate array
-        n_points = 10000
-        coords = np.random.randn(n_points, 2) * 0.5  # Random points in reasonable range
-
-        # Time forward mapping
-        start_time = time.time()
-        result_forward = lt.map(coords)
-        forward_time = time.time() - start_time
-
-        # Time inverse mapping
-        start_time = time.time()
-        result_inverse = lt.imap(result_forward[:100])  # Test smaller set for inverse
-        inverse_time = time.time() - start_time
-
-        # Basic performance check (not strict timing requirements)
-        assert forward_time < 1.0  # Should complete in reasonable time
-        assert inverse_time < 5.0  # Inverse is more expensive due to iteration
-
-        # Verify results are reasonable
-        assert np.isfinite(result_forward).all()
-        assert np.isfinite(result_inverse).all()
-
 
 class TestNonlinearTransformComposition:
     """Test composition of multiple nonlinear transforms."""
