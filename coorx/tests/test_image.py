@@ -1,5 +1,5 @@
-# ABOUTME: Tests for the Image class functionality including slicing validation
-# ABOUTME: Covers the __getitem__ method and its slice validation requirements
+# Tests for the Image class functionality including slicing validation
+# Covers the __getitem__ method and its slice validation requirements
 
 import pytest
 import numpy as np
