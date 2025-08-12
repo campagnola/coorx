@@ -1,6 +1,6 @@
 """
-ABOUTME: Comprehensive edge case and numerical stability tests for nonlinear transforms
-ABOUTME: Tests LogTransform, PolarTransform, and LensDistortionTransform with extreme values
+Comprehensive edge case and numerical stability tests for nonlinear transforms
+Tests LogTransform, PolarTransform, and LensDistortionTransform with extreme values
 """
 import math
 import warnings
