@@ -165,6 +165,8 @@ class Image:
 
     def copy(self, **updates):
         kwds = {'axes': self.spatial_to_image_axes, 'graph': self.graph}
+        if 'image' not in updates:
+            kwds['image'] = self.image.copy()
         kwds.update(updates)
         return Image(**kwds)
 
