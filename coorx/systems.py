@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ._types import StrOrNone, CoordSysOrStr, GraphOrGraphName
+from ._types import CoordSysOrStr, GraphOrGraphName
+
+
+def __reload__(old):
+    # when this module is reloaded, we want to preserve existing graphs
+    CoordinateSystemGraph.all_graphs = old["CoordinateSystemGraph"].all_graphs
 
 
 def get_coordinate_system(system: CoordSysOrStr, graph: GraphOrGraphName=None, ndim=None, create=False) -> 'CoordinateSystem':
@@ -36,7 +41,7 @@ class CoordinateSystemGraph:
       etc.)
     """
 
-    all_graphs:dict[str|None, 'CoordinateSystemGraph'] = {}
+    all_graphs: dict[str|None, 'CoordinateSystemGraph'] = {}
 
     @classmethod
     def get_graph(cls, graph_name=None, create=False, **create_kwargs) -> 'CoordinateSystemGraph':
