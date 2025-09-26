@@ -291,49 +291,32 @@ class Transform(object):
 
     def to_qmatrix4x4(self):
         """Return a QMatrix4x4 that is equivalent to this transform."""
-        def _get_qt_gui():
-            # Try different Qt bindings in order of preference
-            import_errors = []
+        QtGui = None
+        import_errors = []
 
-            # First try PySide6 (newest)
-            try:
-                from PySide6 import QtGui
-                return QtGui
-            except ImportError as e:
-                import_errors.append(f"PySide6: {e}")
+        try:
+            from PySide6 import QtGui
+        except ImportError as e:
+            import_errors.append(f"PySide6: {e}")
 
-            # Then try PySide2
-            try:
-                from PySide2 import QtGui
-                return QtGui
-            except ImportError as e:
-                import_errors.append(f"PySide2: {e}")
+        try:
+            from PyQt6 import QtGui
+        except ImportError as e:
+            import_errors.append(f"PyQt6: {e}")
 
-            # Then try PyQt6
-            try:
-                from PyQt6 import QtGui
-                return QtGui
-            except ImportError as e:
-                import_errors.append(f"PyQt6: {e}")
+        try:
+            from PySide2 import QtGui
+        except ImportError as e:
+            import_errors.append(f"PySide2: {e}")
 
-            # Then try PyQt5
-            try:
-                from PyQt5 import QtGui
-                return QtGui
-            except ImportError as e:
-                import_errors.append(f"PyQt5: {e}")
+        try:
+            from PyQt5 import QtGui
+        except ImportError as e:
+            import_errors.append(f"PyQt5: {e}")
 
-            # Finally try pyqtgraph's Qt (fallback)
-            try:
-                from pyqtgraph.Qt import QtGui
-                return QtGui
-            except ImportError as e:
-                import_errors.append(f"pyqtgraph.Qt: {e}")
+        if QtGui is None:
+            raise ImportError(f"Could not import QtGui module. Attempts: {'; '.join(import_errors)}")
 
-            # If all fail, raise informative error
-            raise ImportError(f"Could not import Qt GUI module. Tried: {'; '.join(import_errors)}")
-
-        QtGui = _get_qt_gui()
         return QtGui.QMatrix4x4(self.full_matrix.reshape(-1))
 
     def add_change_callback(self, cb):
