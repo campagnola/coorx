@@ -326,7 +326,9 @@ class Transform(object):
             import_errors.append(f"PyQt5: {e}")
 
         if QtGui is None:
-            raise ImportError(f"Could not import QtGui module. Attempts: {'; '.join(import_errors)}")
+            raise ImportError(
+                f"Could not import QtGui module. Attempts: {'; '.join(import_errors)}"
+            )
 
         return QtGui.QMatrix4x4(self.full_matrix.reshape(-1))
 
