@@ -300,30 +300,16 @@ class Transform(object):
         # a functional default if nothing else is implemented
         return SRTTransform3D(QtGui.QMatrix4x4(self.full_matrix.reshape(-1)))
 
-    def to_qmatrix4x4(self):
+    def to_qmatrix4x4(self, QtGui=None):
         """Return a QMatrix4x4 that is equivalent to this transform."""
-        QtGui = None
         import_errors = []
-
-        try:
-            from PySide6 import QtGui
-        except ImportError as e:
-            import_errors.append(f"PySide6: {e}")
-
-        try:
-            from PyQt6 import QtGui
-        except ImportError as e:
-            import_errors.append(f"PyQt6: {e}")
-
-        try:
-            from PySide2 import QtGui
-        except ImportError as e:
-            import_errors.append(f"PySide2: {e}")
-
-        try:
-            from PyQt5 import QtGui
-        except ImportError as e:
-            import_errors.append(f"PyQt5: {e}")
+        if QtGui is None:
+            for qt_module in ['PySide6', 'PyQt6', 'PySide2', 'PyQt5']:
+                try:
+                    QtGui = __import__(qt_module + '.QtGui', fromlist=['QtGui'])
+                    break
+                except ImportError as e:
+                    import_errors.append(f"{qt_module}: {e}")
 
         if QtGui is None:
             raise ImportError(
