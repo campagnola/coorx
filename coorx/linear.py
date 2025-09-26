@@ -757,6 +757,21 @@ class AffineTransform(Transform):
             return False
         return np.all(self.full_matrix == tr.full_matrix)
 
+    @classmethod
+    def from_qmatrix4x4(cls, matrix, *init_args, **init_kwargs):
+        """Create an AffineTransform from a QMatrix4x4."""
+        # Extract the matrix data and reshape it to 4x4
+        data = matrix.data()
+        # QMatrix4x4 data() returns 16 values in column-major order
+        matrix_array = np.array(data).reshape(4, 4, order='F')  # Fortran order for column-major
+
+        # Create an AffineTransform from the matrix
+        return cls(
+            matrix=matrix_array[:-1, :-1],  # 3x3 transformation matrix
+            offset=matrix_array[:-1, -1],   # 3-element translation vector
+            *init_args, **init_kwargs
+        )
+
     def copy(self, from_cs=None, to_cs=None):
         return AffineTransform(
             matrix=self.matrix, offset=self.offset, from_cs=from_cs or self.systems[0], to_cs=to_cs or self.systems[1]
