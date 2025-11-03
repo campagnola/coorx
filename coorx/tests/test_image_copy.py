@@ -51,8 +51,8 @@ class TestImageCopyMetadataPreservation:
         axes = (1, 2)  # Non-default axes
         img1 = Image(sample_3d_image_data, axes=axes)
         img2 = img1.copy()
-        
-        assert img1.axes == img2.axes == axes
+
+        assert tuple(img1.spatial_to_image_axes) == tuple(img2.spatial_to_image_axes) == tuple(axes)
 
     def test_copy_preserves_graph_reference(self, sample_image_data):
         """Test that copy preserves graph reference."""
@@ -73,17 +73,16 @@ class TestImageCopyMetadataPreservation:
         img2 = img1.copy(image=new_data, axes=new_axes)
         
         np.testing.assert_array_equal(img2.image, new_data)
-        assert img2.axes == new_axes
-        assert img1.axes != img2.axes or not np.array_equal(img1.image, img2.image)
+        assert tuple(img2.spatial_to_image_axes) == tuple(new_axes)
+        assert tuple(img1.spatial_to_image_axes) != tuple(img2.spatial_to_image_axes) or not np.array_equal(img1.image, img2.image)
 
     def test_copy_preserves_shape_properties(self, sample_image_data):
         """Test that copy preserves shape-related properties."""
         img1 = Image(sample_image_data)
         img2 = img1.copy()
         
-        assert img1.shape == img2.shape
-        assert img1.n_rows == img2.n_rows
-        assert img1.n_cols == img2.n_cols
+        assert img1.image.shape == img2.image.shape
+        assert img1.spatial_shape == img2.spatial_shape
 
 
 class TestImageCopyIndependence:
@@ -96,7 +95,7 @@ class TestImageCopyIndependence:
 
     def test_copy_creates_independent_coordinate_system(self, sample_image_data):
         """Test that copy creates independent coordinate system."""
-        img1 = Image(sample_image_data, cs_name='img1')
+        img1 = Image(sample_image_data, system='img1', graph='independence')
         img2 = img1.copy()
         
         # Should have different coordinate systems
@@ -140,7 +139,7 @@ class TestImageCopyIndependence:
 
     def test_copy_independence_coordinate_mapping_failure(self, sample_image_data):
         """Test that points cannot be mapped between original and copy."""
-        img1 = Image(sample_image_data, cs_name='img1')
+        img1 = Image(sample_image_data, system='img1', graph='independence')
         img2 = img1.copy()
         
         # Create a point in img1's coordinate system
@@ -168,7 +167,7 @@ class TestImageCopyIndependence:
 
     def test_copy_chain_independence(self, sample_image_data):
         """Test independence in a chain of copies."""
-        img1 = Image(sample_image_data, cs_name='original')
+        img1 = Image(sample_image_data, system='original', graph='chain')
         img2 = img1.copy()
         img3 = img2.copy()
         
@@ -194,11 +193,11 @@ class TestImageCopyIndependence:
 class TestImageCopyEdgeCases:
     """Test edge cases and integration scenarios for Image.copy()."""
 
-    def test_copy_with_custom_cs_name_override(self):
+    def test_copy_with_custom_system_override(self):
         """Test copy with custom coordinate system name override."""
         img_data = np.ones((5, 5))
-        img1 = Image(img_data, cs_name='original')
-        img2 = img1.copy(cs_name='custom_copy')
+        img1 = Image(img_data, system='original', graph='custom-system')
+        img2 = img1.copy(system='custom_copy')
         
         assert img1.system.name == 'original'
         assert img2.system.name == 'custom_copy'
@@ -249,11 +248,10 @@ class TestImageCopyEdgeCases:
         img_data = np.random.rand(5, 10, 15)
         img1 = Image(img_data, axes=axes)
         img2 = img1.copy()
-        
-        assert img1.axes == img2.axes == axes
+
+        assert tuple(img1.spatial_to_image_axes) == tuple(img2.spatial_to_image_axes) == tuple(axes)
         # Shape properties should match
-        assert img1.n_rows == img2.n_rows
-        assert img1.n_cols == img2.n_cols
+        assert img1.spatial_shape == img2.spatial_shape
 
 
 class TestImageCopyIntegration:
@@ -282,7 +280,7 @@ class TestImageCopyIntegration:
     def test_copy_doesnt_interfere_with_existing_transforms(self):
         """Test that copying doesn't interfere with existing transforms."""
         img_data = np.random.rand(10, 10)
-        img1 = Image(img_data, cs_name='original_for_transform_test')
+        img1 = Image(img_data, system='original_for_transform_test', graph='integration')
         
         # Create a transform chain
         img2 = img1.rotate(45)
