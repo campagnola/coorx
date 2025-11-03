@@ -226,8 +226,8 @@ class TestVispyIntegration:
 class TestPyQtGraphIntegration:
     """Test PyQtGraph framework integration robustness."""
 
-    def test_pyqtgraph_srt3d_round_trip_enhanced(self):
-        """Enhanced version of existing SRT3D round-trip test."""
+    def test_pyqtgraph_srt3d_round_trip(self):
+        """SRT3D round-trip test."""
         # Test multiple axis configurations and parameter combinations
         test_cases = [
             {'scale': (1, 1, 1), 'offset': (0, 0, 0), 'angle': 0, 'axis': (0, 0, 1)},
