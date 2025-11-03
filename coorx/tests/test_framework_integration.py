@@ -134,7 +134,7 @@ class TestVispyIntegration:
                 assert np.isfinite(vispy_transform.scale).all()
                 assert np.isfinite(vispy_transform.translate).all()
 
-    def test_vispy_round_trip_accuracy(self):
+    def test_vispy_accuracy(self):
         """Test transform → vispy → coordinate mapping accuracy."""
         # Test various transforms with coordinate mapping
         test_transforms = [
