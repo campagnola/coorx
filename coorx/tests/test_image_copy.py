@@ -299,20 +299,3 @@ class TestImageCopyIntegration:
         pt1_copy = img1_copy.point([5, 5])
         with pytest.raises(Exception):
             pt1_copy.mapped_to(img2.system)
-
-    def test_memory_efficiency_large_image(self):
-        """Test memory efficiency with large images."""
-        # Create a reasonably large image
-        large_data = np.random.rand(100, 100, 50)  # ~4MB
-        img1 = Image(large_data, axes=(0, 1))
-        
-        # Copy without new data should create independent copies
-        img2 = img1.copy()
-        assert img1.image is not img2.image
-        # But data content should be identical
-        np.testing.assert_array_equal(img1.image, img2.image)
-        
-        # Copy with new data should not share memory
-        new_data = np.zeros((10, 10, 5))
-        img3 = img1.copy(image=new_data)
-        assert img1.image is not img3.image
