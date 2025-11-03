@@ -839,6 +839,10 @@ class SRT3DTransform(Transform):
         """Set the translation of this transform"""
         self.set_params(offset=offset)
 
+    @property
+    def offset(self):
+        return self._state["offset"].copy()
+
     def scale(self, scale):
         """adjust the scale of this transform"""
         ## try to prevent accidentally setting 0 scale on z axis

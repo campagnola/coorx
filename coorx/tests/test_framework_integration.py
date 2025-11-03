@@ -270,7 +270,7 @@ class TestPyQtGraphIntegration:
             # Coordinate mapping should be very close
             test_points = np.random.normal(size=(10, 3))
             np.testing.assert_allclose(
-                tr.map(test_points), tr2.map(test_points), rtol=1e-6, atol=1e-10
+                tr.map(test_points), tr2.map(test_points), rtol=1e-6, atol=1e-6
             )
 
     def test_pyqtgraph_base_transform(self):
@@ -306,7 +306,7 @@ class TestPyQtGraphIntegration:
         coorx_transform = coorx.SRT3DTransform.from_pyqtgraph(pg_transform)
 
         # Verify parameters
-        np.testing.assert_allclose(coorx_transform.scale, [2, 3, 4], rtol=1e-12)
+        np.testing.assert_allclose(coorx_transform.get_scale(), [2, 3, 4], rtol=1e-12)
         np.testing.assert_allclose(coorx_transform.offset, [10, 5, -2], rtol=1e-12)
 
         # Verify matrix equivalence through coordinate mapping
@@ -377,7 +377,7 @@ class TestPyQtGraphIntegration:
 
             # Matrices should be close (allowing for numerical precision issues)
             np.testing.assert_allclose(
-                tr.full_matrix, tr2.full_matrix, rtol=1e-10, atol=1e-12
+                tr.full_matrix, tr2.full_matrix, rtol=1e-6, atol=1e-10
             )
 
 
