@@ -247,9 +247,7 @@ class TestPyQtGraphIntegration:
         ]
 
         for case in test_cases:
-            # Normalize axis
             axis = np.array(case['axis'])
-            axis = axis / np.linalg.norm(axis)
 
             # Create transform
             tr = coorx.SRT3DTransform(
