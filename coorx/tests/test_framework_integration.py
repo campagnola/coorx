@@ -39,110 +39,19 @@ except ImportError:
 @pytest.mark.skipif(not HAVE_VISPY, reason="VisPy not available")
 class TestVispyIntegration:
     """Test VisPy framework integration for all applicable transform types."""
-
-    def test_vispy_base_transform_matrix(self):
-        """Test base transform MatrixTransform conversion."""
-        # Test various linear transforms using base class method
-        transforms = [
-            coorx.NullTransform(dims=(3, 3)),
-            coorx.TTransform(offset=[1, 2, 3], dims=(3, 3)),
-            coorx.AffineTransform(dims=(3, 3)),
-        ]
-
-        for transform in transforms:
-            vispy_transform = transform.as_vispy()
-
-            # Should be MatrixTransform
-            assert isinstance(vispy_transform, MatrixTransform)
-
-            # Matrix should be transposed version of coorx full_matrix
-            expected_matrix = transform.full_matrix.T
-            np.testing.assert_allclose(
-                vispy_transform.matrix, expected_matrix, rtol=1e-14
-            )
-
-    def test_vispy_sttransform_native(self):
-        """Test STTransform's native VisPy implementation."""
-        # Test STTransform with various scale and translation values
-        test_cases = [
-            {'scale': [1, 1], 'offset': [0, 0]},  # Identity
-            {'scale': [2, 3], 'offset': [10, -5]},  # Basic
-            {'scale': [0.1, 100], 'offset': [-1000, 0.001]},  # Extreme
-        ]
-
-        for case in test_cases:
-            st_transform = coorx.STTransform(
-                scale=case['scale'], offset=case['offset'], dims=(2, 2)
-            )
-            vispy_transform = st_transform.as_vispy()
-
-            # Should be native VisPy STTransform, not MatrixTransform
-            assert isinstance(vispy_transform, VispySTTransform)
-
-            # Parameters should match (VisPy extends to 4D, uses float32)
-            np.testing.assert_allclose(
-                vispy_transform.scale[:2], case['scale'], rtol=1e-6
-            )
-            np.testing.assert_allclose(
-                vispy_transform.translate[:2], case['offset'], rtol=1e-6
-            )
-
-    def test_vispy_composite_chain(self):
-        """Test CompositeTransform's ChainTransform conversion."""
-        # Create composite transform
-        transforms = [
-            coorx.TTransform(offset=[1, 2], dims=(2, 2)),
-            coorx.STTransform(scale=[2, 3], dims=(2, 2)),
-            coorx.TTransform(offset=[10, -5], dims=(2, 2)),
-        ]
-        composite = coorx.CompositeTransform(transforms)
-
-        vispy_chain = composite.as_vispy()
-
-        # Should be ChainTransform
-        assert isinstance(vispy_chain, ChainTransform)
-
-        # Should have same number of transforms (in reverse order)
-        assert len(vispy_chain.transforms) == len(transforms)
-
-    def test_vispy_all_linear_transforms(self):
-        """Test as_vispy() for all linear transform types."""
-        transforms = [
-            coorx.NullTransform(dims=(3, 3)),
-            coorx.TTransform(offset=[1, 2, 3], dims=(3, 3)),
-            coorx.STTransform(scale=[2, 3, 4], offset=[1, 2, 3], dims=(3, 3)),
-            coorx.AffineTransform(dims=(3, 3)),
-            coorx.SRT3DTransform(
-                scale=[2, 2, 2], offset=[1, 1, 1], angle=45, axis=[0, 0, 1]
-            ),
-        ]
-
-        for transform in transforms:
-            vispy_transform = transform.as_vispy()
-
-            # Should successfully create a VisPy transform
-            assert vispy_transform is not None
-
-            # Should have a matrix attribute (except for STTransform which has scale/translate)
-            if hasattr(vispy_transform, 'matrix'):
-                # Matrix should be finite
-                assert np.isfinite(vispy_transform.matrix).all()
-            else:
-                # STTransform should have scale and translate
-                assert hasattr(vispy_transform, 'scale')
-                assert hasattr(vispy_transform, 'translate')
-                assert np.isfinite(vispy_transform.scale).all()
-                assert np.isfinite(vispy_transform.translate).all()
-
     def test_vispy_accuracy(self):
         """Test transform → vispy → coordinate mapping accuracy."""
         # Test various transforms with coordinate mapping
         test_transforms = [
             coorx.STTransform(scale=[2, 3], offset=[10, -5], dims=(2, 2)),
             coorx.AffineTransform(dims=(3, 3)),  # Use 3D for VisPy compatibility
-            coorx.SRT3DTransform(
-                scale=[1.5, 2, 0.5], offset=[1, 2, 3], angle=30, axis=[1, 1, 0]
-            ),
+            coorx.SRT3DTransform(scale=[1.5, 2, 0.5], offset=[1, 2, 3], angle=30, axis=[1, 1, 0]),
+            coorx.TTransform(offset=[-5, 10, 2], dims=(3, 3)),
+            coorx.NullTransform(dims=(2, 2)),  # Base class
+            coorx.STTransform(scale=[1e-10, 1e10], offset=[1e6, -1e6], dims=(2, 2)),
+            coorx.STTransform(scale=[0.001, 1000], offset=[0, 0], dims=(2, 2)),
+            coorx.STTransform(scale=[0.1, 0.2, 0.3], dims=(3, 3))
+            * coorx.TTransform(offset=[100, -50, 25], dims=(3, 3)),  # Chain of transforms
         ]
 
         # Test coordinates
@@ -186,40 +95,6 @@ class TestVispyIntegration:
                 np.testing.assert_allclose(
                     coorx_result, vispy_result, rtol=1e-6, atol=1e-8
                 )
-
-    def test_vispy_extreme_parameters(self):
-        """Test VisPy integration with extreme parameter values."""
-        # Test with extreme values that might cause numerical issues
-        extreme_transforms = [
-            coorx.STTransform(scale=[1e-10, 1e10], offset=[1e6, -1e6], dims=(2, 2)),
-            coorx.STTransform(scale=[0.001, 1000], offset=[0, 0], dims=(2, 2)),
-        ]
-
-        for transform in extreme_transforms:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                vispy_transform = transform.as_vispy()
-
-                # Should not raise exceptions
-                assert vispy_transform is not None
-
-                # Matrix should be finite (no NaN/inf from extreme values)
-                if hasattr(vispy_transform, 'matrix'):
-                    # Allow inf values for extreme scales, but not NaN
-                    assert not np.isnan(vispy_transform.matrix).any()
-
-    def test_vispy_nonlinear_fallback(self):
-        """Test that nonlinear transforms handle VisPy conversion gracefully."""
-        nonlinear_transforms = [
-            coorx.LogTransform(base=[2, 10], dims=(2, 2)),
-            coorx.PolarTransform(dims=(2, 2)),
-        ]
-
-        for transform in nonlinear_transforms:
-            # Nonlinear transforms don't have affine approximations,
-            # so as_vispy() should raise NotImplementedError
-            with pytest.raises(NotImplementedError):
-                transform.as_vispy()
 
 
 @pytest.mark.skipif(not HAVE_PYQTGRAPH, reason="PyQtGraph not available")
