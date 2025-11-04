@@ -62,24 +62,16 @@ class TestVispyIntegration:
             coorx.SRT3DTransform(scale=[1.5, 2, 0.5], offset=[1, 2, 3], angle=30, axis=[1, 1, 0]),
             coorx.TTransform(offset=[-5, 10, 2], dims=(3, 3)),
             coorx.NullTransform(dims=(3, 3)),  # Base class
-            coorx.STTransform(scale=[1e-10, 1e10], offset=[1e6, -1e6], dims=(3, 3)),
-            coorx.STTransform(scale=[0.001, 1000], offset=[0, 0], dims=(3, 3)),
+            coorx.STTransform(scale=[1e-10, 1e10, -1e10], offset=[1e6, -1e6, 0], dims=(3, 3)),
+            coorx.STTransform(scale=[0.001, 1000, 1e12], offset=[0, 0, 1], dims=(3, 3)),
             coorx.STTransform(scale=[0.1, 0.2, 0.3], dims=(3, 3))
             * coorx.TTransform(offset=[100, -50, 25], dims=(3, 3)),  # Chain of transforms
         ]
 
-        # Test coordinates
-        coords_2d = np.array([[0, 0], [1, 1], [-5, 10], [100, -200]])
-        coords_3d = np.array([[0, 0, 0], [1, 1, 1], [-5, 10, 2], [100, -200, 50]])
-
         for transform in test_transforms:
             vispy_transform = transform.as_vispy()
 
-            # Choose appropriate coordinates based on transform dimensions
-            if transform.dims[0] == 2:
-                test_coords = coords_2d
-            else:
-                test_coords = coords_3d
+            test_coords = np.array([[0, 0, 0], [1, 1, 1], [-5, 10, 2], [100, -200, 50]])
 
             # Map coordinates through coorx transform
             coorx_result = transform.map(test_coords)
