@@ -39,17 +39,31 @@ except ImportError:
 @pytest.mark.skipif(not HAVE_VISPY, reason="VisPy not available")
 class TestVispyIntegration:
     """Test VisPy framework integration for all applicable transform types."""
+    def test_vispy_only_supports_3d(self):
+        """Test that VisPy integration only supports 3D transforms."""
+        # Test various 2D transforms
+        transforms_2d = [
+            coorx.STTransform(scale=[2, 3], dims=(2, 2)),
+            coorx.AffineTransform(dims=(2, 2)),
+            coorx.TTransform(offset=[1, 2], dims=(2, 2)),
+            coorx.NullTransform(dims=(2, 2)),  # Base class
+        ]
+
+        for transform in transforms_2d:
+            with pytest.raises(NotImplementedError):
+                transform.as_vispy()
+
     def test_vispy_accuracy(self):
         """Test transform → vispy → coordinate mapping accuracy."""
         # Test various transforms with coordinate mapping
         test_transforms = [
-            coorx.STTransform(scale=[2, 3], offset=[10, -5], dims=(2, 2)),
+            coorx.STTransform(scale=[2, 3, 4], offset=[10, -5, 2.2], dims=(3, 3)),
             coorx.AffineTransform(dims=(3, 3)),  # Use 3D for VisPy compatibility
             coorx.SRT3DTransform(scale=[1.5, 2, 0.5], offset=[1, 2, 3], angle=30, axis=[1, 1, 0]),
             coorx.TTransform(offset=[-5, 10, 2], dims=(3, 3)),
-            coorx.NullTransform(dims=(2, 2)),  # Base class
-            coorx.STTransform(scale=[1e-10, 1e10], offset=[1e6, -1e6], dims=(2, 2)),
-            coorx.STTransform(scale=[0.001, 1000], offset=[0, 0], dims=(2, 2)),
+            coorx.NullTransform(dims=(3, 3)),  # Base class
+            coorx.STTransform(scale=[1e-10, 1e10], offset=[1e6, -1e6], dims=(3, 3)),
+            coorx.STTransform(scale=[0.001, 1000], offset=[0, 0], dims=(3, 3)),
             coorx.STTransform(scale=[0.1, 0.2, 0.3], dims=(3, 3))
             * coorx.TTransform(offset=[100, -50, 25], dims=(3, 3)),  # Chain of transforms
         ]
@@ -93,7 +107,7 @@ class TestVispyIntegration:
             else:
                 # For matrix-based transforms, results should be very close
                 np.testing.assert_allclose(
-                    coorx_result, vispy_result, rtol=1e-6, atol=1e-8
+                    coorx_result, vispy_result, rtol=1e-6, atol=1e-8, err_msg=f"Transform: {transform}"
                 )
 
 
@@ -261,7 +275,7 @@ class TestFrameworkErrorHandling:
         """Test behavior when VisPy is not available."""
         # This test runs even when VisPy is available - we're testing the import error path
         # We'll patch the import to simulate missing VisPy
-        transform = coorx.STTransform(scale=[2, 3], dims=(2, 2))
+        transform = coorx.STTransform(scale=[2, 3, 4], dims=(3, 3))
 
         # The as_vispy method should exist and work when VisPy is available
         if HAVE_VISPY:
@@ -308,7 +322,7 @@ class TestCrossFrameworkConsistency:
     def test_same_transform_all_frameworks(self):
         """Test that the same transform gives consistent results across frameworks."""
         # Create a transform that both frameworks can handle
-        transform = coorx.STTransform(scale=[2, 3], offset=[10, -5], dims=(2, 2))
+        transform = coorx.STTransform(scale=[2, 3, 4], offset=[10, -5, 8], dims=(3, 3))
 
         # Convert to both frameworks
         vispy_transform = transform.as_vispy()
@@ -320,14 +334,14 @@ class TestCrossFrameworkConsistency:
         pg_transform = transform_4d.as_pyqtgraph()
 
         # Test coordinate mapping
-        test_coords = np.array([[0, 0], [1, 1], [5, -3]])
+        test_coords = np.array([[0, 0, 0], [1, 1, 1], [5, -3, 27]])
         coorx_result = transform.map(test_coords)
 
         # VisPy result - pad coordinates to 4D for VisPy
         padded_coords = np.zeros((test_coords.shape[0], 4))
-        padded_coords[:, :2] = test_coords
+        padded_coords[:, :3] = test_coords
         vispy_result_full = vispy_transform.map(padded_coords)
-        vispy_result = vispy_result_full[:, :2]
+        vispy_result = vispy_result_full[:, :3]
 
         # Results should be consistent (account for VisPy float32 precision)
         # NOTE: VisPy STTransform coordinate mapping differs from coorx
@@ -365,7 +379,7 @@ class TestCrossFrameworkConsistency:
         """Basic performance benchmarks for framework conversions."""
         # Create various transforms for performance testing
         transforms = [
-            coorx.STTransform(scale=[2, 3], dims=(2, 2)),
+            coorx.STTransform(scale=[2, 3, 4], dims=(3, 3)),
             coorx.AffineTransform(dims=(3, 3)),
             coorx.SRT3DTransform(
                 scale=[1, 2, 3], offset=[1, 2, 3], angle=45, axis=[0, 0, 1]

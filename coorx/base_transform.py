@@ -278,6 +278,8 @@ class Transform(object):
 
     def as_vispy(self):
         """Return a VisPy transform that is equivalent to this transform, if possible."""
+        if self.dims != (3, 3):
+            raise NotImplementedError("as_vispy is only implemented for 3D transforms")
         from vispy.visuals.transforms import MatrixTransform
         # a functional default if nothing else is implemented
         return MatrixTransform(self.full_matrix.T)
