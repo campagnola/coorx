@@ -430,19 +430,9 @@ class AffineTransform(unittest.TestCase):
         """Test conversion to and from QMatrix4x4 objects."""
         # Skip test if no Qt is available
         try:
-            # Try to get a Qt GUI module
-            QtGui = None
-            for qt_module in ['PySide6', 'PySide2', 'PyQt6', 'PyQt5']:
-                try:
-                    QtGui = __import__(qt_module + '.QtGui', fromlist=['QtGui'])
-                    break
-                except ImportError:
-                    continue
+            from coorx.qt import import_qt_gui
 
-            # Fallback to pyqtgraph
-            if QtGui is None:
-                from pyqtgraph.Qt import QtGui
-
+            import_qt_gui()
         except ImportError:
             self.skipTest("Qt GUI module not available")
 

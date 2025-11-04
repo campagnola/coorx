@@ -302,21 +302,9 @@ class Transform(object):
 
     def to_qmatrix4x4(self, QtGui=None):
         """Return a QMatrix4x4 that is equivalent to this transform."""
-        import_errors = []
-        if QtGui is None:
-            for qt_module in ['PySide6', 'PyQt6', 'PySide2', 'PyQt5']:
-                try:
-                    QtGui = __import__(qt_module + '.QtGui', fromlist=['QtGui'])
-                    break
-                except ImportError as e:
-                    import_errors.append(f"{qt_module}: {e}")
+        from .qt import import_qt_gui
 
-        if QtGui is None:
-            raise ImportError(
-                f"Could not import QtGui module. Attempts: {'; '.join(import_errors)}"
-            )
-
-        return QtGui.QMatrix4x4(self.full_matrix.reshape(-1))
+        return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
     def add_change_callback(self, cb):
         self._change_callbacks.append(cb)
