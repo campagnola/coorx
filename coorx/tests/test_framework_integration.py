@@ -60,7 +60,7 @@ class TestVispyIntegration:
             coorx.STTransform(scale=[2, 3, 4], offset=[10, -5, 2.2], dims=(3, 3)),
             coorx.AffineTransform(dims=(3, 3)),  # Use 3D for VisPy compatibility
             coorx.SRT3DTransform(scale=[1.5, 2, 0.5], offset=[1, 2, 3], angle=30, axis=[1, 1, 0]),
-            coorx.TTransform(offset=[-5, 10, 2], dims=(3, 3)),
+            coorx.TTransform(offset=[-5., 10., 2.], dims=(3, 3)),
             coorx.NullTransform(dims=(3, 3)),  # Base class
             coorx.STTransform(scale=[1e-10, 1e10, -1e10], offset=[1e6, -1e6, 0], dims=(3, 3)),
             coorx.STTransform(scale=[0.001, 1000, 1e12], offset=[0, 0, 1], dims=(3, 3)),
@@ -79,8 +79,8 @@ class TestVispyIntegration:
             # Map coordinates through VisPy transform
             # VisPy works with homogeneous coordinates, extend test coordinates as needed
             if test_coords.shape[1] < 4:
-                # Add extra dimensions for VisPy (pad with zeros)
-                padded_coords = np.zeros((test_coords.shape[0], 4))
+                # Add extra dimensions for VisPy (pad with one)
+                padded_coords = np.ones((test_coords.shape[0], 4))
                 padded_coords[:, : test_coords.shape[1]] = test_coords
                 vispy_coords = padded_coords
             else:
