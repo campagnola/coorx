@@ -300,6 +300,12 @@ class Transform(object):
         # a functional default if nothing else is implemented
         return SRTTransform3D(QtGui.QMatrix4x4(self.full_matrix.reshape(-1)))
 
+    def to_qmatrix4x4(self, QtGui=None):
+        """Return a QMatrix4x4 that is equivalent to this transform."""
+        from .qt import import_qt_gui
+
+        return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
+
     def add_change_callback(self, cb):
         self._change_callbacks.append(cb)
 

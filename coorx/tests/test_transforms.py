@@ -426,6 +426,33 @@ class AffineTransform(unittest.TestCase):
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
+    def test_to_and_from_qmatrix4x4(self):
+        """Test conversion to and from QMatrix4x4 objects."""
+        # Skip test if no Qt is available
+        try:
+            from coorx.qt import import_qt_gui
+
+            import_qt_gui()
+        except ImportError:
+            self.skipTest("Qt GUI module not available")
+
+        # Create a test transform with rotation, scaling, and translation
+        tr = coorx.AffineTransform(dims=(3, 3))
+        tr.scale((2, 3, 0.5))
+        tr.rotate(45, (0, 0, 1))
+        tr.translate((10, 20, 30))
+
+        # Convert to QMatrix4x4 and back
+        qmatrix = tr.to_qmatrix4x4()
+        tr2 = coorx.AffineTransform.from_qmatrix4x4(qmatrix)
+
+        # Check that full matrices are identical
+        assert np.allclose(tr.full_matrix, tr2.full_matrix)
+
+        # Check that transforms produce identical results
+        pts = np.random.normal(size=(10, 3))
+        assert np.allclose(tr.map(pts), tr2.map(pts))
+
 
 class TransposeTransformTest(unittest.TestCase):
     def test_inverse_and_map(self):
