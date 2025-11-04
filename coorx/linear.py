@@ -418,6 +418,8 @@ class STTransform(Transform):
         return m
 
     def as_vispy(self):
+        if self.dims != (3, 3):
+            raise NotImplementedError("as_vispy is only implemented for 3D transforms")
         from vispy.visuals.transforms import STTransform as VispySTTransform
 
         return VispySTTransform(scale=self.scale, translate=self.offset)
@@ -853,6 +855,10 @@ class SRT3DTransform(Transform):
     def set_offset(self, offset):
         """Set the translation of this transform"""
         self.set_params(offset=offset)
+
+    @property
+    def offset(self):
+        return self._state["offset"].copy()
 
     def scale(self, scale):
         """adjust the scale of this transform"""
