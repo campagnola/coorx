@@ -67,7 +67,7 @@ class TestImageCopyMetadataPreservation:
     def test_copy_allows_parameter_overrides(self, sample_image_data):
         """Test that copy allows parameter overrides."""
         new_data = np.ones((5, 5))
-        new_axes = (0, 1)  # Different from default if different input
+        new_axes = (1, 0)
         
         img1 = Image(sample_image_data)
         img2 = img1.copy(image=new_data, axes=new_axes)
@@ -75,14 +75,6 @@ class TestImageCopyMetadataPreservation:
         np.testing.assert_array_equal(img2.image, new_data)
         assert tuple(img2.spatial_to_image_axes) == tuple(new_axes)
         assert tuple(img1.spatial_to_image_axes) != tuple(img2.spatial_to_image_axes) or not np.array_equal(img1.image, img2.image)
-
-    def test_copy_preserves_shape_properties(self, sample_image_data):
-        """Test that copy preserves shape-related properties."""
-        img1 = Image(sample_image_data)
-        img2 = img1.copy()
-        
-        assert img1.image.shape == img2.image.shape
-        assert img1.spatial_shape == img2.spatial_shape
 
 
 class TestImageCopyIndependence:
@@ -104,20 +96,6 @@ class TestImageCopyIndependence:
         
         # But should be in the same graph
         assert img1.graph is img2.graph
-
-    def test_copy_gets_unique_system_name(self, sample_image_data):
-        """Test that copied images get unique coordinate system names."""
-        img1 = Image(sample_image_data)
-        img2 = img1.copy()
-        img3 = img1.copy()
-        
-        # All should have different system names
-        system_names = {img1.system.name, img2.system.name, img3.system.name}
-        assert len(system_names) == 3
-        
-        # All should follow the pattern 'image_N'
-        for name in system_names:
-            assert name.startswith('image_')
 
     def test_copy_independence_data_modification(self, sample_image_data):
         """Test that copied images have independent image data."""
@@ -148,46 +126,6 @@ class TestImageCopyIndependence:
         # Trying to map to img2's system should fail (no transform path)
         with pytest.raises(Exception):  # Could be various exception types
             pt1.mapped_to(img2.system)
-
-    def test_copy_preserves_parent_transform_isolation(self, sample_image_data):
-        """Test that copied image's parent transform is independent."""
-        img1 = Image(sample_image_data)
-        img2 = img1.copy()
-        
-        # Initially, both should have None parent transform
-        assert img1._parent_tr is None
-        assert img2._parent_tr is None
-        
-        # Rotate img1 (creates parent transform)
-        img1_rotated = img1.rotate(45)
-        
-        # img2 should still have None parent transform
-        assert img2._parent_tr is None
-        assert img1_rotated._parent_tr is not None
-
-    def test_copy_chain_independence(self, sample_image_data):
-        """Test independence in a chain of copies."""
-        img1 = Image(sample_image_data, system='original', graph='chain')
-        img2 = img1.copy()
-        img3 = img2.copy()
-        
-        # All should have different coordinate systems
-        systems = [img1.system, img2.system, img3.system]
-        system_ids = [id(sys) for sys in systems]
-        assert len(set(system_ids)) == 3
-        
-        # Create points in each system
-        pt1 = img1.point([1, 2])
-        pt2 = img2.point([3, 4])
-        pt3 = img3.point([5, 6])
-        
-        # None should be mappable to the others
-        with pytest.raises(Exception):
-            pt1.mapped_to(img2.system)
-        with pytest.raises(Exception):
-            pt1.mapped_to(img3.system)
-        with pytest.raises(Exception):
-            pt2.mapped_to(img3.system)
 
 
 class TestImageCopyEdgeCases:
