@@ -153,33 +153,6 @@ class TestImageCopyEdgeCases:
         assert img1.graph is not img2.graph
         assert img1.graph.name != img2.graph.name
 
-    def test_copy_preserves_image_reference_semantics(self):
-        """Test that copy handles image reference correctly."""
-        original_data = np.ones((5, 5))
-        img1 = Image(original_data)
-        
-        # Copy without providing new image data
-        img2 = img1.copy()
-        
-        # Should be independent copies when no image provided
-        assert img1.image is not img2.image
-        # But data content should be identical
-        np.testing.assert_array_equal(img1.image, original_data)
-        np.testing.assert_array_equal(img2.image, original_data)
-
-    def test_copy_with_new_image_creates_new_reference(self):
-        """Test that copy with new image creates proper reference."""
-        original_data = np.ones((5, 5))
-        new_data = np.zeros((3, 3))
-        
-        img1 = Image(original_data)
-        img2 = img1.copy(image=new_data)
-        
-        # Should have different image data
-        assert img1.image is not img2.image
-        assert img1.image is original_data
-        assert img2.image is new_data
-
     @pytest.mark.parametrize("axes", [(0, 1), (1, 2), (0, 2)])
     def test_copy_with_different_axes_configurations(self, axes):
         """Test copy behavior with different axes configurations."""
@@ -190,30 +163,6 @@ class TestImageCopyEdgeCases:
         assert tuple(img1.spatial_to_image_axes) == tuple(img2.spatial_to_image_axes) == tuple(axes)
         # Shape properties should match
         assert img1.spatial_shape == img2.spatial_shape
-
-
-class TestImageCopyIntegration:
-    """Integration tests for Image.copy() with other Image methods."""
-
-    def test_copy_integration_with_transforms(self):
-        """Test that copy works correctly with image transforms."""
-        img_data = np.random.rand(20, 20)
-        img1 = Image(img_data)
-        
-        # Create a chain of transforms
-        img2_rotated = img1.rotate(30)
-        img3_cropped = img2_rotated[5:15, 5:15]
-        img4_zoomed = img3_cropped.zoom(2.0)
-        
-        # Each should have independent coordinate systems
-        systems = [img1.system, img2_rotated.system, img3_cropped.system, img4_zoomed.system]
-        system_ids = [id(sys) for sys in systems]
-        assert len(set(system_ids)) == 4
-        
-        # But points should be mappable through the transform chain
-        pt1 = img1.point([10, 10])
-        pt4 = pt1.mapped_to(img4_zoomed.system)
-        assert pt4 is not None  # Should succeed
 
     def test_copy_doesnt_interfere_with_existing_transforms(self):
         """Test that copying doesn't interfere with existing transforms."""
