@@ -842,7 +842,7 @@ class SRT3DTransform(Transform):
     @property
     def rotation(self):
         """Return (angle, axis) of rotation"""
-        return self._state["angle"], np.array([self._state["axis"]])
+        return self._state["angle"], np.array(self._state["axis"])
 
     @rotation.setter
     def rotation(self, angle_axis):

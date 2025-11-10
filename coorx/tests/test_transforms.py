@@ -509,7 +509,6 @@ class LogTransformTest(unittest.TestCase):
 
 
 class SRT3DTransformTest(unittest.TestCase):
-    @unittest.expectedFailure
     def test_srt3d(self):
         pts = np.random.normal(size=(10, 3))
 
@@ -527,15 +526,22 @@ class SRT3DTransformTest(unittest.TestCase):
         tr.rotation = angle, axis
         aff.rotate(angle, axis)
         assert np.allclose(aff.map(pts), tr.map(pts))
+        assert tr.rotation[0] == angle
+        assert np.allclose(tr.rotation[1], axis)
 
         offset = [1e-6, -10, 1e6]
         tr.offset = offset
         aff.translate(offset)
         assert np.allclose(aff.map(pts), tr.map(pts))
 
+    @unittest.expectedFailure
+    def test_from_affine(self):
+        # TODO this was previously part of test_srt3d, but it breaks trying to initialize tr2
         tr2 = coorx.SRT3DTransform(init=aff)
-        assert np.allclose(tr.params["offset"], tr2.params["offset"])
-        assert np.allclose(tr.params["scale"], tr2.params["scale"])
+        assert np.allclose(tr.offset, tr2.offset)
+        assert np.allclose(tr.scale, tr2.scale)
+        assert tr.rotation[0] == tr2.rotation[0]
+        assert np.allclose(tr.rotation[1], tr2.rotation[1])
         assert np.allclose(tr2.map(pts), tr.map(pts))
 
     def test_save(self):
