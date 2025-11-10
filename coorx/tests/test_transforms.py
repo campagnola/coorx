@@ -326,7 +326,7 @@ class STTransform(unittest.TestCase):
         translate = (1e6, 0.2, 0)
         st = coorx.STTransform(scale=scale, offset=translate)
         at = coorx.AffineTransform(dims=(3, 3))
-        at.scale(scale)
+        at.zoom(scale)
         at.translate(translate)
 
         assert np.allclose(st.map(pts), at.map(pts))
@@ -342,13 +342,15 @@ class STTransform(unittest.TestCase):
         assert np.allclose(t.map(p1)[:, : len(p2)], p2)
 
 
+def check_matrix(t, m):
+    dim = m.shape[0] - 1
+    assert np.allclose(t.full_matrix, m)
+    assert np.allclose(t.matrix, m[:dim, :dim])
+    assert np.allclose(t.offset, m[:dim, dim])
+
+
 class AffineTransform(unittest.TestCase):
     def test_modifiers(self):
-        def check_matrix(t, m):
-            assert np.allclose(t.full_matrix, m)
-            assert np.allclose(t.matrix, m[:3, :3])
-            assert np.allclose(t.offset, m[:3, 3])
-
         t = coorx.AffineTransform(dims=(3, 3))
         m = np.eye(4)
         check_matrix(t, m)
@@ -357,7 +359,7 @@ class AffineTransform(unittest.TestCase):
         m[:3, 3] += 1
         check_matrix(t, m)
 
-        t.scale(2)
+        t.zoom(2)
         m[:3] *= 2
         check_matrix(t, m)
 
@@ -374,6 +376,28 @@ class AffineTransform(unittest.TestCase):
         t2 = rm * coorx.TTransform([3, 3, 3]) * coorx.STTransform(scale=[2, 2, 2]) * coorx.TTransform([1, 1, 1])
         assert t2 == t
 
+    def test_4d(self):
+        t = coorx.AffineTransform(dims=(4, 4))
+        m = np.eye(5)
+        check_matrix(t, m)
+
+        t.translate([1, 2, 3, 4])
+        m[:4, 4] += [1, 2, 3, 4]
+        check_matrix(t, m)
+
+        t.zoom([2, 3, 4, 5])
+        for i in range(4):
+            m[i] *= [2, 3, 4, 5][i]
+        check_matrix(t, m)
+
+        t.translate([5, 6, 7, 8])
+        m[:4, 4] += [5, 6, 7, 8]
+        check_matrix(t, m)
+
+        inv = t.inverse
+        a = np.random.normal(size=(10, 4))
+        assert np.allclose(inv.map(t.map(a)), a)
+
     def test_inverse(self):
         tr = AT(dims=(3, 3), matrix=np.eye(3) * 0.1, offset=[1, 2, 3])
         pts = np.random.normal(size=(10, 3))
@@ -386,6 +410,14 @@ class AffineTransform(unittest.TestCase):
         else:
             with self.assertRaises(TypeError):
                 tr.map(pts)
+
+    def test_uninvertible(self):
+        tr = AT(dims=(2, 2), matrix=[[1, 1], [2, 2]], offset=[0, 0])
+        pts = np.random.normal(size=(10, 2))
+        with self.assertRaises(np.linalg.LinAlgError):
+            tr.imap(pts)
+        with self.assertRaises(np.linalg.LinAlgError):
+            tr.inverse.map(pts)
 
     def x_test_affine_mapping(self):
         t = coorx.AffineTransform()
@@ -404,7 +436,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(5.5)
+        t2.zoom(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
         # test scale + translate
@@ -412,7 +444,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(3.5)
+        t2.zoom(3.5)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
@@ -421,7 +453,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(3.5)
+        t2.zoom(3.5)
         t2.rotate(90)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
@@ -438,7 +470,7 @@ class AffineTransform(unittest.TestCase):
 
         # Create a test transform with rotation, scaling, and translation
         tr = coorx.AffineTransform(dims=(3, 3))
-        tr.scale((2, 3, 0.5))
+        tr.zoom((2, 3, 0.5))
         tr.rotate(45, (0, 0, 1))
         tr.translate((10, 20, 30))
 
@@ -486,18 +518,18 @@ class SRT3DTransformTest(unittest.TestCase):
         assert np.allclose(pts, tr.map(pts))
 
         scale = [10, 1, 0.1]
-        tr.set_scale(scale)
-        aff.scale(scale)
+        tr.scale = scale
+        aff.zoom(scale)
         assert np.allclose(aff.map(pts), tr.map(pts))
 
         angle = 30
         axis = np.array([1, 0.5, 0.3])
-        tr.set_rotation(angle, axis)
+        tr.rotation = angle, axis
         aff.rotate(angle, axis)
         assert np.allclose(aff.map(pts), tr.map(pts))
 
         offset = [1e-6, -10, 1e6]
-        tr.set_offset(offset)
+        tr.offset = offset
         aff.translate(offset)
         assert np.allclose(aff.map(pts), tr.map(pts))
 

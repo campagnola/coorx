@@ -386,7 +386,7 @@ class STTransform(Transform):
         offset = np.asarray(offset)
         self.offset = self.offset + offset
 
-    def zoom(self, zoom, center, mapped=True):
+    def zoom(self, zoom, center=None, mapped=True):
         """Update the transform such that its scale factor is changed, but
         the specified center point is left unchanged.
 
@@ -396,12 +396,14 @@ class STTransform(Transform):
             Values to multiply the transform's current scale
             factors.
         center : array-like
-            The center point around which the scaling will take place.
+            The center point around which the scaling will take place. Defaults to the origin.
         mapped : bool
             Whether *center* is expressed in mapped coordinates (True) or
             unmapped coordinates (False).
         """
         zoom = np.asarray(zoom)
+        if center is None:
+            center = np.zeros(self.dims[0])
         center = np.asarray(center)
         assert zoom.shape == center.shape == (self.dims[0],)
         scale = self.scale * zoom
@@ -413,7 +415,7 @@ class STTransform(Transform):
 
     def as_affine(self):
         m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
-        m.scale(self.scale)
+        m.zoom(self.scale)
         m.translate(self.offset)
         return m
 
@@ -678,7 +680,7 @@ class AffineTransform(Transform):
         pos = np.asarray(pos)
         self.offset = self.offset + pos
 
-    def scale(self, scale, center=None):
+    def zoom(self, scale, center=None):
         """
         Scale the matrix about a given origin.
 
@@ -829,15 +831,38 @@ class SRT3DTransform(Transform):
             assert init is None
             self.set_params(offset, scale, angle, axis)
 
-    def get_scale(self):
+    @property
+    def scale(self):
         return np.array(self._state["scale"])
 
-    def get_rotation(self):
+    @scale.setter
+    def scale(self, s):
+        self.set_params(scale=s)
+
+    @property
+    def rotation(self):
         """Return (angle, axis) of rotation"""
         return self._state["angle"], np.array([self._state["axis"]])
 
-    def get_translation(self):
-        return np.array(self._state["offset"])
+    @rotation.setter
+    def rotation(self, angle_axis):
+        """Set the transformation rotation to angle (in degrees)"""
+        if np.isscalar(angle_axis):
+            angle = angle_axis
+            axis = (0, 0, 1)
+        else:
+            angle, axis = angle_axis
+
+        self.set_params(angle=angle, axis=axis)
+
+    @property
+    def offset(self):
+        return (
+            self._state["offset"].copy())
+
+    @offset.setter
+    def offset(self, o):
+        self.set_params(offset=o)
 
     def reset(self):
         self._state = {
@@ -850,44 +875,48 @@ class SRT3DTransform(Transform):
 
     def translate(self, offset):
         """Adjust the translation of this transform"""
-        self.set_offset(self._state["offset"] + offset)
+        self.offset = self._state["offset"] + offset
 
-    def set_offset(self, offset):
-        """Set the translation of this transform"""
-        self.set_params(offset=offset)
+    def zoom(self, zoom, center=None, mapped=True):
+        """Update the transform such that its scale factor is changed, but
+        the specified center point is left unchanged.
 
-    @property
-    def offset(self):
-        return self._state["offset"].copy()
-
-    def scale(self, scale):
-        """adjust the scale of this transform"""
-        ## try to prevent accidentally setting 0 scale on z axis
-        if np.isscalar(scale):
-            scale = (scale,) * 3
-        self.set_scale(self._state["scale"] * scale)
-
-    def set_scale(self, scale):
-        """Set the scale of this transform"""
-        self.set_params(scale=scale)
+        Parameters
+        ----------
+        zoom : array-like
+            Values to multiply the transform's current scale
+            factors.
+        center : array-like
+            The center point around which the scaling will take place. Defaults to the origin.
+        mapped : bool
+            Whether *center* is expressed in mapped coordinates (True) or
+            unmapped coordinates (False).
+        """
+        zoom = np.asarray(zoom)
+        if center is None:
+            center = np.zeros(self.dims[0])
+        center = np.asarray(center)
+        assert zoom.shape == center.shape == (self.dims[0],)
+        scale = self.scale * zoom
+        if mapped:
+            trans = center - (center - self.offset) * zoom
+        else:
+            trans = self.scale * (1 - zoom) * center + self.offset
+        self.set_params(scale=scale, offset=trans)
 
     def rotate(self, angle, axis):
         """Adjust the rotation of this transform"""
         axis = np.asarray(axis)
         origAxis = self._state["axis"]
         if np.all(axis == origAxis):
-            self.set_rotation(self._state["angle"] + angle)
+            self.rotation = self._state["angle"] + angle, axis
         else:
             m = AffineTransform(dims=self.dims)
             m.translate(self._state["offset"])
             m.rotate(self._state["angle"], self._state["axis"])
             m.rotate(angle, axis)
-            m.scale(self._state["scale"])
+            m.zoom(self._state["scale"])
             self.set_from_affine(m)
-
-    def set_rotation(self, angle, axis=(0, 0, 1)):
-        """Set the transformation rotation to angle (in degrees)"""
-        self.set_params(angle=angle, axis=axis)
 
     def set_from_affine(self, tr):
         """
@@ -1070,7 +1099,7 @@ class SRT3DTransform(Transform):
 
     def as_affine(self):
         affine = AffineTransform(dims=(3, 3), from_cs=self.systems[0], to_cs=self.systems[1])
-        affine.scale(self._state["scale"])
+        affine.zoom(self._state["scale"])
         affine.rotate(self._state["angle"], self._state["axis"])
         affine.translate(self._state["offset"])
         # TODO figure out if this can be generalized to all meta data
@@ -1104,11 +1133,11 @@ class SRT3DTransform(Transform):
         if not isinstance(pg_transform, SRTTransform3D):
             raise TypeError("Input must be a SRTTransform3D instance")
         tr = cls(*init_args, **init_kwargs)
-        tr.set_offset(pg_transform.getTranslation())
-        tr.set_scale(pg_transform.getScale())
+        tr.offset = pg_transform.getTranslation()
+        tr.scale = pg_transform.getScale()
         angle, axis = pg_transform.getRotation()
         angle = -angle  # pyqtgraph uses left-handed rotations
-        tr.set_rotation(angle, axis)
+        tr.rotation = angle, axis
         return tr
 
 

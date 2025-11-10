@@ -185,7 +185,7 @@ class TestPyQtGraphIntegration:
         coorx_transform = coorx.SRT3DTransform.from_pyqtgraph(pg_transform)
 
         # Verify parameters
-        np.testing.assert_allclose(coorx_transform.get_scale(), [2, 3, 4], rtol=1e-12)
+        np.testing.assert_allclose(coorx_transform.scale, [2, 3, 4], rtol=1e-12)
         np.testing.assert_allclose(coorx_transform.offset, [10, 5, -2], rtol=1e-12)
 
         # Verify matrix equivalence through coordinate mapping
@@ -352,7 +352,7 @@ class TestCrossFrameworkConsistency:
         """Compare numerical precision between frameworks."""
         # Test with high-precision transform
         transform = coorx.AffineTransform(dims=(3, 3))
-        transform.scale([1.123456789123456, 2.987654321987654, 0.555555555555555])
+        transform.zoom([1.123456789123456, 2.987654321987654, 0.555555555555555])
         transform.translate([10.111111111111, -5.222222222222, 3.333333333333])
 
         vispy_transform = transform.as_vispy()
