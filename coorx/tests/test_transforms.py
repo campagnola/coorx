@@ -398,6 +398,28 @@ class AffineTransform(unittest.TestCase):
         a = np.random.normal(size=(10, 4))
         assert np.allclose(inv.map(t.map(a)), a)
 
+    def test_changing_dims(self):
+        matrix = [[1, 0, 1], [0, 1, 1]]
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, dims=3)
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, dims=(2, 2))
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, offset=[1, 2, 3])
+
+        t = AT(matrix=matrix, offset=[1, 2])
+        assert t.dims == (3, 2)
+
+        with self.assertRaises(ValueError):
+            t.matrix = np.eye(3)
+
+        pts = np.random.normal(size=(10, 3))
+        mapped = t.map(pts)
+        assert mapped.shape == (10, 2)
+
+        with self.assertRaises(np.linalg.LinAlgError):
+            t.imap(mapped)
+
     def test_inverse(self):
         tr = AT(dims=(3, 3), matrix=np.eye(3) * 0.1, offset=[1, 2, 3])
         pts = np.random.normal(size=(10, 3))

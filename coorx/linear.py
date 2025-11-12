@@ -533,11 +533,14 @@ class AffineTransform(Transform):
     def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
             matrix = np.asarray(matrix)
-            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
-                raise TypeError("Matrix must be 2-dimensional and square")
-        dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
-        self._inv_matrix = None
+            if matrix.ndim != 2:
+                raise ValueError("Matrix must be 2-dimensional")
+            if dims is None:
+                dims = (matrix.shape[1], matrix.shape[0])
+        else:
+            dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
 
+        self._inv_matrix = None
         super().__init__(dims, **kwargs)
 
         self.reset()
@@ -614,7 +617,7 @@ class AffineTransform(Transform):
         if matrix is not None:
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
-                raise TypeError(f"Matrix shape must be {self.dims[::-1]}")
+                raise ValueError(f"Matrix shape must be {self.dims[::-1]}")
             if np.any(m != self._matrix):
                 self._matrix = m
                 self._inv_matrix = None
@@ -623,7 +626,7 @@ class AffineTransform(Transform):
         if offset is not None:
             o = np.asarray(offset)
             if o.ndim != 1 or len(o) != self.dims[1]:
-                raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
+                raise ValueError(f"Offset length must be the same as transform output dimension ({self.dims[1]:d})")
             if np.any(o != self._offset):
                 self._offset = o
                 self._inv_matrix = None
