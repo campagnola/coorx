@@ -206,6 +206,11 @@ class Transform(object):
                 ret.shape[1],
             ), f"Transform maps to {self.dims[1]}D, but mapping generated {ret.shape[1]}D"
             return self._restore_shape(ret, original_shape)
+        elif hasattr(obj, '__len__') and len(obj) == self.dims[0]:
+            # fudge for single points passed as list/tuple-like objects
+            arr = np.asarray(obj)
+            ret = self._map(arr)
+            return type(obj)(*ret)
         else:
             raise TypeError(f"Cannot use argument for mapping: {obj}")
 

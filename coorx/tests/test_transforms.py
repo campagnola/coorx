@@ -97,6 +97,18 @@ class TransformMultiplication(unittest.TestCase):
         assert_composite_types(p * log_trans * s, [ST, LT, PT])
 
 
+class VectorMapping(unittest.TestCase):
+    @unittest.skipIf(not HAVE_PG, "pyqtgraph could not be imported")
+    def test_vector_map(self):
+        vector = pg.Vector(1, 2, 3)
+        t = coorx.STTransform(scale=(2, 3, 4), offset=(5, 6, 7))
+        mapped = t.map(vector)
+        assert isinstance(mapped, pg.Vector)
+        self.assertEqual(mapped.x(), 1 * 2 + 5)
+        self.assertEqual(mapped.y(), 2 * 3 + 6)
+        self.assertEqual(mapped.z(), 3 * 4 + 7)
+
+
 class CompositeTransform(unittest.TestCase):
     def test_transform_composite(self):
         # Make dummy classes for easier distinguishing the transforms
