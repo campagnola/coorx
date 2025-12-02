@@ -22,7 +22,7 @@ def transform_types():
 _cached_types = None
 
 
-def create_transform(type, params, dims=None, systems=(None, None)):
+def create_transform(type, **kwargs):
     global _cached_types
     if _cached_types is None or type not in _cached_types:
         _cached_types = {tr.__name__: tr for tr in transform_types()}
@@ -30,4 +30,4 @@ def create_transform(type, params, dims=None, systems=(None, None)):
     if type not in _cached_types:
         raise TypeError(f"Unknown transform type {type!r}")
 
-    return _cached_types[type](dims=dims, from_cs=systems[0], to_cs=systems[1], **params)
+    return _cached_types[type].from_state(kwargs)

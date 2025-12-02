@@ -26,7 +26,7 @@ class LogTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["_base"]
+    state_keys = ["base"]
 
     def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
@@ -37,7 +37,6 @@ class LogTransform(Transform):
 
         super().__init__(dims, **kwargs)
 
-        self._base = [None] * self.dims[0]
         if base is not None:
             self.base = base
 
@@ -52,6 +51,8 @@ class LogTransform(Transform):
 
     @base.setter
     def base(self, s):
+        if not hasattr(self, "_base"):
+            self._base = [None] * self.dims[0]
         self._base[:] = s
 
     def _map(self, coords, base=None):

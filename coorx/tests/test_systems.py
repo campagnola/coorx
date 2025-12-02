@@ -207,13 +207,13 @@ PARAMS = {
 def test_transform_mapping(type1, type2, inverse1, inverse2):
     point = Point((1., 1., 1.), "cs1")
     if inverse1:
-        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
+        cs2_from_cs1 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
     else:
-        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
+        cs2_from_cs1 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
     if inverse2:
-        cs3_from_cs2 = create_transform(type2, PARAMS[type2], dims=(3, 3), systems=("cs3", "cs2")).inverse
+        cs3_from_cs2 = create_transform(type2, params=PARAMS[type2], dims=(3, 3), systems=("cs3", "cs2")).inverse
     else:
-        cs3_from_cs2 = create_transform(type2, PARAMS[type2], dims=(3, 3), systems=("cs2", "cs3"))
+        cs3_from_cs2 = create_transform(type2, params=PARAMS[type2], dims=(3, 3), systems=("cs2", "cs3"))
 
     assert str(cs2_from_cs1.map(point).system) == "cs2"
 
@@ -241,13 +241,13 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
 
 
 def test_this_one_weird_situation():
-    cs2_from_cs1 = create_transform("NullTransform", {}, dims=(3, 3), systems=("cs1", "cs2"))
-    cs3_from_cs2 = create_transform("SRT3DTransform", PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs2", "cs3"))
+    cs2_from_cs1 = create_transform("NullTransform", params={}, dims=(3, 3), systems=("cs1", "cs2"))
+    cs3_from_cs2 = create_transform("SRT3DTransform", params=PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs2", "cs3"))
     cs3_from_cs1 = cs3_from_cs2 * cs2_from_cs1
     assert str(cs3_from_cs1.map(Point([1, 1, 1], "cs1")).system) == "cs3"
     assert cs3_from_cs2.full_matrix.shape == (4, 4)  # just used to access it, really
 
-    cs1_from_cs0 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs0", "cs1"))
+    cs1_from_cs0 = create_transform("AffineTransform", params=PARAMS["AffineTransform"], dims=(3, 3), systems=("cs0", "cs1"))
     cs3_from_cs0 = cs3_from_cs2 * cs2_from_cs1 * cs1_from_cs0
     assert str(cs3_from_cs0.map(Point([1, 1, 1], "cs0")).system) == "cs3"
 
@@ -257,9 +257,9 @@ def test_this_one_weird_situation():
 @pytest.mark.parametrize("inverse2", [False, True])
 def test_copy(type1, inverse1, inverse2):
     if inverse1:
-        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
+        cs2_from_cs1 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
     else:
-        cs2_from_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
+        cs2_from_cs1 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
     copy = cs2_from_cs1.copy(from_cs="cs4")
     assert str(copy.systems[0]) == "cs4"
     assert str(copy.systems[1]) == "cs2"
@@ -272,8 +272,8 @@ def test_copy(type1, inverse1, inverse2):
 
 
 def test_composite_copy():
-    cs2_from_cs1 = create_transform("AffineTransform", PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs2"))
-    cs3_from_cs2 = create_transform("STTransform", PARAMS["STTransform"], dims=(3, 3), systems=("cs2", "cs3"))
+    cs2_from_cs1 = create_transform("AffineTransform", params=PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs2"))
+    cs3_from_cs2 = create_transform("STTransform", params=PARAMS["STTransform"], dims=(3, 3), systems=("cs2", "cs3"))
     cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
     with pytest.raises(ValueError):
         cs3_from_cs1.copy(from_cs="cs4")
@@ -283,7 +283,7 @@ def test_composite_copy():
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
 def test_as_affine_systems(type1):
-    xform = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
+    xform = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
     point = Point([1, 2, 3], "affine1")
     with contextlib.suppress(NotImplementedError):  # ignore non-affine transforms here
         assert np.all(xform.as_affine().map(point) == xform.map(point))
@@ -313,9 +313,9 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
         cs3_from_cs2 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs2", to_cs="cs3")
         cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
     if inverse1:
-        cs4_from_cs3 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs4", "cs3")).inverse
+        cs4_from_cs3 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs4", "cs3")).inverse
     else:
-        cs4_from_cs3 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs3", "cs4"))
+        cs4_from_cs3 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs3", "cs4"))
 
     assert str(cs3_from_cs1.map(pt_cs1).system) == "cs3"
     assert str(cs4_from_cs3.map(pt_cs3).system) == "cs4"
@@ -344,7 +344,7 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
 
     # check it works on the other side, too
     pt_cs0 = Point([0., 2., 0.], "cs0")
-    cs0_to_cs1 = create_transform(type1, PARAMS[type1], dims=(3, 3), systems=("cs0", "cs1"))
+    cs0_to_cs1 = create_transform(type1, params=PARAMS[type1], dims=(3, 3), systems=("cs0", "cs1"))
 
     assert str(cs0_to_cs1.map(pt_cs0).system) == "cs1"
 

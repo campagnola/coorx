@@ -1,7 +1,6 @@
 from ._types import Mappable
 
 from .base_transform import Transform
-from .linear import NullTransform
 
 
 class CompositeTransform(Transform):
@@ -25,7 +24,6 @@ class CompositeTransform(Transform):
         super().__init__(**kwargs)
         self._transforms = []
         self._simplified = None
-        self._null_transform = NullTransform()
 
         # Set input transforms
         trs = []
@@ -56,7 +54,15 @@ class CompositeTransform(Transform):
         return super().copy()
 
     def __setstate__(self, state):
-        self._transforms = state["_transforms"]
+        if not hasattr(self, "_transforms"):
+            self._transforms = []
+        self.transforms = state["transforms"]
+
+    def __getstate__(self):
+        return {
+            'type': type(self).__name__,
+            'transforms': self.transforms,
+        }
 
     @property
     def dims(self):
