@@ -88,23 +88,14 @@ def test_pickling():
         assert tr == tr2
         mapped1 = tr.map(points)
         mapped2 = tr2.map(points)
-        assert np.all(
-            (np.isnan(mapped1) == np.isnan(mapped2))
-            & (np.isclose(mapped1, mapped2) | (np.isnan(mapped1) & np.isnan(mapped2)))
-        ), f"Mapping differs for pickled {type(tr)}"
-        mask = ~np.isnan(mapped1)
-        assert np.allclose(mapped1[mask], mapped2[mask]), f"Mapping differs for pickled {type(tr)}"
+        assert_equal_including_nans(mapped1, mapped2, f"Mapping differs for pickled {type(tr)}")
 
         alt_tr2 = coorx.create_transform(**tr.save_state())
         assert tr == alt_tr2
         mapped2b = alt_tr2.map(points)
-        assert np.all(
-            (np.isnan(mapped1) == np.isnan(mapped2b))
-            & (np.isclose(mapped1, mapped2b) | (np.isnan(mapped1) & np.isnan(mapped2b)))
-        ), f"Mapping differs for create_transform'd {type(tr)}"
-        assert np.allclose(
-            mapped1[mask], mapped2b[mask]
-        ), f"Mapping differs for create_transform'd {type(tr)}"
+        assert_equal_including_nans(
+            mapped1, mapped2b, f"Mapping differs for create_transform'd {type(tr)}"
+        )
 
         try:
             tr.inverse.map(tr.map(points))
@@ -115,31 +106,26 @@ def test_pickling():
         assert tr.inverse == inv_tr2
         inv_mapped1 = tr.inverse.map(mapped1)
         inv_mapped2 = inv_tr2.map(mapped2)
-        assert np.all(
-            (np.isnan(inv_mapped1) == np.isnan(inv_mapped2))
-            & (
-                np.isclose(inv_mapped1, inv_mapped2)
-                | (np.isnan(inv_mapped1) & np.isnan(inv_mapped2))
-            )
-        ), f"Inverse mapping differs for pickled {type(tr)}"
-        mask = ~np.isnan(inv_mapped1)
-        assert np.allclose(
-            inv_mapped1[mask], inv_mapped2[mask]
-        ), f"Inverse mapping differs for pickled {type(tr)}"
+        assert_equal_including_nans(
+            inv_mapped1, inv_mapped2, f"Inverse mapping differs for pickled {type(tr)}"
+        )
 
         alt_inv_tr2 = coorx.create_transform(**tr.inverse.save_state())
         assert tr.inverse == alt_inv_tr2
         alt_inv_mapped2 = alt_inv_tr2.map(mapped2)
-        assert np.all(
-            (np.isnan(inv_mapped1) == np.isnan(inv_mapped2))
-            & (
-                np.isclose(inv_mapped1, inv_mapped2)
-                | (np.isnan(inv_mapped1) & np.isnan(inv_mapped2))
-            )
-        ), f"Inverse mapping differs for pickled {type(tr)}"
-        assert np.allclose(
-            inv_mapped1[mask], alt_inv_mapped2[mask]
-        ), f"Inverse mapping differs for create_transform'd {type(tr)}"
+        assert_equal_including_nans(
+            inv_mapped1,
+            alt_inv_mapped2,
+            f"Inverse mapping differs for create_transform'd {type(tr)}",
+        )
+
+
+def assert_equal_including_nans(a, b, msg):
+    assert np.all(
+        (np.isnan(a) == np.isnan(b)) & (np.isclose(a, b) | (np.isnan(a) & np.isnan(b)))
+    ), msg
+    mask = ~np.isnan(a)
+    assert np.allclose(a[mask], b[mask]), msg
 
 
 class TransformMultiplication(unittest.TestCase):
