@@ -18,7 +18,6 @@ class CompositeTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
-    state_keys = ["_transforms"]
 
     def __init__(self, *transforms, **kwargs):
         super().__init__(**kwargs)

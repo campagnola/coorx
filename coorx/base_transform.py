@@ -62,9 +62,6 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    # List of keys that will be saved and restored in __getstate__ and __setstate__
-    state_keys = []
-
     def __init__(
         self,
         dims: Dims = None,
@@ -440,8 +437,6 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    state_keys = ["_inverse"]
-
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
@@ -466,10 +461,21 @@ class InverseTransform(Transform):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
 
     def __setstate__(self, state):
-        inverse = state["_inverse"]
-        self._inverse = inverse
-        self._map = inverse._imap
-        self._imap = inverse._map
+        from coorx import create_transform
+
+        self._inverse = create_transform(**state["inverse"])
+        self._map = self._inverse._imap
+        self._imap = self._inverse._map
+
+    def __getstate__(self):
+        return {
+            "type": type(self).__name__,
+            "inverse": self._inverse.__getstate__(),
+        }
+
+    @property
+    def params(self):
+        return {'inverse': self._inverse}
 
     @property
     def dims(self):

@@ -18,6 +18,7 @@ except ImportError:
 
 try:
     import vispy
+
     HAVE_VISPY = True
 except ImportError:
     HAVE_VISPY = False
@@ -40,6 +41,13 @@ RT = coorx.AffineTransform
 PT = coorx.PolarTransform
 LT = coorx.LogTransform
 CT = coorx.CompositeTransform
+T3 = coorx.SRT3DTransform
+ZT = coorx.AxisSelectionEmbeddedTransform
+HT = coorx.HomogeneousEmbeddedTransform
+DT = coorx.LensDistortionTransform
+QT = coorx.PerspectiveTransform
+BT = coorx.BilinearTransform
+T2 = coorx.Homography2DTransform
 
 
 def assert_composite_types(composite, types):
@@ -48,6 +56,90 @@ def assert_composite_types(composite, types):
 
 def assert_composite_objects(composite1, composite2):
     assert composite1.transforms == composite2.transforms
+
+
+def test_pickling():
+    points = np.random.normal(size=(10, 3))
+    transforms = [
+        NT(dims=(3, 3)),
+        TT(dims=(3, 3), offset=(1, 2, 3)),
+        ST(dims=(3, 3), scale=(2, 3, 4), offset=(1, 2, 3)),
+        AT(dims=(3, 3)),
+        PT(dims=(3, 3)),
+        XT(axis_order=(2, 1, 0)),
+        LT(dims=(3, 3), base=(10, None, 2)),
+        CT([ST(dims=(3, 3), scale=(2, 2, 2)), TT(dims=(3, 3), offset=(1, 1, 1))]),
+        T3(dims=(3, 3), scale=(2, 2, 2), offset=(1, 2, 3), angle=45, axis=(0, 0, 1)),
+        ZT(axes=(0, 2), transform=ST(dims=(2, 2), scale=(3, 3), offset=(1, 1)), dims=(3, 3)),
+        HT(transform=AT(dims=(4, 4)), dims=(3, 3)),
+        QT(
+            dims=(3, 3),
+            affine={
+                'matrix': [[1, 0, 0, 0], [0, 1, 0, 0], [0.001, 0.002, 1, 0], [0, 0, 0, 1]],
+                'offset': [0, 0, 0, 0],
+            },
+        ),
+        # DT(dims=(2, 2), coeff=(0.1, -0.05, 0.01, 0.0, 0.0)),
+        # BT(dims=(2, 2)),
+        # T2(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0), (1, 1), (0, 2)]),
+    ]
+    for tr in transforms:
+        tr2 = pickle.loads(pickle.dumps(tr))
+        assert tr == tr2
+        mapped1 = tr.map(points)
+        mapped2 = tr2.map(points)
+        assert np.all(
+            (np.isnan(mapped1) == np.isnan(mapped2))
+            & (np.isclose(mapped1, mapped2) | (np.isnan(mapped1) & np.isnan(mapped2)))
+        ), f"Mapping differs for pickled {type(tr)}"
+        mask = ~np.isnan(mapped1)
+        assert np.allclose(mapped1[mask], mapped2[mask]), f"Mapping differs for pickled {type(tr)}"
+
+        alt_tr2 = coorx.create_transform(**tr.save_state())
+        assert tr == alt_tr2
+        mapped2b = alt_tr2.map(points)
+        assert np.all(
+            (np.isnan(mapped1) == np.isnan(mapped2b))
+            & (np.isclose(mapped1, mapped2b) | (np.isnan(mapped1) & np.isnan(mapped2b)))
+        ), f"Mapping differs for create_transform'd {type(tr)}"
+        assert np.allclose(
+            mapped1[mask], mapped2b[mask]
+        ), f"Mapping differs for create_transform'd {type(tr)}"
+
+        try:
+            tr.inverse.map(tr.map(points))
+        except (np.linalg.LinAlgError, NotImplementedError):
+            continue  # non-invertible
+
+        inv_tr2 = pickle.loads(pickle.dumps(tr.inverse))
+        assert tr.inverse == inv_tr2
+        inv_mapped1 = tr.inverse.map(mapped1)
+        inv_mapped2 = inv_tr2.map(mapped2)
+        assert np.all(
+            (np.isnan(inv_mapped1) == np.isnan(inv_mapped2))
+            & (
+                np.isclose(inv_mapped1, inv_mapped2)
+                | (np.isnan(inv_mapped1) & np.isnan(inv_mapped2))
+            )
+        ), f"Inverse mapping differs for pickled {type(tr)}"
+        mask = ~np.isnan(inv_mapped1)
+        assert np.allclose(
+            inv_mapped1[mask], inv_mapped2[mask]
+        ), f"Inverse mapping differs for pickled {type(tr)}"
+
+        alt_inv_tr2 = coorx.create_transform(**tr.inverse.save_state())
+        assert tr.inverse == alt_inv_tr2
+        alt_inv_mapped2 = alt_inv_tr2.map(mapped2)
+        assert np.all(
+            (np.isnan(inv_mapped1) == np.isnan(inv_mapped2))
+            & (
+                np.isclose(inv_mapped1, inv_mapped2)
+                | (np.isnan(inv_mapped1) & np.isnan(inv_mapped2))
+            )
+        ), f"Inverse mapping differs for pickled {type(tr)}"
+        assert np.allclose(
+            inv_mapped1[mask], alt_inv_mapped2[mask]
+        ), f"Inverse mapping differs for create_transform'd {type(tr)}"
 
 
 class TransformMultiplication(unittest.TestCase):
@@ -385,7 +477,12 @@ class AffineTransform(unittest.TestCase):
 
         rm = coorx.AffineTransform(dims=(3, 3))
         rm.rotate(90, (0, 0, 1))
-        t2 = rm * coorx.TTransform([3, 3, 3]) * coorx.STTransform(scale=[2, 2, 2]) * coorx.TTransform([1, 1, 1])
+        t2 = (
+            rm
+            * coorx.TTransform([3, 3, 3])
+            * coorx.STTransform(scale=[2, 2, 2])
+            * coorx.TTransform([1, 1, 1])
+        )
         assert t2 == t
 
     def test_4d(self):
@@ -658,21 +755,12 @@ class TransformInverse(unittest.TestCase):
 class BilinearTest(unittest.TestCase):
     def test_bilinear(self):
         # identity
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[0, 0], [1, 0], [0, 1], [1, 1]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [0, 1], [1, 1]])
         assert np.allclose(tr.matrix, np.eye(4)[1:3])
 
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[0, 0], [1, 1], [0, 1], [1, 0]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 1], [0, 1], [1, 0]])
 
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[1, 1], [3, 0], [0, 4], [7, 7]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[1, 1], [3, 0], [0, 4], [7, 7]])
 
     def check_mapping(self, a, b):
         a = np.asarray(a)
@@ -684,10 +772,7 @@ class BilinearTest(unittest.TestCase):
         assert c.shape == b.shape
         assert np.allclose(c, b)
 
-        assert np.allclose(
-            tr.map(a.mean(axis=0)),
-            b.mean(axis=0)
-        )
+        assert np.allclose(tr.map(a.mean(axis=0)), b.mean(axis=0))
 
         tr_inv = tr.inverse
         d = tr_inv.map(b)

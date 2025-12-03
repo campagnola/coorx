@@ -81,7 +81,6 @@ class TransposeTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = True
-    state_keys = ["axis_order"]
 
     def __init__(self, axis_order: None|tuple[int, ...] = None, *args, **kwargs):
         if "dims" not in kwargs:
@@ -145,7 +144,6 @@ class TTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["offset"]
 
     def __init__(self, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset})
@@ -295,7 +293,6 @@ class STTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["scale", "offset"]
 
     def __init__(self, scale=None, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset, "scale": scale})
@@ -543,7 +540,6 @@ class AffineTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
-    state_keys = ["matrix", "offset"]
 
     def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
@@ -653,6 +649,10 @@ class AffineTransform(Transform):
 
         if need_update:
             self._update()
+
+    def __setstate__(self, state):
+        self._inv_matrix = None
+        super().__setstate__(state)
 
     @property
     def inv_matrix(self):
@@ -825,7 +825,6 @@ class SRT3DTransform(Transform):
         Rotation axis. Default is (0, 0, 1).
     """
 
-    state_keys = ["scale", "angle", "axis", "offset"]
 
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
         kwds.setdefault("dims", (3, 3))
@@ -1176,8 +1175,6 @@ class PerspectiveTransform(Transform):
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
 
-    state_keys = ["affine"]
-
     def __init__(self, affine=None, **kwds):
         kwds.setdefault("dims", (3, 3))
         assert kwds["dims"] == (3, 3)
@@ -1252,12 +1249,16 @@ class PerspectiveTransform(Transform):
                 dims=(4, 4), **affine, from_cs=self.systems[0], to_cs=self.systems[1]
             )
 
+    def __eq__(self, tr):
+        if not isinstance(tr, PerspectiveTransform):
+            return False
+        return self.affine == tr.affine
+
 
 class BilinearTransform(Transform):
     """2D bilinear transform.
 
     """
-    state_keys = ["matrix", "inv_matrix"]
 
     def __init__(self, **kwds):
         ident = np.eye(4)[:2]
@@ -1334,7 +1335,6 @@ class Homography2DTransform(Transform):
     """2D homography transform.
 
     """
-    state_keys = ["matrix", "inv_matrix"]
 
     def __init__(self, **kwds):
         ident = np.eye(3)

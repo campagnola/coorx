@@ -26,7 +26,6 @@ class LogTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["base"]
 
     def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
@@ -155,8 +154,6 @@ class LensDistortionTransform(Transform):
     Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
     and p1, p2 are tangential distortion coefficients.
     """
-
-    state_keys = ["coeff"]
 
     def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
         kwds.setdefault('dims', (2, 2))
