@@ -81,9 +81,8 @@ class TransposeTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = True
-    state_keys = ["axis_order"]
 
-    def __init__(self, axis_order: tuple[int, ...] = None, *args, **kwargs):
+    def __init__(self, axis_order: None|tuple[int, ...] = None, *args, **kwargs):
         if "dims" not in kwargs:
             kwargs["dims"] = (len(axis_order),) * 2
         if kwargs["dims"][0] != kwargs["dims"][1]:
@@ -121,6 +120,12 @@ class TransposeTransform(Transform):
             )
         return super().__rmul__(tr)
 
+    def set_params(self, axis_order=None):
+        if axis_order is not None:
+            if len(axis_order) != self.dims[0]:
+                raise ValueError("Axis order must have length equal to transform dimensionality")
+            self.axis_order = axis_order
+
 
 class TTransform(Transform):
     """Transform performing only translation.
@@ -139,7 +144,6 @@ class TTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["_offset"]
 
     def __init__(self, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset})
@@ -210,7 +214,10 @@ class TTransform(Transform):
     def offset(self, t):
         t = np.asarray(t)
         if t.shape != (self.dims[0],):
-            raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+            raise TypeError(
+                f"Offset must have length equal to transform dimensionality ({self.dims[0]:d})")
+        if not hasattr(self, "_offset"):
+            self._offset = np.zeros(self.dims[0], dtype=float)
         if np.all(t == self._offset):
             return
 
@@ -286,7 +293,6 @@ class STTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["_scale", "_offset"]
 
     def __init__(self, scale=None, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset, "scale": scale})
@@ -357,17 +363,23 @@ class STTransform(Transform):
         need_update = False
 
         if scale is not None:
+            if not hasattr(self, "_scale"):
+                self._scale = np.ones(self.dims[0], dtype=float)
             scale = np.asarray(scale)
             if scale.shape != (self.dims[0],):
-                raise TypeError("Scale must have length equal to transform dimensionality (%d)" % self.dims[0])
+                raise TypeError(
+                    f"Scale must have length equal to transform dimensionality ({self.dims[0]:d})")
             if not np.all(scale == self._scale):
                 self._scale[:] = scale
                 need_update = True
 
-        if offset is not None and not np.all(offset == self._offset):
+        if offset is not None:
+            if not hasattr(self, "_offset"):
+                self._offset = np.zeros(self.dims[0], dtype=float)
             offset = np.asarray(offset)
             if offset.shape != (self.dims[0],):
-                raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+                raise TypeError(
+                    f"Offset must have length equal to transform dimensionality ({self.dims[0]:d})")
             if not np.all(offset == self._offset):
                 self._offset[:] = offset
                 need_update = True
@@ -386,7 +398,7 @@ class STTransform(Transform):
         offset = np.asarray(offset)
         self.offset = self.offset + offset
 
-    def zoom(self, zoom, center, mapped=True):
+    def zoom(self, zoom, center=None, mapped=True):
         """Update the transform such that its scale factor is changed, but
         the specified center point is left unchanged.
 
@@ -396,12 +408,14 @@ class STTransform(Transform):
             Values to multiply the transform's current scale
             factors.
         center : array-like
-            The center point around which the scaling will take place.
+            The center point around which the scaling will take place. Defaults to the origin.
         mapped : bool
             Whether *center* is expressed in mapped coordinates (True) or
             unmapped coordinates (False).
         """
         zoom = np.asarray(zoom)
+        if center is None:
+            center = np.zeros(self.dims[0])
         center = np.asarray(center)
         assert zoom.shape == center.shape == (self.dims[0],)
         scale = self.scale * zoom
@@ -413,7 +427,7 @@ class STTransform(Transform):
 
     def as_affine(self):
         m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
-        m.scale(self.scale)
+        m.zoom(self.scale)
         m.translate(self.offset)
         return m
 
@@ -526,16 +540,18 @@ class AffineTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
-    state_keys = ["matrix", "offset"]
 
     def __init__(self, matrix=None, offset=None, dims=None, **kwargs):
         if matrix is not None:
             matrix = np.asarray(matrix)
-            if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
-                raise TypeError("Matrix must be 2-dimensional and square")
-        dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
-        self._inv_matrix = None
+            if matrix.ndim != 2:
+                raise ValueError("Matrix must be 2-dimensional")
+            if dims is None:
+                dims = (matrix.shape[1], matrix.shape[0])
+        else:
+            dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
 
+        self._inv_matrix = None
         super().__init__(dims, **kwargs)
 
         self.reset()
@@ -571,7 +587,7 @@ class AffineTransform(Transform):
         Parameters
         ----------
         coords : array-like
-            Coordinates to inverse map. The length of the last array dimenstion
+            Coordinates to inverse map. The length of the last array dimension
             must be equal to the input dimensionality of the transform.
 
         Returns
@@ -610,18 +626,22 @@ class AffineTransform(Transform):
         need_update = False
 
         if matrix is not None:
+            if not hasattr(self, "_matrix"):
+                self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
-                raise TypeError(f"Matrix shape must be {self.dims[::-1]}")
+                raise ValueError(f"Matrix shape must be {self.dims[::-1]}")
             if np.any(m != self._matrix):
                 self._matrix = m
                 self._inv_matrix = None
                 need_update = True
 
         if offset is not None:
+            if not hasattr(self, "_offset"):
+                self._offset = np.zeros(self.dims[1], dtype=float)
             o = np.asarray(offset)
             if o.ndim != 1 or len(o) != self.dims[1]:
-                raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
+                raise ValueError(f"Offset length must be the same as transform output dimension ({self.dims[1]:d})")
             if np.any(o != self._offset):
                 self._offset = o
                 self._inv_matrix = None
@@ -629,6 +649,10 @@ class AffineTransform(Transform):
 
         if need_update:
             self._update()
+
+    def __setstate__(self, state):
+        self._inv_matrix = None
+        super().__setstate__(state)
 
     @property
     def inv_matrix(self):
@@ -678,7 +702,7 @@ class AffineTransform(Transform):
         pos = np.asarray(pos)
         self.offset = self.offset + pos
 
-    def scale(self, scale, center=None):
+    def zoom(self, scale, center=None):
         """
         Scale the matrix about a given origin.
 
@@ -768,11 +792,13 @@ class AffineTransform(Transform):
         matrix_array = np.array(data).reshape(4, 4, order='F')  # Fortran order for column-major
 
         # Create an AffineTransform from the matrix
-        return cls(
-            matrix=matrix_array[:-1, :-1],  # 3x3 transformation matrix
-            offset=matrix_array[:-1, -1],   # 3-element translation vector
-            *init_args, **init_kwargs
-        )
+        return cls.from_matrix(matrix_array, *init_args, **init_kwargs)
+
+    @classmethod
+    def from_matrix(cls, matrix, *init_args, **init_kwargs):
+        offset = (matrix[:-1, -1])
+        matrix = (matrix[:-1, :-1])
+        return cls(matrix=matrix, offset=offset, *init_args, **init_kwargs)
 
     def copy(self, from_cs=None, to_cs=None):
         return AffineTransform(
@@ -801,13 +827,13 @@ class SRT3DTransform(Transform):
         Rotation axis. Default is (0, 0, 1).
     """
 
-    state_keys = ["_state"]
 
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
         kwds.setdefault("dims", (3, 3))
         super().__init__(**kwds)
         assert self.dims == (3, 3), "SRT3DTransform can only map 3D coordinates"
-        self._state = {"offset": np.zeros(3), "scale": np.ones(3), "angle": 0, "axis": np.array([0.0, 0.0, 1.0])}
+        self._state = {}
+        self.reset(update=False)
         self._affine = None
         if all(p is None for p in (offset, scale, angle, axis)):
             if init is not None:
@@ -829,65 +855,93 @@ class SRT3DTransform(Transform):
             assert init is None
             self.set_params(offset, scale, angle, axis)
 
-    def get_scale(self):
+    @property
+    def scale(self):
         return np.array(self._state["scale"])
 
-    def get_rotation(self):
+    @scale.setter
+    def scale(self, s):
+        self.set_params(scale=s)
+
+    @property
+    def rotation(self):
         """Return (angle, axis) of rotation"""
-        return self._state["angle"], np.array([self._state["axis"]])
+        return self._state["angle"], np.array(self._state["axis"])
 
-    def get_translation(self):
-        return np.array(self._state["offset"])
+    @rotation.setter
+    def rotation(self, angle_axis):
+        """Set the transformation rotation to angle (in degrees)"""
+        if np.isscalar(angle_axis):
+            angle = angle_axis
+            axis = (0.0, 0.0, 1.0)
+        else:
+            angle, axis = angle_axis
 
-    def reset(self):
-        self._state = {
-            "offset": np.array([0, 0, 0]),
-            "scale": np.array([1, 1, 1]),
-            "angle": 0.0,  ## in degrees
-            "axis": (0, 0, 1),
-        }
-        self._update_affine()
-
-    def translate(self, offset):
-        """Adjust the translation of this transform"""
-        self.set_offset(self._state["offset"] + offset)
-
-    def set_offset(self, offset):
-        """Set the translation of this transform"""
-        self.set_params(offset=offset)
+        self.set_params(angle=angle, axis=axis)
 
     @property
     def offset(self):
-        return self._state["offset"].copy()
+        return (
+            self._state["offset"].copy())
 
-    def scale(self, scale):
-        """adjust the scale of this transform"""
-        ## try to prevent accidentally setting 0 scale on z axis
-        if np.isscalar(scale):
-            scale = (scale,) * 3
-        self.set_scale(self._state["scale"] * scale)
+    @offset.setter
+    def offset(self, o):
+        self.set_params(offset=o)
 
-    def set_scale(self, scale):
-        """Set the scale of this transform"""
-        self.set_params(scale=scale)
+    def reset(self, update=True):
+        self._state = {
+            "offset": np.zeros(self.dims[0]),
+            "scale": np.ones(self.dims[0]),
+            "angle": 0.0,  ## in degrees
+            "axis": (0.0, 0.0, 1.0),
+        }
+        if update:
+            self._update_affine()
+
+    def translate(self, offset):
+        """Adjust the translation of this transform"""
+        self.offset = self._state["offset"] + offset
+
+    def zoom(self, zoom, center=None, mapped=True):
+        """Update the transform such that its scale factor is changed, but
+        the specified center point is left unchanged.
+
+        Parameters
+        ----------
+        zoom : array-like
+            Values to multiply the transform's current scale
+            factors.
+        center : array-like
+            The center point around which the scaling will take place. Defaults to the origin.
+        mapped : bool
+            Whether *center* is expressed in mapped coordinates (True) or
+            unmapped coordinates (False).
+        """
+        zoom = np.asarray(zoom)
+        if center is None:
+            center = np.zeros(self.dims[0])
+        center = np.asarray(center)
+        assert zoom.shape == center.shape == (self.dims[0],)
+        scale = self.scale * zoom
+        if mapped:
+            trans = center - (center - self.offset) * zoom
+        else:
+            trans = self.scale * (1 - zoom) * center + self.offset
+        self.set_params(scale=scale, offset=trans)
 
     def rotate(self, angle, axis):
         """Adjust the rotation of this transform"""
         axis = np.asarray(axis)
         origAxis = self._state["axis"]
         if np.all(axis == origAxis):
-            self.set_rotation(self._state["angle"] + angle)
+            self.rotation = self._state["angle"] + angle, axis
         else:
             m = AffineTransform(dims=self.dims)
             m.translate(self._state["offset"])
             m.rotate(self._state["angle"], self._state["axis"])
             m.rotate(angle, axis)
-            m.scale(self._state["scale"])
+            m.zoom(self._state["scale"])
             self.set_from_affine(m)
-
-    def set_rotation(self, angle, axis=(0, 0, 1)):
-        """Set the transformation rotation to angle (in degrees)"""
-        self.set_params(angle=angle, axis=axis)
 
     def set_from_affine(self, tr):
         """
@@ -967,6 +1021,8 @@ class SRT3DTransform(Transform):
         return self._get_affine()._imap(arr)
 
     def set_params(self, offset=None, scale=None, angle=None, axis=None):
+        if not hasattr(self, "_state"):
+            self.reset(update=False)
         need_update = False
         need_update |= self._set_param("offset", offset)
         need_update |= self._set_param("scale", scale)
@@ -1070,7 +1126,7 @@ class SRT3DTransform(Transform):
 
     def as_affine(self):
         affine = AffineTransform(dims=(3, 3), from_cs=self.systems[0], to_cs=self.systems[1])
-        affine.scale(self._state["scale"])
+        affine.zoom(self._state["scale"])
         affine.rotate(self._state["angle"], self._state["axis"])
         affine.translate(self._state["offset"])
         # TODO figure out if this can be generalized to all meta data
@@ -1104,11 +1160,11 @@ class SRT3DTransform(Transform):
         if not isinstance(pg_transform, SRTTransform3D):
             raise TypeError("Input must be a SRTTransform3D instance")
         tr = cls(*init_args, **init_kwargs)
-        tr.set_offset(pg_transform.getTranslation())
-        tr.set_scale(pg_transform.getScale())
+        tr.offset = pg_transform.getTranslation()
+        tr.scale = pg_transform.getScale()
         angle, axis = pg_transform.getRotation()
         angle = -angle  # pyqtgraph uses left-handed rotations
-        tr.set_rotation(angle, axis)
+        tr.rotation = angle, axis
         return tr
 
 
@@ -1121,14 +1177,13 @@ class PerspectiveTransform(Transform):
     Points inside the perspective frustum are mapped to the range [-1, +1] along all three axes.
     """
 
-    state_keys = ["affine"]
-
-    def __init__(self, **kwds):
+    def __init__(self, affine=None, **kwds):
         kwds.setdefault("dims", (3, 3))
         assert kwds["dims"] == (3, 3)
-        affine_params = kwds.pop("affine", {})
+        affine = {} if affine is None else affine
         super().__init__(**kwds)
-        self.affine = AffineTransform(dims=(4, 4), **affine_params, from_cs=self.systems[0], to_cs=self.systems[1])
+        # TODO this is incompatible with a unique-enforced coordinate system graph
+        self.set_params(affine=affine)
 
     def _map(self, arr):
         arr4 = np.empty((arr.shape[0], 4), dtype=arr.dtype)
@@ -1189,14 +1244,23 @@ class PerspectiveTransform(Transform):
         return {"affine": self.affine.params}
 
     def set_params(self, affine=None):
-        self.affine.set_params(**affine)
+        if hasattr(self, "affine"):
+            self.affine.set_params(**affine)
+        else:
+            self.affine = AffineTransform(
+                dims=(4, 4), **affine, from_cs=self.systems[0], to_cs=self.systems[1]
+            )
+
+    def __eq__(self, tr):
+        if not isinstance(tr, PerspectiveTransform):
+            return False
+        return self.affine == tr.affine
 
 
 class BilinearTransform(Transform):
     """2D bilinear transform.
 
     """
-    state_keys = ["_matrix", "_inv_matrix"]
 
     def __init__(self, **kwds):
         ident = np.eye(4)[:2]
@@ -1273,7 +1337,6 @@ class Homography2DTransform(Transform):
     """2D homography transform.
 
     """
-    state_keys = ["_matrix", "_inv_matrix"]
 
     def __init__(self, **kwds):
         ident = np.eye(3)

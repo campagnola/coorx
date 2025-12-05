@@ -62,9 +62,6 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    # List of keys that will be saved and restored in __getstate__ and __setstate__
-    state_keys = []
-
     def __init__(
         self,
         dims: Dims = None,
@@ -78,6 +75,7 @@ class Transform(object):
             raise TypeError("dims must be length-2 tuple")
         self._dims = dims
         self._inverse = None
+        # TODO is _dynamic really used?
         self._dynamic = False
         self._change_callbacks = []
         self._systems = (None, None)
@@ -122,7 +120,7 @@ class Transform(object):
         return dims
 
     @property
-    def systems(self):
+    def systems(self) -> tuple[CoordinateSystem|None, CoordinateSystem|None]:
         """The CoordinateSystem instances mapped from and to by this transform."""
         return self._systems
 
@@ -205,6 +203,11 @@ class Transform(object):
                 ret.shape[1],
             ), f"Transform maps to {self.dims[1]}D, but mapping generated {ret.shape[1]}D"
             return self._restore_shape(ret, original_shape)
+        elif hasattr(obj, '__len__') and len(obj) == self.dims[0]:
+            # fudge for single points passed as list/tuple-like objects
+            arr = np.asarray(obj)
+            ret = self._map(arr)
+            return type(obj)(*ret)
         else:
             raise TypeError(f"Cannot use argument for mapping: {obj}")
 
@@ -265,12 +268,7 @@ class Transform(object):
 
     def save_state(self):
         """Return serializable parameters that specify this transform."""
-        return {
-            'type': type(self).__name__,
-            'dims': self.dims,
-            'systems': tuple([None if sys is None else sys.save_state() for sys in self.systems]),
-            'params': self.params,
-        }
+        return self.__getstate__()
 
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
@@ -319,7 +317,7 @@ class Transform(object):
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-        for cb in self._change_callbacks:
+        for cb in getattr(self, "_change_callbacks", []):
             try:
                 cb(event)
             except Exception as exc:
@@ -373,27 +371,28 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
-        state["_dims"] = self.dims
-        if self.systems[0] is None:
-            state['_systems'] = (None, None, None)
-        else:
-            state['_systems'] = (
-                self.systems[0].name,
-                self.systems[1].name,
-                self.systems[0].graph.name,
-            )
-        return state
+        return {
+            'type': type(self).__name__,
+            'dims': self.dims,
+            'systems': tuple([None if sys is None else sys.name for sys in self.systems]),
+            'graph': self.systems[0].graph.name if self.systems[0] is not None else None,
+            'params': self.params,
+        }
 
     def __setstate__(self, state):
-        from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
-        self.__dict__.update(state)
+        self._dims = state['dims']
+        from_cs, to_cs = state.pop('systems', (None, None))
+        graph = state.pop('graph', None)
+        self._systems = (None, None)
+        self._inverse = None
+        self._dynamic = False
+        self._change_callbacks = []
         self._systems = (None, None)
         self.set_systems(from_cs, to_cs, graph)
+        self.set_params(**state['params'])
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform."""
-        tr = self.__class__(dims=self.dims)
         state = self.__getstate__()
         if from_cs is not None or to_cs is not None:
             from_cs = from_cs or self.systems[0]
@@ -403,7 +402,14 @@ class Transform(object):
                 graph = from_cs.graph.name
             if graph is None and to_cs is not None and not isinstance(to_cs, str):
                 graph = to_cs.graph.name
-            state['_systems'] = (from_cs, to_cs, graph)
+            state['systems'] = (from_cs, to_cs)
+            state['graph'] = graph
+        return self.from_state(state)
+
+    @classmethod
+    def from_state(cls, state):
+        """Return a Transform instance created from saved state."""
+        tr = cls.__new__(cls)
         tr.__setstate__(state)
         return tr
 
@@ -431,8 +437,6 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    state_keys = ["_inverse"]
-
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
@@ -457,10 +461,21 @@ class InverseTransform(Transform):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
 
     def __setstate__(self, state):
-        inverse = state["_inverse"]
-        self._inverse = inverse
-        self._map = inverse._imap
-        self._imap = inverse._map
+        from coorx import create_transform
+
+        self._inverse = create_transform(**state["inverse"])
+        self._map = self._inverse._imap
+        self._imap = self._inverse._map
+
+    def __getstate__(self):
+        return {
+            "type": type(self).__name__,
+            "inverse": self._inverse.__getstate__(),
+        }
+
+    @property
+    def params(self):
+        return {'inverse': self._inverse}
 
     @property
     def dims(self):
