@@ -587,7 +587,7 @@ class AffineTransform(Transform):
         Parameters
         ----------
         coords : array-like
-            Coordinates to inverse map. The length of the last array dimenstion
+            Coordinates to inverse map. The length of the last array dimension
             must be equal to the input dimensionality of the transform.
 
         Returns
@@ -792,11 +792,13 @@ class AffineTransform(Transform):
         matrix_array = np.array(data).reshape(4, 4, order='F')  # Fortran order for column-major
 
         # Create an AffineTransform from the matrix
-        return cls(
-            matrix=matrix_array[:-1, :-1],  # 3x3 transformation matrix
-            offset=matrix_array[:-1, -1],   # 3-element translation vector
-            *init_args, **init_kwargs
-        )
+        return cls.from_matrix(matrix_array, *init_args, **init_kwargs)
+
+    @classmethod
+    def from_matrix(cls, matrix, *init_args, **init_kwargs):
+        offset = (matrix[:-1, -1])
+        matrix = (matrix[:-1, :-1])
+        return cls(matrix=matrix, offset=offset, *init_args, **init_kwargs)
 
     def copy(self, from_cs=None, to_cs=None):
         return AffineTransform(
