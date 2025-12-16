@@ -39,7 +39,10 @@ class NullTransform(Transform):
 
     def as_affine(self):
         return AffineTransform(
-            matrix=np.eye(self.dims[0]), offset=np.zeros(self.dims[0]), from_cs=self.systems[0], to_cs=self.systems[1]
+            matrix=np.eye(self.dims[0]),
+            offset=np.zeros(self.dims[0]),
+            from_cs=self.systems[0],
+            to_cs=self.systems[1],
         )
 
     @property
@@ -117,7 +120,9 @@ class TransposeTransform(Transform):
         if isinstance(tr, TransposeTransform):
             tr.validate_transform_for_mul(self)
             return TransposeTransform(
-                axis_order=tuple(self._map(np.array(tr.axis_order))), from_cs=self.systems[0], to_cs=tr.systems[1]
+                axis_order=tuple(self._map(np.array(tr.axis_order))),
+                from_cs=self.systems[0],
+                to_cs=tr.systems[1],
             )
         return super().__rmul__(tr)
 
@@ -210,7 +215,9 @@ class TTransform(Transform):
     def offset(self, t):
         t = np.asarray(t)
         if t.shape != (self.dims[0],):
-            raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+            raise TypeError(
+                "Offset must have length equal to transform dimensionality (%d)" % self.dims[0]
+            )
         if np.all(t == self._offset):
             return
 
@@ -235,7 +242,10 @@ class TTransform(Transform):
 
     def as_st(self):
         return STTransform(
-            offset=self.offset, scale=(1,) * self.dims[0], from_cs=self.systems[0], to_cs=self.systems[1]
+            offset=self.offset,
+            scale=(1,) * self.dims[0],
+            from_cs=self.systems[0],
+            to_cs=self.systems[1],
         )
 
     def __mul__(self, tr):
@@ -359,7 +369,9 @@ class STTransform(Transform):
         if scale is not None:
             scale = np.asarray(scale)
             if scale.shape != (self.dims[0],):
-                raise TypeError("Scale must have length equal to transform dimensionality (%d)" % self.dims[0])
+                raise TypeError(
+                    "Scale must have length equal to transform dimensionality (%d)" % self.dims[0]
+                )
             if not np.all(scale == self._scale):
                 self._scale[:] = scale
                 need_update = True
@@ -367,7 +379,9 @@ class STTransform(Transform):
         if offset is not None and not np.all(offset == self._offset):
             offset = np.asarray(offset)
             if offset.shape != (self.dims[0],):
-                raise TypeError("Offset must have length equal to transform dimensionality (%d)" % self.dims[0])
+                raise TypeError(
+                    "Offset must have length equal to transform dimensionality (%d)" % self.dims[0]
+                )
             if not np.all(offset == self._offset):
                 self._offset[:] = offset
                 need_update = True
@@ -621,7 +635,10 @@ class AffineTransform(Transform):
         if offset is not None:
             o = np.asarray(offset)
             if o.ndim != 1 or len(o) != self.dims[1]:
-                raise Exception("Offset length must be the same as transform output dimension (%d)" % self.dims[1])
+                raise Exception(
+                    "Offset length must be the same as transform output dimension (%d)"
+                    % self.dims[1]
+                )
             if np.any(o != self._offset):
                 self._offset = o
                 self._inv_matrix = None
@@ -642,7 +659,10 @@ class AffineTransform(Transform):
 
     def as_affine(self):
         return AffineTransform(
-            matrix=self.matrix.copy(), offset=self.offset.copy(), from_cs=self.systems[0], to_cs=self.systems[1]
+            matrix=self.matrix.copy(),
+            offset=self.offset.copy(),
+            from_cs=self.systems[0],
+            to_cs=self.systems[1],
         )
 
     @property
@@ -750,7 +770,9 @@ class AffineTransform(Transform):
         self.validate_transform_for_mul(tr)
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
-            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1])
+            return AffineTransform(
+                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1]
+            )
         return tr.__rmul__(self)
 
     def __eq__(self, tr):
@@ -770,13 +792,17 @@ class AffineTransform(Transform):
         # Create an AffineTransform from the matrix
         return cls(
             matrix=matrix_array[:-1, :-1],  # 3x3 transformation matrix
-            offset=matrix_array[:-1, -1],   # 3-element translation vector
-            *init_args, **init_kwargs
+            offset=matrix_array[:-1, -1],  # 3-element translation vector
+            *init_args,
+            **init_kwargs,
         )
 
     def copy(self, from_cs=None, to_cs=None):
         return AffineTransform(
-            matrix=self.matrix, offset=self.offset, from_cs=from_cs or self.systems[0], to_cs=to_cs or self.systems[1]
+            matrix=self.matrix,
+            offset=self.offset,
+            from_cs=from_cs or self.systems[0],
+            to_cs=to_cs or self.systems[1],
         )
 
 
@@ -807,7 +833,12 @@ class SRT3DTransform(Transform):
         kwds.setdefault("dims", (3, 3))
         super().__init__(**kwds)
         assert self.dims == (3, 3), "SRT3DTransform can only map 3D coordinates"
-        self._state = {"offset": np.zeros(3), "scale": np.ones(3), "angle": 0, "axis": np.array([0.0, 0.0, 1.0])}
+        self._state = {
+            "offset": np.zeros(3),
+            "scale": np.ones(3),
+            "angle": 0,
+            "axis": np.array([0.0, 0.0, 1.0]),
+        }
         self._affine = None
         if all(p is None for p in (offset, scale, angle, axis)):
             if init is not None:
@@ -1001,8 +1032,15 @@ class SRT3DTransform(Transform):
         #     else:
         #         params_flat.extend(v)
         #         param_len[k] = len(v)
-        params_flat = list(params["offset"]) + [params["scale"][0]] + list(params["axis"]) + [params["angle"]]
-        params_flat = list(params["offset"]) + list(params["scale"]) + list(params["axis"]) + [params["angle"]]
+        params_flat = (
+            list(params["offset"]) + [params["scale"][0]] + list(params["axis"]) + [params["angle"]]
+        )
+        params_flat = (
+            list(params["offset"])
+            + list(params["scale"])
+            + list(params["axis"])
+            + [params["angle"]]
+        )
         x0 = np.array(params_flat)
 
         def unflatten_params(x):
@@ -1128,7 +1166,9 @@ class PerspectiveTransform(Transform):
         assert kwds["dims"] == (3, 3)
         affine_params = kwds.pop("affine", {})
         super().__init__(**kwds)
-        self.affine = AffineTransform(dims=(4, 4), **affine_params, from_cs=self.systems[0], to_cs=self.systems[1])
+        self.affine = AffineTransform(
+            dims=(4, 4), **affine_params, from_cs=self.systems[0], to_cs=self.systems[1]
+        )
 
     def _map(self, arr):
         arr4 = np.empty((arr.shape[0], 4), dtype=arr.dtype)
@@ -1193,9 +1233,8 @@ class PerspectiveTransform(Transform):
 
 
 class BilinearTransform(Transform):
-    """2D bilinear transform.
+    """2D bilinear transform."""
 
-    """
     state_keys = ["_matrix", "_inv_matrix"]
 
     def __init__(self, **kwds):
@@ -1205,7 +1244,7 @@ class BilinearTransform(Transform):
 
         kwds.setdefault("dims", (2, 2))
         assert kwds["dims"] == (2, 2)
-        super().__init__(**kwds)        
+        super().__init__(**kwds)
 
     def set_mapping(self, points1, points2):
         """Set to a transformation matrix that maps points1 onto points2.
@@ -1215,8 +1254,10 @@ class BilinearTransform(Transform):
         # convert inputs to (4, 2) arrays
         points1 = self._prepare_arg_for_mapping(points1)[0]
         points2 = self._prepare_arg_for_mapping(points2)[0]
-        assert points1.shape == points2.shape == (4, 2), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
-       
+        assert (
+            points1.shape == points2.shape == (4, 2)
+        ), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
+
         self._inv_matrix = self._solve_matrix(points2, points1)
         self._matrix = self._solve_matrix(points1, points2)
 
@@ -1224,7 +1265,7 @@ class BilinearTransform(Transform):
     def _solve_matrix(a, b):
         # solve 2 sets of linear equations to determine transformation matrix elements
         c = BilinearTransform._prepare_for_mapping(a)
-        matrix = np.zeros((2,4))
+        matrix = np.zeros((2, 4))
         for i in range(2):
             # solve Ax = B; x is one row of the desired transformation matrix
             matrix[i] = numpy.linalg.solve(c, b[:, i])
@@ -1244,17 +1285,17 @@ class BilinearTransform(Transform):
     @property
     def matrix(self):
         return self._matrix.copy()
-    
+
     @property
     def inv_matrix(self):
         return self._inv_matrix.copy()
 
-    def _map(self, arr):        
+    def _map(self, arr):
         arr4 = BilinearTransform._prepare_for_mapping(arr)
         out = np.dot(arr4, self._matrix.T)
         return out[:, :2]
 
-    def _imap(self, arr):        
+    def _imap(self, arr):
         arr4 = BilinearTransform._prepare_for_mapping(arr)
         out = np.dot(arr4, self._inv_matrix.T)
         return out[:, :2]
@@ -1262,7 +1303,7 @@ class BilinearTransform(Transform):
     @property
     def params(self):
         return {"matrix": self.matrix, "inv_matrix": self.inv_matrix}
-    
+
     def set_params(self, matrix, inv_matrix):
         self._matrix = matrix
         self._inv_matrix = inv_matrix
@@ -1270,9 +1311,8 @@ class BilinearTransform(Transform):
 
 
 class Homography2DTransform(Transform):
-    """2D homography transform.
+    """2D homography transform."""
 
-    """
     state_keys = ["_matrix", "_inv_matrix"]
 
     def __init__(self, **kwds):
@@ -1282,7 +1322,7 @@ class Homography2DTransform(Transform):
 
         kwds.setdefault("dims", (2, 2))
         assert kwds["dims"] == (2, 2)
-        super().__init__(**kwds)        
+        super().__init__(**kwds)
 
     def set_mapping(self, points1, points2):
         """Set to a transformation matrix that maps points1 onto points2.
@@ -1292,15 +1332,17 @@ class Homography2DTransform(Transform):
         # convert inputs to (4, 2) arrays
         points1 = self._prepare_arg_for_mapping(points1)[0]
         points2 = self._prepare_arg_for_mapping(points2)[0]
-        assert points1.shape == points2.shape == (4, 2), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
-       
+        assert (
+            points1.shape == points2.shape == (4, 2)
+        ), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
+
         self._inv_matrix = self._solve_matrix(points2, points1)
         self._matrix = self._solve_matrix(points1, points2)
 
     @staticmethod
     def _solve_matrix(a, b):
         assert a.shape == (4, 2) and b.shape == (4, 2), "a and B must be of shape (4, 2)"
-        
+
         # Constructing the matrix to solve ah = b
         a_matrix = []
         b_matrix = []
@@ -1308,20 +1350,16 @@ class Homography2DTransform(Transform):
             a_matrix.append([x, y, 1, 0, 0, 0, -x * x_prime, -y * x_prime])
             a_matrix.append([0, 0, 0, x, y, 1, -x * y_prime, -y * y_prime])
             b_matrix.extend([x_prime, y_prime])
-        
+
         a_matrix = np.array(a_matrix)
         b_matrix = np.array(b_matrix)
-        
+
         # Solving for h (the homography parameters)
         h = np.linalg.lstsq(a_matrix, b_matrix, rcond=None)[0]
-        
+
         # Construct the homography matrix
-        H = np.array([
-            [h[0], h[1], h[2]],
-            [h[3], h[4], h[5]],
-            [h[6], h[7], 1]
-        ])
-        
+        H = np.array([[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1]])
+
         return H
 
     @staticmethod
@@ -1337,17 +1375,17 @@ class Homography2DTransform(Transform):
     @property
     def matrix(self):
         return self._matrix.copy()
-    
+
     @property
     def inv_matrix(self):
         return self._inv_matrix.copy()
 
-    def _map(self, arr):        
+    def _map(self, arr):
         arr4 = self._prepare_for_mapping(arr)
         out = np.dot(arr4, self._matrix.T)
         return out[:, :2] / out[:, 2:3]
 
-    def _imap(self, arr):        
+    def _imap(self, arr):
         arr4 = self._prepare_for_mapping(arr)
         out = np.dot(arr4, self._inv_matrix.T)
         return out[:, :2] / out[:, 2:3]
@@ -1355,7 +1393,7 @@ class Homography2DTransform(Transform):
     @property
     def params(self):
         return {"matrix": self.matrix, "inv_matrix": self.inv_matrix}
-    
+
     def set_params(self, matrix, inv_matrix):
         self._matrix = matrix
         self._inv_matrix = inv_matrix
