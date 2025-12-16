@@ -53,14 +53,16 @@ class CompositeTransform(Transform):
         return super().copy()
 
     def __setstate__(self, state):
+        from . import create_transform
+
         if not hasattr(self, "_transforms"):
             self._transforms = []
-        self.transforms = state["transforms"]
+        self.transforms = [create_transform(**t) for t in state["transforms"]]
 
     def __getstate__(self):
         return {
             'type': type(self).__name__,
-            'transforms': self.transforms,
+            'transforms': [t.__getstate__() for t in self.transforms],
         }
 
     @property

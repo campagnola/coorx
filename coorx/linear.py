@@ -551,8 +551,9 @@ class AffineTransform(Transform):
         else:
             dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
 
-        self._inv_matrix = None
         super().__init__(dims, **kwargs)
+        self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
+        self._inv_matrix = None
 
         self.reset()
         if matrix is not None:
@@ -626,8 +627,6 @@ class AffineTransform(Transform):
         need_update = False
 
         if matrix is not None:
-            if not hasattr(self, "_matrix"):
-                self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
                 raise ValueError(f"Matrix shape must be {self.dims[::-1]}")
@@ -651,6 +650,8 @@ class AffineTransform(Transform):
             self._update()
 
     def __setstate__(self, state):
+        self._matrix = None
+        self._offset = None
         self._inv_matrix = None
         super().__setstate__(state)
 
@@ -1133,7 +1134,7 @@ class SRT3DTransform(Transform):
         return affine
 
     def _get_affine(self):
-        if self._affine is None:
+        if getattr(self, "_affine", None) is None:
             self._affine = self.as_affine()
         return self._affine
 
@@ -1155,9 +1156,9 @@ class SRT3DTransform(Transform):
     @classmethod
     def from_pyqtgraph(cls, pg_transform, *init_args, **init_kwargs):
         """Create an SRT3DTransform from a pyqtgraph Transform3D instance"""
-        from pyqtgraph import SRTTransform3D
+        from pyqtgraph import SRTTransform3D, Transform3D
 
-        if not isinstance(pg_transform, SRTTransform3D):
+        if not isinstance(pg_transform, (SRTTransform3D, Transform3D)):
             raise TypeError("Input must be a SRTTransform3D instance")
         tr = cls(*init_args, **init_kwargs)
         tr.offset = pg_transform.getTranslation()
@@ -1182,7 +1183,6 @@ class PerspectiveTransform(Transform):
         assert kwds["dims"] == (3, 3)
         affine = {} if affine is None else affine
         super().__init__(**kwds)
-        # TODO this is incompatible with a unique-enforced coordinate system graph
         self.set_params(affine=affine)
 
     def _map(self, arr):
@@ -1241,15 +1241,23 @@ class PerspectiveTransform(Transform):
 
     @property
     def params(self):
-        return {"affine": self.affine.params}
+        return {"affine": self.affine}
 
     def set_params(self, affine=None):
         if hasattr(self, "affine"):
             self.affine.set_params(**affine)
         else:
-            self.affine = AffineTransform(
-                dims=(4, 4), **affine, from_cs=self.systems[0], to_cs=self.systems[1]
+            from . import create_transform
+
+            creation = dict(
+                type="AffineTransform",
+                dims=(4, 4),
+                params=affine,
+                from_cs=self.systems[0],
+                to_cs=self.systems[1],
             )
+            creation.update(affine)
+            self.affine = create_transform(**creation)
 
     def __eq__(self, tr):
         if not isinstance(tr, PerspectiveTransform):

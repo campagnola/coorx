@@ -371,12 +371,19 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
+        def to_serializable(o):
+            if isinstance(o, Transform):
+                return o.__getstate__()
+            elif np.isscalar(o):
+                return o
+            else:
+                return np.asarray(o).tolist()
         return {
             'type': type(self).__name__,
             'dims': self.dims,
             'systems': tuple([None if sys is None else sys.name for sys in self.systems]),
             'graph': self.systems[0].graph.name if self.systems[0] is not None else None,
-            'params': self.params,
+            'params': {k: to_serializable(v) for k, v in self.params.items()},
         }
 
     def __setstate__(self, state):

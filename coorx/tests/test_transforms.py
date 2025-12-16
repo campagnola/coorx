@@ -90,7 +90,7 @@ def test_pickling():
         mapped2 = tr2.map(points)
         assert_equal_including_nans(mapped1, mapped2, f"Mapping differs for pickled {type(tr)}")
 
-        alt_tr2 = coorx.create_transform(**tr.save_state())
+        alt_tr2 = coorx.create_transform(**eval(str(tr.save_state())))
         assert tr == alt_tr2
         mapped2b = alt_tr2.map(points)
         assert_equal_including_nans(
@@ -110,7 +110,7 @@ def test_pickling():
             inv_mapped1, inv_mapped2, f"Inverse mapping differs for pickled {type(tr)}"
         )
 
-        alt_inv_tr2 = coorx.create_transform(**tr.inverse.save_state())
+        alt_inv_tr2 = coorx.create_transform(**eval(str(tr.inverse.save_state())))
         assert tr.inverse == alt_inv_tr2
         alt_inv_mapped2 = alt_inv_tr2.map(mapped2)
         assert_equal_including_nans(
@@ -321,6 +321,21 @@ class CompositeTransform(unittest.TestCase):
         t2 = coorx.STTransform(offset=(3, 4, 2))
         composite = coorx.CompositeTransform(t1, t2.inverse)
         assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
+
+    def test_save_state(self):
+        t1 = coorx.STTransform(scale=(2, 3, 5))
+        t2 = coorx.STTransform(offset=(3, 4, 0))
+        matrix = np.eye(3)
+        matrix[:2, :2] = [[0, -0.1], [0.1, 0]]
+        t3 = coorx.AffineTransform(matrix, offset=(1, 2, 3))
+        data = np.random.normal(size=(10, 3))
+        composite = coorx.CompositeTransform(t1, t2, t3)
+        state = eval(str(composite.save_state()))
+        assert state['type'] == 'CompositeTransform'
+
+        composite2 = coorx.create_transform(**state)
+        assert composite == composite2
+        assert np.allclose(composite.map(data), composite2.map(data))
 
     @unittest.skipIf(not HAVE_VISPY, "vispy could not be imported")
     def test_as_vispy(self):
@@ -663,7 +678,7 @@ class SRT3DTransformTest(unittest.TestCase):
 
     def test_save(self):
         tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
-        s = tr.save_state()
+        s = eval(str(tr.save_state()))
         assert s["type"] == "SRT3DTransform"
         assert s["dims"] == (3, 3)
 
