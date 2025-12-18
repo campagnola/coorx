@@ -361,7 +361,7 @@ class Transform(object):
            is returned.
         """
         # switch to __rmul__ attempts.
-        # Don't use the "return NotImplemted" trick, because that won't work if
+        # Don't use the "return NotImplemented" trick, because that won't work if
         # self and tr are of the same type.
         return tr.__rmul__(self)
 
