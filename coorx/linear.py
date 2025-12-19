@@ -130,6 +130,7 @@ class TransposeTransform(Transform):
             if len(axis_order) != self.dims[0]:
                 raise ValueError("Axis order must have length equal to transform dimensionality")
             self.axis_order = axis_order
+        self._update()
 
 
 class TTransform(Transform):
@@ -283,6 +284,7 @@ class TTransform(Transform):
     def set_params(self, offset=None):
         if offset is not None:
             self.offset = offset
+        self._update()
 
 
 class STTransform(Transform):
@@ -371,9 +373,10 @@ class STTransform(Transform):
     def set_params(self, scale=None, offset=None):
         need_update = False
 
+        if not hasattr(self, "_scale"):
+            self._scale = np.ones(self.dims[0], dtype=float)
+
         if scale is not None:
-            if not hasattr(self, "_scale"):
-                self._scale = np.ones(self.dims[0], dtype=float)
             scale = np.asarray(scale)
             if scale.shape != (self.dims[0],):
                 raise TypeError(
@@ -383,9 +386,10 @@ class STTransform(Transform):
                 self._scale[:] = scale
                 need_update = True
 
+        if not hasattr(self, "_offset"):
+            self._offset = np.zeros(self.dims[0], dtype=float)
+
         if offset is not None:
-            if not hasattr(self, "_offset"):
-                self._offset = np.zeros(self.dims[0], dtype=float)
             offset = np.asarray(offset)
             if offset.shape != (self.dims[0],):
                 raise TypeError(
@@ -563,8 +567,6 @@ class AffineTransform(Transform):
             dims = self._dims_from_params(dims=dims, params={"matrix": matrix, "offset": offset})
 
         super().__init__(dims, **kwargs)
-        self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
-        self._inv_matrix = None
 
         self.reset()
         if matrix is not None:
@@ -637,6 +639,10 @@ class AffineTransform(Transform):
     def set_params(self, matrix=None, offset=None):
         need_update = False
 
+        if not hasattr(self, "_matrix"):
+            self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
+            self._inv_matrix = None
+
         if matrix is not None:
             m = np.asarray(matrix)
             if m.shape[::-1] != self.dims:
@@ -645,6 +651,9 @@ class AffineTransform(Transform):
                 self._matrix = m
                 self._inv_matrix = None
                 need_update = True
+
+        if not hasattr(self, "_offset"):
+            self._offset = np.zeros(self.dims[1], dtype=float)
 
         if offset is not None:
             if not hasattr(self, "_offset"):
@@ -661,12 +670,6 @@ class AffineTransform(Transform):
 
         if need_update:
             self._update()
-
-    def __setstate__(self, state):
-        self._matrix = None
-        self._offset = None
-        self._inv_matrix = None
-        super().__setstate__(state)
 
     @property
     def inv_matrix(self):
@@ -784,6 +787,7 @@ class AffineTransform(Transform):
     def reset(self):
         """Reset this transform to have an identity matrix and no offset."""
         self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
+        self._inv_matrix = None
         self._offset = np.zeros(self.dims[1])
         self._update()
 
@@ -1139,9 +1143,10 @@ class SRT3DTransform(Transform):
                 return False
         else:
             value = np.asarray(value)
-            assert len(value) == len(
-                current_value
-            ), f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
+            if len(value) != len(current_value):
+                raise ValueError(
+                    f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
+                )
             if np.all(current_value == value):
                 return False
         self._state[param] = value
@@ -1270,7 +1275,9 @@ class PerspectiveTransform(Transform):
         return {"affine": self.affine}
 
     def set_params(self, affine=None):
-        if hasattr(self, "affine"):
+        if isinstance(affine, AffineTransform):
+            self.affine = affine
+        elif hasattr(self, "affine"):
             self.affine.set_params(**affine)
         else:
             from . import create_transform
@@ -1284,6 +1291,7 @@ class PerspectiveTransform(Transform):
             )
             creation.update(affine)
             self.affine = create_transform(**creation)
+        self._update()
 
     def __eq__(self, tr):
         if not isinstance(tr, PerspectiveTransform):

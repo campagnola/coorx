@@ -52,19 +52,6 @@ class CompositeTransform(Transform):
             raise ValueError("Cannot set systems on a CompositeTransform")
         return super().copy()
 
-    def __setstate__(self, state):
-        from . import create_transform
-
-        if not hasattr(self, "_transforms"):
-            self._transforms = []
-        self.transforms = [create_transform(**t) for t in state["transforms"]]
-
-    def __getstate__(self):
-        return {
-            'type': type(self).__name__,
-            'transforms': [t.__getstate__() for t in self.transforms],
-        }
-
     @property
     def dims(self):
         if len(self.transforms) == 0:
@@ -93,8 +80,21 @@ class CompositeTransform(Transform):
         """
         return self._transforms
 
+    @property
+    def params(self):
+        return {'transforms': self.transforms}
+
+    def set_params(self, transforms):
+        from . import create_transform
+
+        self.transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms]
+        self._simplified = None
+        self._update()
+
     @transforms.setter
     def transforms(self, tr):
+        if not hasattr(self, '_transforms'):
+            self._transforms = []
         if isinstance(tr, Transform):
             tr = [tr]
         if not isinstance(tr, list):

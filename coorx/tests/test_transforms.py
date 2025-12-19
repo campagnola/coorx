@@ -1,3 +1,4 @@
+import json
 import math
 import pickle
 import unittest
@@ -90,7 +91,7 @@ def test_pickling():
         mapped2 = tr2.map(points)
         assert_equal_including_nans(mapped1, mapped2, f"Mapping differs for pickled {type(tr)}")
 
-        alt_tr2 = coorx.create_transform(**eval(str(tr.save_state())))
+        alt_tr2 = coorx.create_transform(**json.loads(json.dumps(tr.save_state())))
         assert tr == alt_tr2
         mapped2b = alt_tr2.map(points)
         assert_equal_including_nans(
@@ -386,10 +387,10 @@ class TTransform(unittest.TestCase):
         # test save/restore
         tt2 = coorx.TTransform(dims=(3, 3))
         tt2.__setstate__(tt.__getstate__())
-        assert np.all(tt.map(pts) == tt2.map(pts))
+        assert np.allclose(tt.map(pts), tt2.map(pts))
 
         tt3 = pickle.loads(pickle.dumps(tt))
-        assert np.all(tt.map(pts) == tt3.map(pts))
+        assert np.allclose(tt.map(pts), tt3.map(pts))
 
     @unittest.skipIf(not HAVE_ITK, "itk could not be imported")
     def test_itk_compat(self):

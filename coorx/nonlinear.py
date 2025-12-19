@@ -83,6 +83,7 @@ class LogTransform(Transform):
 
     def set_params(self, base):
         self.base = base
+        self._update()
 
     def __repr__(self):
         return f"<LogTransform base={self.base}>"
@@ -133,7 +134,7 @@ class PolarTransform(Transform):
         return {}
 
     def set_params(self):
-        return
+        self._update()
 
 
 # class SphericalTransform(Transform):
@@ -244,3 +245,4 @@ class LensDistortionTransform(Transform):
 
     def set_params(self, coeff):
         self.set_coeff(coeff)
+        self._update()

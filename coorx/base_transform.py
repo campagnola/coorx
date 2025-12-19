@@ -11,6 +11,7 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+import contextlib
 
 import numpy as np
 
@@ -73,7 +74,7 @@ class Transform(object):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
-        self._dims = dims
+        self._dims = tuple(dims)
         self._inverse = None
         # TODO is _dynamic really used?
         self._dynamic = False
@@ -269,10 +270,6 @@ class Transform(object):
         """
         raise NotImplementedError(f"{self.__class__.__name__}.set_params")
 
-    def save_state(self):
-        """Return serializable parameters that specify this transform."""
-        return self.__getstate__()
-
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
         raise NotImplementedError()
@@ -374,36 +371,35 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        def to_serializable(o):
-            if isinstance(o, Transform):
-                return o.__getstate__()
-            elif np.isscalar(o):
-                return o
-            else:
-                return np.asarray(o).tolist()
-        return {
-            'type': type(self).__name__,
-            'dims': self.dims,
-            'systems': tuple([None if sys is None else sys.name for sys in self.systems]),
-            'graph': self.systems[0].graph.name if self.systems[0] is not None else None,
-            'params': {k: to_serializable(v) for k, v in self.params.items()},
-        }
+        state = self.params.copy()
+        state["dims"] = self.dims
+        if self.systems[0] is None:
+            state['systems'] = (None, None, None)
+        else:
+            state['systems'] = (
+                self.systems[0].name,
+                self.systems[1].name,
+                self.systems[0].graph.name,
+            )
+        return state
 
     def __setstate__(self, state):
-        self._dims = state['dims']
-        from_cs, to_cs = state.pop('systems', (None, None))
-        graph = state.pop('graph', None)
-        self._systems = (None, None)
-        self._inverse = None
-        self._dynamic = False
-        self._change_callbacks = []
-        self._systems = (None, None)
-        self.set_systems(from_cs, to_cs, graph)
-        self.set_params(**state['params'])
+        self._dims = tuple(state.pop('dims'))
+        if not hasattr(self, '_change_callbacks'):
+            self._change_callbacks = []
+        if not hasattr(self, '_inverse'):
+            self._inverse = None
+        from_cs, to_cs, graph = state.pop('systems', (None, None, None))
+        self.__dict__.update(state)
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            self._systems = (None, None)
+            self.set_systems(from_cs, to_cs, graph)
+        self.set_params(**state)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform."""
-        state = self.__getstate__()
+        state = self.save_state()
         if from_cs is not None or to_cs is not None:
             from_cs = from_cs or self.systems[0]
             to_cs = to_cs or self.systems[1]
@@ -416,11 +412,41 @@ class Transform(object):
             state['graph'] = graph
         return self.from_state(state)
 
+    def save_state(self):
+        """Return serializable parameters that specify this transform. Distinct from __getstate__
+        for no good long-term reason, but we need to support yaml serialization somehow for now."""
+        def to_simple(o):
+            if isinstance(o, Transform):
+                return o.save_state()
+            elif np.isscalar(o) or o is None:
+                return o
+            else:
+                return [to_simple(e) for e in np.asarray(o).tolist()]
+
+        if self.systems[0] is None:
+            systems = (None, None, None)
+        else:
+            systems = (self.systems[0].name, self.systems[1].name, self.systems[0].graph.name)
+        return {
+            'type': type(self).__name__,
+            'dims': self.dims,
+            'systems': systems,
+            'params': {k: to_simple(v) for k, v in self.params.items()},
+        }
+
     @classmethod
     def from_state(cls, state):
         """Return a Transform instance created from saved state."""
         tr = cls.__new__(cls)
-        tr.__setstate__(state)
+        tr._inverse = None
+        tr._dynamic = False
+        tr._change_callbacks = []
+        tr._dims = tuple(state.pop('dims'))
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            tr._systems = (None, None)
+            tr.set_systems(*state.pop('systems', (None, None, None)))
+        tr.set_params(**state['params'])
         return tr
 
     def __eq__(self, tr):
@@ -470,18 +496,15 @@ class InverseTransform(Transform):
     def copy(self, from_cs=None, to_cs=None):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
 
-    def __setstate__(self, state):
-        from coorx import create_transform
-
-        self._inverse = create_transform(**state["inverse"])
+    def set_params(self, inverse):
+        if isinstance(inverse, Transform):
+            self._inverse = inverse
+        else:
+            from . import create_transform
+            self._inverse = create_transform(**inverse)
         self._map = self._inverse._imap
         self._imap = self._inverse._map
-
-    def __getstate__(self):
-        return {
-            "type": type(self).__name__,
-            "inverse": self._inverse.__getstate__(),
-        }
+        self._update()
 
     @property
     def params(self):
