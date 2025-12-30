@@ -12,6 +12,7 @@ API Issues to work out:
     rect.
 """
 import contextlib
+import weakref
 
 import numpy as np
 
@@ -307,22 +308,48 @@ class Transform(object):
         return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
     def add_change_callback(self, cb):
-        self._change_callbacks.append(cb)
+        """Add a change callback. Bound methods are stored as weak references to prevent reference cycles."""
+        # Use WeakMethod for bound methods to avoid keeping objects alive
+        import inspect
+        if inspect.ismethod(cb):
+            cb_ref = weakref.WeakMethod(cb)
+        else:
+            # For regular functions, we can't use weak refs (they don't support it)
+            # so we store them directly
+            cb_ref = lambda: cb
+        self._change_callbacks.append(cb_ref)
 
     def remove_change_callback(self, cb):
-        self._change_callbacks.remove(cb)
+        """Remove a change callback."""
+        import inspect
+        # Find and remove the callback, handling both weak and strong refs
+        to_remove = []
+        for i, cb_ref in enumerate(self._change_callbacks):
+            stored_cb = cb_ref() if callable(cb_ref) else cb_ref
+            if stored_cb is cb or (stored_cb is None and inspect.ismethod(cb)):
+                to_remove.append(i)
+
+        for i in reversed(to_remove):
+            self._change_callbacks.pop(i)
 
     def _update(self, source_event=None):
         """
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-        for cb in getattr(self, "_change_callbacks", []):
-            try:
-                cb(event)
-            except Exception as exc:
-                print(f"Error invoking callback {cb}")
-                raise
+        # Clean up dead weak refs and invoke live callbacks
+        live_callbacks = []
+        for cb_ref in getattr(self, "_change_callbacks", []):
+            cb = cb_ref() if callable(cb_ref) else cb_ref
+            if cb is not None:
+                live_callbacks.append(cb_ref)
+                try:
+                    cb(event)
+                except Exception as exc:
+                    print(f"Error invoking callback {cb}")
+                    raise
+        # Update list to remove dead weak refs
+        self._change_callbacks[:] = live_callbacks
 
     def __mul__(self, tr):
         """
