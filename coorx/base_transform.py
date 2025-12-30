@@ -1,10 +1,5 @@
 """
 API Issues to work out:
-
-  - MatrixTransform and STTransform both have 'scale' and 'translate'
-    attributes, but they are used in very different ways. It would be nice
-    to keep this consistent, but how?
-
   - Need a transform.map_rect function that returns the bounding rectangle of
     a rect after transformation. Non-linear transforms might need to work
     harder at this, but we can provide a default implementation that
