@@ -196,6 +196,35 @@ class TestGarbageCollection(unittest.TestCase):
         self.assertIsNotNone(t1)
         self.assertIsNotNone(t2)
 
+    def test_reused_transform_callback_cleanup(self):
+        """Test that reused transforms don't accumulate dead weak refs.
+
+        When a transform is reused across many CompositeTransforms that get deleted,
+        it could accumulate dead WeakMethod refs in its callback list.
+        The threshold-based cleanup should prevent unbounded growth.
+        """
+        # Create a transform that will be reused
+        shared_transform = coorx.TTransform(offset=(1, 2))
+
+        # Create and delete many composites that use this transform
+        for i in range(50):
+            t = coorx.STTransform(scale=(2, 3), offset=(i, i))
+            composite = coorx.CompositeTransform(shared_transform, t)
+            del composite  # Explicitly delete to avoid loop variable hanging around
+
+        # Force GC to ensure composites are deleted
+        gc.collect()
+
+        # The callback list should be cleaned up and bounded
+        # Without cleanup, we'd have ~50 dead weak refs
+        # With threshold cleanup at 20, we should have much fewer
+        live_callbacks = [cb for cb in shared_transform._change_callbacks if cb() is not None]
+
+        self.assertLess(len(shared_transform._change_callbacks), 25,
+                       f"Callback list grew too large: {len(shared_transform._change_callbacks)} refs")
+        self.assertEqual(len(live_callbacks), 0,
+                        "Should have no live callbacks since all composites were deleted")
+
     def test_inverse_transform_gc(self):
         """Test that transforms with inverses can be GC'd.
 

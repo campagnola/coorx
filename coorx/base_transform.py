@@ -12,12 +12,29 @@ API Issues to work out:
     rect.
 """
 import contextlib
+import inspect
+import threading
 import weakref
+from typing import Callable
 
 import numpy as np
 
-from .systems import CoordinateSystemGraph, CoordinateSystem
 from ._types import Dims, StrOrNone, Mappable
+from .systems import CoordinateSystemGraph, CoordinateSystem
+
+
+class ChangeEvent:
+    def __init__(self, transform, source_event=None):
+        self.transform = transform
+        self.source_event = source_event
+
+    @property
+    def sources(self):
+        """A list of all transforms that changed leading to this event"""
+        s = [self]
+        if self.source_event is not None:
+            s += self.source_event.sources
+        return s
 
 
 class Transform(object):
@@ -80,6 +97,7 @@ class Transform(object):
         # TODO is _dynamic really used?
         self._dynamic = False
         self._change_callbacks = []
+        self._change_callbacks_lock = threading.Lock()
         self._systems = (None, None)
 
         # optional coordinate system tracking
@@ -307,49 +325,61 @@ class Transform(object):
 
         return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
-    def add_change_callback(self, cb):
+    def add_change_callback(self, cb: Callable[[ChangeEvent], None]):
         """Add a change callback. Bound methods are stored as weak references to prevent reference cycles."""
-        # Use WeakMethod for bound methods to avoid keeping objects alive
-        import inspect
         if inspect.ismethod(cb):
+            # Use WeakMethod for bound methods to avoid keeping objects alive
             cb_ref = weakref.WeakMethod(cb)
         else:
-            # For regular functions, we can't use weak refs (they don't support it)
-            # so we store them directly
+            # For regular functions, we can't use weak refs, but make the interface consistent
             cb_ref = lambda: cb
-        self._change_callbacks.append(cb_ref)
+
+        with self._change_callbacks_lock:
+            # Clean up dead weak refs if the list is getting long
+            # This prevents accumulation when a transform is reused across many CompositeTransforms
+            # but never actually changes (never calls _update)
+            if len(self._change_callbacks) > 20:
+                self._change_callbacks[:] = [cb for cb in self._change_callbacks if cb() is not None]
+
+            self._change_callbacks.append(cb_ref)
 
     def remove_change_callback(self, cb):
         """Remove a change callback."""
-        import inspect
-        # Find and remove the callback, handling both weak and strong refs
-        to_remove = []
-        for i, cb_ref in enumerate(self._change_callbacks):
-            stored_cb = cb_ref() if callable(cb_ref) else cb_ref
-            if stored_cb is cb or (stored_cb is None and inspect.ismethod(cb)):
-                to_remove.append(i)
+        with self._change_callbacks_lock:
+            # Find and remove the callback, cleaning up dead weak refs as we go
+            to_remove = []
+            for i, cb_ref in enumerate(self._change_callbacks):
+                stored_cb = cb_ref()
+                if stored_cb in (cb, None):
+                    to_remove.append(i)
 
-        for i in reversed(to_remove):
-            self._change_callbacks.pop(i)
+            for i in reversed(to_remove):
+                self._change_callbacks.pop(i)
 
     def _update(self, source_event=None):
         """
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-        # Clean up dead weak refs and invoke live callbacks
-        live_callbacks = []
-        for cb_ref in getattr(self, "_change_callbacks", []):
-            cb = cb_ref() if callable(cb_ref) else cb_ref
-            if cb is not None:
-                live_callbacks.append(cb_ref)
-                try:
-                    cb(event)
-                except Exception as exc:
-                    print(f"Error invoking callback {cb}")
-                    raise
-        # Update list to remove dead weak refs
-        self._change_callbacks[:] = live_callbacks
+
+        # Get a snapshot of callbacks to invoke (under lock to prevent races)
+        with self._change_callbacks_lock:
+            callbacks_to_invoke = []
+            live_refs = []
+            for cb_ref in getattr(self, "_change_callbacks", []):
+                cb = cb_ref()
+                if cb is not None:
+                    callbacks_to_invoke.append(cb)
+                    live_refs.append(cb_ref)
+            self._change_callbacks[:] = live_refs
+
+        # Invoke callbacks outside the lock to avoid deadlocks if callbacks modify callback list
+        for cb in callbacks_to_invoke:
+            try:
+                cb(event)
+            except Exception as exc:
+                print(f"Error invoking callback {cb}")
+                raise
 
     def __mul__(self, tr):
         """
@@ -414,6 +444,8 @@ class Transform(object):
         self._dims = tuple(state.pop('dims'))
         if not hasattr(self, '_change_callbacks'):
             self._change_callbacks = []
+        if not hasattr(self, '_change_callbacks_lock'):
+            self._change_callbacks_lock = threading.Lock()
         if not hasattr(self, '_inverse'):
             self._inverse = None
         from_cs, to_cs, graph = state.pop('systems', (None, None, None))
@@ -468,6 +500,7 @@ class Transform(object):
         tr._inverse = None
         tr._dynamic = False
         tr._change_callbacks = []
+        tr._change_callbacks_lock = threading.Lock()
         tr._dims = tuple(state.pop('dims'))
         from .util import DependentTransformError
         with contextlib.suppress(DependentTransformError):
@@ -563,20 +596,6 @@ class InverseTransform(Transform):
 
     def __repr__(self):
         return "<Inverse of %r>" % repr(self._inverse)
-
-
-class ChangeEvent:
-    def __init__(self, transform, source_event=None):
-        self.transform = transform
-        self.source_event = source_event
-
-    @property
-    def sources(self):
-        """A list of all transforms that changed leading to this event"""
-        s = [self]
-        if self.source_event is not None:
-            s += self.source_event.sources
-        return s
 
 
 # import here to avoid import cycle; needed for Transform.__mul__.
