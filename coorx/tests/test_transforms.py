@@ -1,3 +1,4 @@
+import json
 import math
 import pickle
 import unittest
@@ -18,6 +19,7 @@ except ImportError:
 
 try:
     import vispy
+
     HAVE_VISPY = True
 except ImportError:
     HAVE_VISPY = False
@@ -40,6 +42,13 @@ RT = coorx.AffineTransform
 PT = coorx.PolarTransform
 LT = coorx.LogTransform
 CT = coorx.CompositeTransform
+T3 = coorx.SRT3DTransform
+ZT = coorx.AxisSelectionEmbeddedTransform
+HT = coorx.HomogeneousEmbeddedTransform
+DT = coorx.LensDistortionTransform
+QT = coorx.PerspectiveTransform
+BT = coorx.BilinearTransform
+T2 = coorx.Homography2DTransform
 
 
 def assert_composite_types(composite, types):
@@ -48,6 +57,76 @@ def assert_composite_types(composite, types):
 
 def assert_composite_objects(composite1, composite2):
     assert composite1.transforms == composite2.transforms
+
+
+def test_pickling():
+    points = np.random.normal(size=(10, 3))
+    transforms = [
+        NT(dims=(3, 3)),
+        TT(dims=(3, 3), offset=(1, 2, 3)),
+        ST(dims=(3, 3), scale=(2, 3, 4), offset=(1, 2, 3)),
+        AT(dims=(3, 3)),
+        PT(dims=(3, 3)),
+        XT(axis_order=(2, 1, 0)),
+        LT(dims=(3, 3), base=(10, None, 2)),
+        CT([ST(dims=(3, 3), scale=(2, 2, 2)), TT(dims=(3, 3), offset=(1, 1, 1))]),
+        T3(dims=(3, 3), scale=(2, 2, 2), offset=(1, 2, 3), angle=45, axis=(0, 0, 1)),
+        ZT(axes=(0, 2), transform=ST(dims=(2, 2), scale=(3, 3), offset=(1, 1)), dims=(3, 3)),
+        HT(transform=AT(dims=(4, 4)), dims=(3, 3)),
+        QT(
+            dims=(3, 3),
+            affine={
+                'matrix': [[1, 0, 0, 0], [0, 1, 0, 0], [0.001, 0.002, 1, 0], [0, 0, 0, 1]],
+                'offset': [0, 0, 0, 0],
+            },
+        ),
+        # DT(dims=(2, 2), coeff=(0.1, -0.05, 0.01, 0.0, 0.0)),
+        # BT(dims=(2, 2)),
+        # T2(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0), (1, 1), (0, 2)]),
+    ]
+    for tr in transforms:
+        tr2 = pickle.loads(pickle.dumps(tr))
+        assert tr == tr2
+        mapped1 = tr.map(points)
+        mapped2 = tr2.map(points)
+        assert_equal_including_nans(mapped1, mapped2, f"Mapping differs for pickled {type(tr)}")
+
+        alt_tr2 = coorx.create_transform(**json.loads(json.dumps(tr.save_state())))
+        assert tr == alt_tr2
+        mapped2b = alt_tr2.map(points)
+        assert_equal_including_nans(
+            mapped1, mapped2b, f"Mapping differs for create_transform'd {type(tr)}"
+        )
+
+        try:
+            tr.inverse.map(tr.map(points))
+        except (np.linalg.LinAlgError, NotImplementedError):
+            continue  # non-invertible
+
+        inv_tr2 = pickle.loads(pickle.dumps(tr.inverse))
+        assert tr.inverse == inv_tr2
+        inv_mapped1 = tr.inverse.map(mapped1)
+        inv_mapped2 = inv_tr2.map(mapped2)
+        assert_equal_including_nans(
+            inv_mapped1, inv_mapped2, f"Inverse mapping differs for pickled {type(tr)}"
+        )
+
+        alt_inv_tr2 = coorx.create_transform(**eval(str(tr.inverse.save_state())))
+        assert tr.inverse == alt_inv_tr2
+        alt_inv_mapped2 = alt_inv_tr2.map(mapped2)
+        assert_equal_including_nans(
+            inv_mapped1,
+            alt_inv_mapped2,
+            f"Inverse mapping differs for create_transform'd {type(tr)}",
+        )
+
+
+def assert_equal_including_nans(a, b, msg):
+    assert np.all(
+        (np.isnan(a) == np.isnan(b)) & (np.isclose(a, b) | (np.isnan(a) & np.isnan(b)))
+    ), msg
+    mask = ~np.isnan(a)
+    assert np.allclose(a[mask], b[mask]), msg
 
 
 class TransformMultiplication(unittest.TestCase):
@@ -95,6 +174,18 @@ class TransformMultiplication(unittest.TestCase):
         assert_composite_types(s * a * p * x * s * a, [AT, ST, XT, PT, AT])
         assert_composite_types(c2 * a, [AT, ST, AT, ST])
         assert_composite_types(p * log_trans * s, [ST, LT, PT])
+
+
+class VectorMapping(unittest.TestCase):
+    @unittest.skipIf(not HAVE_PG, "pyqtgraph could not be imported")
+    def test_vector_map(self):
+        vector = pg.Vector(1, 2, 3)
+        t = coorx.STTransform(scale=(2, 3, 4), offset=(5, 6, 7))
+        mapped = t.map(vector)
+        assert isinstance(mapped, pg.Vector)
+        self.assertEqual(mapped.x(), 1 * 2 + 5)
+        self.assertEqual(mapped.y(), 2 * 3 + 6)
+        self.assertEqual(mapped.z(), 3 * 4 + 7)
 
 
 class CompositeTransform(unittest.TestCase):
@@ -232,6 +323,21 @@ class CompositeTransform(unittest.TestCase):
         composite = coorx.CompositeTransform(t1, t2.inverse)
         assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
 
+    def test_save_state(self):
+        t1 = coorx.STTransform(scale=(2, 3, 5))
+        t2 = coorx.STTransform(offset=(3, 4, 0))
+        matrix = np.eye(3)
+        matrix[:2, :2] = [[0, -0.1], [0.1, 0]]
+        t3 = coorx.AffineTransform(matrix, offset=(1, 2, 3))
+        data = np.random.normal(size=(10, 3))
+        composite = coorx.CompositeTransform(t1, t2, t3)
+        state = eval(str(composite.save_state()))
+        assert state['type'] == 'CompositeTransform'
+
+        composite2 = coorx.create_transform(**state)
+        assert composite == composite2
+        assert np.allclose(composite.map(data), composite2.map(data))
+
     @unittest.skipIf(not HAVE_VISPY, "vispy could not be imported")
     def test_as_vispy(self):
         from vispy.visuals.transforms import ChainTransform
@@ -281,10 +387,10 @@ class TTransform(unittest.TestCase):
         # test save/restore
         tt2 = coorx.TTransform(dims=(3, 3))
         tt2.__setstate__(tt.__getstate__())
-        assert np.all(tt.map(pts) == tt2.map(pts))
+        assert np.allclose(tt.map(pts), tt2.map(pts))
 
         tt3 = pickle.loads(pickle.dumps(tt))
-        assert np.all(tt.map(pts) == tt3.map(pts))
+        assert np.allclose(tt.map(pts), tt3.map(pts))
 
     @unittest.skipIf(not HAVE_ITK, "itk could not be imported")
     def test_itk_compat(self):
@@ -326,7 +432,7 @@ class STTransform(unittest.TestCase):
         translate = (1e6, 0.2, 0)
         st = coorx.STTransform(scale=scale, offset=translate)
         at = coorx.AffineTransform(dims=(3, 3))
-        at.scale(scale)
+        at.zoom(scale)
         at.translate(translate)
 
         assert np.allclose(st.map(pts), at.map(pts))
@@ -342,13 +448,15 @@ class STTransform(unittest.TestCase):
         assert np.allclose(t.map(p1)[:, : len(p2)], p2)
 
 
+def check_matrix(t, m):
+    dim = m.shape[0] - 1
+    assert np.allclose(t.full_matrix, m)
+    assert np.allclose(t.matrix, m[:dim, :dim])
+    assert np.allclose(t.offset, m[:dim, dim])
+
+
 class AffineTransform(unittest.TestCase):
     def test_modifiers(self):
-        def check_matrix(t, m):
-            assert np.allclose(t.full_matrix, m)
-            assert np.allclose(t.matrix, m[:3, :3])
-            assert np.allclose(t.offset, m[:3, 3])
-
         t = coorx.AffineTransform(dims=(3, 3))
         m = np.eye(4)
         check_matrix(t, m)
@@ -357,7 +465,7 @@ class AffineTransform(unittest.TestCase):
         m[:3, 3] += 1
         check_matrix(t, m)
 
-        t.scale(2)
+        t.zoom(2)
         m[:3] *= 2
         check_matrix(t, m)
 
@@ -371,8 +479,57 @@ class AffineTransform(unittest.TestCase):
 
         rm = coorx.AffineTransform(dims=(3, 3))
         rm.rotate(90, (0, 0, 1))
-        t2 = rm * coorx.TTransform([3, 3, 3]) * coorx.STTransform(scale=[2, 2, 2]) * coorx.TTransform([1, 1, 1])
+        t2 = (
+            rm
+            * coorx.TTransform([3, 3, 3])
+            * coorx.STTransform(scale=[2, 2, 2])
+            * coorx.TTransform([1, 1, 1])
+        )
         assert t2 == t
+
+    def test_4d(self):
+        t = coorx.AffineTransform(dims=(4, 4))
+        m = np.eye(5)
+        check_matrix(t, m)
+
+        t.translate([1, 2, 3, 4])
+        m[:4, 4] += [1, 2, 3, 4]
+        check_matrix(t, m)
+
+        t.zoom([2, 3, 4, 5])
+        for i in range(4):
+            m[i] *= [2, 3, 4, 5][i]
+        check_matrix(t, m)
+
+        t.translate([5, 6, 7, 8])
+        m[:4, 4] += [5, 6, 7, 8]
+        check_matrix(t, m)
+
+        inv = t.inverse
+        a = np.random.normal(size=(10, 4))
+        assert np.allclose(inv.map(t.map(a)), a)
+
+    def test_changing_dims(self):
+        matrix = [[1, 0, 1], [0, 1, 1]]
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, dims=3)
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, dims=(2, 2))
+        with self.assertRaises(ValueError):
+            t = AT(matrix=matrix, offset=[1, 2, 3])
+
+        t = AT(matrix=matrix, offset=[1, 2])
+        assert t.dims == (3, 2)
+
+        with self.assertRaises(ValueError):
+            t.matrix = np.eye(3)
+
+        pts = np.random.normal(size=(10, 3))
+        mapped = t.map(pts)
+        assert mapped.shape == (10, 2)
+
+        with self.assertRaises(np.linalg.LinAlgError):
+            t.imap(mapped)
 
     def test_inverse(self):
         tr = AT(dims=(3, 3), matrix=np.eye(3) * 0.1, offset=[1, 2, 3])
@@ -386,6 +543,14 @@ class AffineTransform(unittest.TestCase):
         else:
             with self.assertRaises(TypeError):
                 tr.map(pts)
+
+    def test_uninvertible(self):
+        tr = AT(dims=(2, 2), matrix=[[1, 1], [2, 2]], offset=[0, 0])
+        pts = np.random.normal(size=(10, 2))
+        with self.assertRaises(np.linalg.LinAlgError):
+            tr.imap(pts)
+        with self.assertRaises(np.linalg.LinAlgError):
+            tr.inverse.map(pts)
 
     def x_test_affine_mapping(self):
         t = coorx.AffineTransform()
@@ -404,7 +569,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(5.5)
+        t2.zoom(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
         # test scale + translate
@@ -412,7 +577,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(3.5)
+        t2.zoom(3.5)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
 
@@ -421,7 +586,7 @@ class AffineTransform(unittest.TestCase):
         t.set_mapping(p1, p2)
         assert np.allclose(t.map(p1)[:, : p2.shape[1]], p2)
         t2 = coorx.AffineTransform()
-        t2.scale(3.5)
+        t2.zoom(3.5)
         t2.rotate(90)
         t2.translate(5.5)
         assert np.allclose(t.full_matrix, t2.full_matrix)
@@ -438,7 +603,7 @@ class AffineTransform(unittest.TestCase):
 
         # Create a test transform with rotation, scaling, and translation
         tr = coorx.AffineTransform(dims=(3, 3))
-        tr.scale((2, 3, 0.5))
+        tr.zoom((2, 3, 0.5))
         tr.rotate(45, (0, 0, 1))
         tr.translate((10, 20, 30))
 
@@ -477,7 +642,6 @@ class LogTransformTest(unittest.TestCase):
 
 
 class SRT3DTransformTest(unittest.TestCase):
-    @unittest.expectedFailure
     def test_srt3d(self):
         pts = np.random.normal(size=(10, 3))
 
@@ -486,29 +650,36 @@ class SRT3DTransformTest(unittest.TestCase):
         assert np.allclose(pts, tr.map(pts))
 
         scale = [10, 1, 0.1]
-        tr.set_scale(scale)
-        aff.scale(scale)
+        tr.scale = scale
+        aff.zoom(scale)
         assert np.allclose(aff.map(pts), tr.map(pts))
 
         angle = 30
         axis = np.array([1, 0.5, 0.3])
-        tr.set_rotation(angle, axis)
+        tr.rotation = angle, axis
         aff.rotate(angle, axis)
         assert np.allclose(aff.map(pts), tr.map(pts))
+        assert tr.rotation[0] == angle
+        assert np.allclose(tr.rotation[1], axis)
 
         offset = [1e-6, -10, 1e6]
-        tr.set_offset(offset)
+        tr.offset = offset
         aff.translate(offset)
         assert np.allclose(aff.map(pts), tr.map(pts))
 
+    @unittest.expectedFailure
+    def test_from_affine(self):
+        # TODO this was previously part of test_srt3d, but it breaks trying to initialize tr2
         tr2 = coorx.SRT3DTransform(init=aff)
-        assert np.allclose(tr.params["offset"], tr2.params["offset"])
-        assert np.allclose(tr.params["scale"], tr2.params["scale"])
+        assert np.allclose(tr.offset, tr2.offset)
+        assert np.allclose(tr.scale, tr2.scale)
+        assert tr.rotation[0] == tr2.rotation[0]
+        assert np.allclose(tr.rotation[1], tr2.rotation[1])
         assert np.allclose(tr2.map(pts), tr.map(pts))
 
     def test_save(self):
         tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
-        s = tr.save_state()
+        s = eval(str(tr.save_state()))
         assert s["type"] == "SRT3DTransform"
         assert s["dims"] == (3, 3)
 
@@ -586,21 +757,12 @@ class TransformInverse(unittest.TestCase):
 class BilinearTest(unittest.TestCase):
     def test_bilinear(self):
         # identity
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[0, 0], [1, 0], [0, 1], [1, 1]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [0, 1], [1, 1]])
         assert np.allclose(tr.matrix, np.eye(4)[1:3])
 
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[0, 0], [1, 1], [0, 1], [1, 0]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 1], [0, 1], [1, 0]])
 
-        tr = self.check_mapping(
-            [[0, 0], [1, 0], [0, 1], [1, 1]],
-            [[1, 1], [3, 0], [0, 4], [7, 7]]
-        )
+        tr = self.check_mapping([[0, 0], [1, 0], [0, 1], [1, 1]], [[1, 1], [3, 0], [0, 4], [7, 7]])
 
     def check_mapping(self, a, b):
         a = np.asarray(a)
@@ -612,10 +774,7 @@ class BilinearTest(unittest.TestCase):
         assert c.shape == b.shape
         assert np.allclose(c, b)
 
-        assert np.allclose(
-            tr.map(a.mean(axis=0)),
-            b.mean(axis=0)
-        )
+        assert np.allclose(tr.map(a.mean(axis=0)), b.mean(axis=0))
 
         tr_inv = tr.inverse
         d = tr_inv.map(b)

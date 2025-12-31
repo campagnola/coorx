@@ -26,7 +26,6 @@ class LogTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
-    state_keys = ["_base"]
 
     def __init__(self, base=None, dims=None, **kwargs):
         if base is not None:
@@ -37,7 +36,6 @@ class LogTransform(Transform):
 
         super().__init__(dims, **kwargs)
 
-        self._base = [None] * self.dims[0]
         if base is not None:
             self.base = base
 
@@ -52,6 +50,8 @@ class LogTransform(Transform):
 
     @base.setter
     def base(self, s):
+        if not hasattr(self, "_base"):
+            self._base = [None] * self.dims[0]
         self._base[:] = s
 
     def _map(self, coords, base=None):
@@ -83,6 +83,7 @@ class LogTransform(Transform):
 
     def set_params(self, base):
         self.base = base
+        self._update()
 
     def __repr__(self):
         return f"<LogTransform base={self.base}>"
@@ -133,7 +134,7 @@ class PolarTransform(Transform):
         return {}
 
     def set_params(self):
-        return
+        self._update()
 
 
 # class SphericalTransform(Transform):
@@ -154,8 +155,6 @@ class LensDistortionTransform(Transform):
     Where k1, k2, and k3 are radial distortion (coordinates are multiplied by 1 + k1*r^2 + k2*r^4 + k3*r^6),
     and p1, p2 are tangential distortion coefficients.
     """
-
-    state_keys = ["coeff"]
 
     def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
         kwds.setdefault('dims', (2, 2))
@@ -246,3 +245,4 @@ class LensDistortionTransform(Transform):
 
     def set_params(self, coeff):
         self.set_coeff(coeff)
+        self._update()

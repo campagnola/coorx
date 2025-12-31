@@ -38,7 +38,11 @@ class AxisSelectionEmbeddedTransform(Transform):
 
     def set_params(self, axes, transform):
         self.axes = axes
-        self.subtr = transform
+        if isinstance(transform, Transform):
+            self.subtr = transform
+        else:
+            from . import create_transform
+            self.subtr = create_transform(**transform)
         self._update()
 
 
@@ -77,5 +81,9 @@ class HomogeneousEmbeddedTransform(Transform):
         return {'transform': self.subtr}
 
     def set_params(self, transform):
-        self.subtr = transform
+        if isinstance(transform, Transform):
+            self.subtr = transform
+        else:
+            from . import create_transform
+            self.subtr = create_transform(**transform)
         self._update()

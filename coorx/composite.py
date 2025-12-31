@@ -1,7 +1,6 @@
 from ._types import Mappable
 
 from .base_transform import Transform
-from .linear import NullTransform
 
 
 class CompositeTransform(Transform):
@@ -19,13 +18,11 @@ class CompositeTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
-    state_keys = ["_transforms"]
 
     def __init__(self, *transforms, **kwargs):
         super().__init__(**kwargs)
         self._transforms = []
         self._simplified = None
-        self._null_transform = NullTransform()
 
         # Set input transforms
         trs = []
@@ -55,9 +52,6 @@ class CompositeTransform(Transform):
             raise ValueError("Cannot set systems on a CompositeTransform")
         return super().copy()
 
-    def __setstate__(self, state):
-        self._transforms = state["_transforms"]
-
     @property
     def dims(self):
         if len(self.transforms) == 0:
@@ -86,8 +80,21 @@ class CompositeTransform(Transform):
         """
         return self._transforms
 
+    @property
+    def params(self):
+        return {'transforms': self.transforms}
+
+    def set_params(self, transforms):
+        from . import create_transform
+
+        self.transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms]
+        self._simplified = None
+        self._update()
+
     @transforms.setter
     def transforms(self, tr):
+        if not hasattr(self, '_transforms'):
+            self._transforms = []
         if isinstance(tr, Transform):
             tr = [tr]
         if not isinstance(tr, list):

@@ -6,11 +6,30 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+import contextlib
+import inspect
+import threading
+import weakref
+from typing import Callable
 
 import numpy as np
 
-from .systems import CoordinateSystemGraph, CoordinateSystem
 from ._types import Dims, StrOrNone, Mappable
+from .systems import CoordinateSystemGraph, CoordinateSystem
+
+
+class ChangeEvent:
+    def __init__(self, transform, source_event=None):
+        self.transform = transform
+        self.source_event = source_event
+
+    @property
+    def sources(self):
+        """A list of all transforms that changed leading to this event"""
+        s = [self]
+        if self.source_event is not None:
+            s += self.source_event.sources
+        return s
 
 
 class Transform(object):
@@ -57,9 +76,6 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    # List of keys that will be saved and restored in __getstate__ and __setstate__
-    state_keys = []
-
     def __init__(
         self,
         dims: Dims = None,
@@ -71,10 +87,12 @@ class Transform(object):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
-        self._dims = dims
+        self._dims = tuple(dims)
         self._inverse = None
+        # TODO is _dynamic really used?
         self._dynamic = False
         self._change_callbacks = []
+        self._change_callbacks_lock = threading.Lock()
         self._systems = (None, None)
 
         # optional coordinate system tracking
@@ -117,7 +135,7 @@ class Transform(object):
         return dims
 
     @property
-    def systems(self):
+    def systems(self) -> tuple[CoordinateSystem|None, CoordinateSystem|None]:
         """The CoordinateSystem instances mapped from and to by this transform."""
         return self._systems
 
@@ -200,6 +218,14 @@ class Transform(object):
                 ret.shape[1],
             ), f"Transform maps to {self.dims[1]}D, but mapping generated {ret.shape[1]}D"
             return self._restore_shape(ret, original_shape)
+        elif hasattr(obj, '__len__') and len(obj) == self.dims[0]:
+            try:
+                # fudge for single points passed as list/tuple-like objects
+                arr = np.asarray(obj)
+                ret = self._map(arr)
+                return type(obj)(*ret)
+            except Exception as e:
+                raise TypeError(f"Cannot directly map object through Transforms: {obj}") from e
         else:
             raise TypeError(f"Cannot use argument for mapping: {obj}")
 
@@ -258,15 +284,6 @@ class Transform(object):
         """
         raise NotImplementedError(f"{self.__class__.__name__}.set_params")
 
-    def save_state(self):
-        """Return serializable parameters that specify this transform."""
-        return {
-            'type': type(self).__name__,
-            'dims': self.dims,
-            'systems': tuple([None if sys is None else sys.save_state() for sys in self.systems]),
-            'params': self.params,
-        }
-
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
         raise NotImplementedError()
@@ -303,18 +320,56 @@ class Transform(object):
 
         return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
-    def add_change_callback(self, cb):
-        self._change_callbacks.append(cb)
+    def add_change_callback(self, cb: Callable[[ChangeEvent], None]):
+        """Add a change callback. Bound methods are stored as weak references to prevent reference cycles."""
+        if inspect.ismethod(cb):
+            # Use WeakMethod for bound methods to avoid keeping objects alive
+            cb_ref = weakref.WeakMethod(cb)
+        else:
+            # For regular functions, we can't use weak refs, but make the interface consistent
+            cb_ref = lambda: cb
+
+        with self._change_callbacks_lock:
+            # Clean up dead weak refs if the list is getting long
+            # This prevents accumulation when a transform is reused across many CompositeTransforms
+            # but never actually changes (never calls _update)
+            if len(self._change_callbacks) > 20:
+                self._change_callbacks[:] = [cb for cb in self._change_callbacks if cb() is not None]
+
+            self._change_callbacks.append(cb_ref)
 
     def remove_change_callback(self, cb):
-        self._change_callbacks.remove(cb)
+        """Remove a change callback."""
+        with self._change_callbacks_lock:
+            # Find and remove the callback, cleaning up dead weak refs as we go
+            to_remove = []
+            for i, cb_ref in enumerate(self._change_callbacks):
+                stored_cb = cb_ref()
+                if stored_cb in (cb, None):
+                    to_remove.append(i)
+
+            for i in reversed(to_remove):
+                self._change_callbacks.pop(i)
 
     def _update(self, source_event=None):
         """
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-        for cb in self._change_callbacks:
+
+        # Get a snapshot of callbacks to invoke (under lock to prevent races)
+        with self._change_callbacks_lock:
+            callbacks_to_invoke = []
+            live_refs = []
+            for cb_ref in getattr(self, "_change_callbacks", []):
+                cb = cb_ref()
+                if cb is not None:
+                    callbacks_to_invoke.append(cb)
+                    live_refs.append(cb_ref)
+            self._change_callbacks[:] = live_refs
+
+        # Invoke callbacks outside the lock to avoid deadlocks if callbacks modify callback list
+        for cb in callbacks_to_invoke:
             try:
                 cb(event)
             except Exception as exc:
@@ -355,7 +410,7 @@ class Transform(object):
            is returned.
         """
         # switch to __rmul__ attempts.
-        # Don't use the "return NotImplemted" trick, because that won't work if
+        # Don't use the "return NotImplemented" trick, because that won't work if
         # self and tr are of the same type.
         return tr.__rmul__(self)
 
@@ -368,12 +423,12 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
-        state["_dims"] = self.dims
+        state = self.params.copy()
+        state["dims"] = self.dims
         if self.systems[0] is None:
-            state['_systems'] = (None, None, None)
+            state['systems'] = (None, None, None)
         else:
-            state['_systems'] = (
+            state['systems'] = (
                 self.systems[0].name,
                 self.systems[1].name,
                 self.systems[0].graph.name,
@@ -381,15 +436,24 @@ class Transform(object):
         return state
 
     def __setstate__(self, state):
-        from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
+        self._dims = tuple(state.pop('dims'))
+        if not hasattr(self, '_change_callbacks'):
+            self._change_callbacks = []
+        if not hasattr(self, '_change_callbacks_lock'):
+            self._change_callbacks_lock = threading.Lock()
+        if not hasattr(self, '_inverse'):
+            self._inverse = None
+        from_cs, to_cs, graph = state.pop('systems', (None, None, None))
         self.__dict__.update(state)
-        self._systems = (None, None)
-        self.set_systems(from_cs, to_cs, graph)
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            self._systems = (None, None)
+            self.set_systems(from_cs, to_cs, graph)
+        self.set_params(**state)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform."""
-        tr = self.__class__(dims=self.dims)
-        state = self.__getstate__()
+        state = self.save_state()
         if from_cs is not None or to_cs is not None:
             from_cs = from_cs or self.systems[0]
             to_cs = to_cs or self.systems[1]
@@ -398,8 +462,46 @@ class Transform(object):
                 graph = from_cs.graph.name
             if graph is None and to_cs is not None and not isinstance(to_cs, str):
                 graph = to_cs.graph.name
-            state['_systems'] = (from_cs, to_cs, graph)
-        tr.__setstate__(state)
+            state['systems'] = (from_cs, to_cs)
+            state['graph'] = graph
+        return self.from_state(state)
+
+    def save_state(self):
+        """Return serializable parameters that specify this transform. Distinct from __getstate__
+        for no good long-term reason, but we need to support yaml serialization somehow for now."""
+        def to_simple(o):
+            if isinstance(o, Transform):
+                return o.save_state()
+            elif np.isscalar(o) or o is None:
+                return o
+            else:
+                return [to_simple(e) for e in np.asarray(o).tolist()]
+
+        if self.systems[0] is None:
+            systems = (None, None, None)
+        else:
+            systems = (self.systems[0].name, self.systems[1].name, self.systems[0].graph.name)
+        return {
+            'type': type(self).__name__,
+            'dims': self.dims,
+            'systems': systems,
+            'params': {k: to_simple(v) for k, v in self.params.items()},
+        }
+
+    @classmethod
+    def from_state(cls, state):
+        """Return a Transform instance created from saved state."""
+        tr = cls.__new__(cls)
+        tr._inverse = None
+        tr._dynamic = False
+        tr._change_callbacks = []
+        tr._change_callbacks_lock = threading.Lock()
+        tr._dims = tuple(state.pop('dims'))
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            tr._systems = (None, None)
+            tr.set_systems(*state.pop('systems', (None, None, None)))
+        tr.set_params(**state['params'])
         return tr
 
     def __eq__(self, tr):
@@ -426,8 +528,6 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    state_keys = ["_inverse"]
-
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
@@ -451,11 +551,19 @@ class InverseTransform(Transform):
     def copy(self, from_cs=None, to_cs=None):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
 
-    def __setstate__(self, state):
-        inverse = state["_inverse"]
-        self._inverse = inverse
-        self._map = inverse._imap
-        self._imap = inverse._map
+    def set_params(self, inverse):
+        if isinstance(inverse, Transform):
+            self._inverse = inverse
+        else:
+            from . import create_transform
+            self._inverse = create_transform(**inverse)
+        self._map = self._inverse._imap
+        self._imap = self._inverse._map
+        self._update()
+
+    @property
+    def params(self):
+        return {'inverse': self._inverse}
 
     @property
     def dims(self):
@@ -483,20 +591,6 @@ class InverseTransform(Transform):
 
     def __repr__(self):
         return "<Inverse of %r>" % repr(self._inverse)
-
-
-class ChangeEvent:
-    def __init__(self, transform, source_event=None):
-        self.transform = transform
-        self.source_event = source_event
-
-    @property
-    def sources(self):
-        """A list of all transforms that changed leading to this event"""
-        s = [self]
-        if self.source_event is not None:
-            s += self.source_event.sources
-        return s
 
 
 # import here to avoid import cycle; needed for Transform.__mul__.
