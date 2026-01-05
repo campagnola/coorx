@@ -66,6 +66,7 @@ class Transform(object):
     def __init__(
         self,
         dims: Dims = None,
+        dynamic: bool = False,
         from_cs: StrOrNone = None,
         to_cs: StrOrNone = None,
         cs_graph: StrOrNone = None,
@@ -76,8 +77,7 @@ class Transform(object):
             raise TypeError("dims must be length-2 tuple")
         self._dims = tuple(dims)
         self._inverse = None
-        # TODO is _dynamic really used?
-        self._dynamic = False
+        self._dynamic = dynamic
         self._change_callbacks = []
         self._systems = (None, None)
 
