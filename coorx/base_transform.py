@@ -8,78 +8,13 @@ API Issues to work out:
 """
 
 import contextlib
-import inspect
-import threading
-import weakref
 from typing import Callable
 
 import numpy as np
 
 from ._types import Dims, StrOrNone, Mappable
 from .systems import CoordinateSystemGraph, CoordinateSystem
-
-
-class ChangeEvent:
-    def __init__(self, transform, source_event=None):
-        self.transform = transform
-        self.source_event = source_event
-
-    @property
-    def sources(self):
-        """A list of all transforms that changed leading to this event"""
-        s = [self]
-        if self.source_event is not None:
-            s += self.source_event.sources
-        return s
-
-
-class CallbackRegistry:
-    def __init__(self):
-        # List of (is_weakref, callback or weakref) tuples
-        self._callbacks: list[tuple[bool, Callable]] = []
-        self.lock = threading.Lock()
-
-    def add(self, cb, keep_reference):
-        if keep_reference:
-            cb_ref = (False, cb)
-        else:
-            weak_self = weakref.ref(self)
-
-            def cleanup(dead_ref):
-                registry = weak_self()
-                if registry is not None:
-                    registry.remove(dead_ref)
-
-            if inspect.ismethod(cb):
-                cb_ref = (True, weakref.WeakMethod(cb, cleanup))
-            else:
-                cb_ref = (True, weakref.ref(cb, cleanup))
-
-        with self.lock:
-            self._callbacks.append(cb_ref)
-
-    def remove(self, cb):
-        with self.lock:
-            new_callbacks = []
-            for is_ref, maybe_cb in self._callbacks:
-                if is_ref:
-                    cb_from_ref = maybe_cb()
-                    if cb_from_ref is None:
-                        # Clean up dead weak refs, too
-                        continue
-                    if cb_from_ref == cb:
-                        continue
-                else:
-                    if maybe_cb == cb:
-                        continue
-                new_callbacks.append((is_ref, maybe_cb))
-            self._callbacks = new_callbacks
-
-    def __iter__(self):
-        with self.lock:
-            # Make a snapshot of callbacks to invoke
-            callbacks = [cb_ref() if is_ref else cb_ref for is_ref, cb_ref in self._callbacks]
-        return iter([cb for cb in callbacks if cb is not None])
+from .events import ChangeEvent, CallbackRegistry
 
 
 class Transform(object):
@@ -387,14 +322,7 @@ class Transform(object):
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-
-        # Get a snapshot of callbacks to invoke (under lock to prevent races)
-        for cb in self._change_callbacks:
-            try:
-                cb(event)
-            except Exception:
-                print(f"Error invoking callback {cb}")
-                raise
+        self._change_callbacks(event)
 
     def __mul__(self, tr):
         """
