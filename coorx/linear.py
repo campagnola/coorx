@@ -83,16 +83,14 @@ class TransposeTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = True
+    Equidimensional = True
+
+    parameter_spec = [
+        TupleParameter("axis_order", length='dims0'),
+    ]
 
     def __init__(self, axis_order: None | tuple[int, ...] = None, *args, **kwargs):
-        if "dims" not in kwargs:
-            kwargs["dims"] = (len(axis_order),) * 2
-        if kwargs["dims"][0] != kwargs["dims"][1]:
-            raise ValueError("Input and output dimensions must be equal")
-        if axis_order is not None and len(axis_order) != kwargs["dims"][0]:
-            raise ValueError("Axis order must have length equal to transform dimensionality")
-        super().__init__(*args, **kwargs)
-        self.axis_order = axis_order
+        super().__init__(*args, **kwargs, axis_order=axis_order)
 
     def _map(self, coords):
         """Return the input array with columns swapped."""
