@@ -1,6 +1,9 @@
 import warnings
+
 import numpy as np
+
 from .base_transform import Transform
+from .params import ArrayParameter
 
 
 class LogTransform(Transform):
@@ -26,14 +29,15 @@ class LogTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
+    Equidimensional = True
 
-    @classmethod
-    def prototype_state(cls, dims):
-        return {'base': np.array([None] * dims[0])}
+    parameter_spec = [
+        ArrayParameter(
+            "base", dtype=float, shape=("dims0",), default=lambda shape: np.array([None] * shape[0])
+        ),
+    ]
 
     def __init__(self, base, dims=None, **kwargs):
-        dims = self._dims_from_params(dims=dims, params={'base': base})
-
         super().__init__(dims, base=base, **kwargs)
 
     @property
@@ -60,9 +64,7 @@ class LogTransform(Transform):
         # Ensure output dtype can handle floating point values including NaN
         ret = _empty_array_like(coords)
         with warnings.catch_warnings():
-            warnings.simplefilter(
-                "ignore", RuntimeWarning
-            )  # divide-by-zeros and invalid values
+            warnings.simplefilter("ignore", RuntimeWarning)  # divide-by-zeros and invalid values
             for i in range(min(ret.shape[-1], 3)):
                 if base[i] is None:
                     ret[..., i] = coords[..., i]
@@ -94,6 +96,7 @@ class PolarTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
+    Equidimensional = True
 
     def __init__(self, dims=None, **kwargs):
         super().__init__(dims, **kwargs)
@@ -136,21 +139,23 @@ class LensDistortionTransform(Transform):
     and p1, p2 are tangential distortion coefficients.
     """
 
-    @classmethod
-    def prototype_state(cls, dims):
-        return {'coeff': np.array([0, 0, 0, 0, 0])}
-    
+    Linear = False
+    Orthogonal = False
+    NonScaling = False
+    Isometric = False
+    Equidimensional = True
+
+    parameter_spec = [
+        ArrayParameter("coeff", dtype=float, shape=(5,), default=lambda shape: np.array([0, 0, 0, 0, 0])),
+    ]
+
     def __init__(self, coeff=None, **kwds):
-        kwds.setdefault('dims', (2, 2))
-        assert kwds['dims'] == (2, 2), "LensDistortionTransform only supports 2D transforms."
-        if coeff is not None:
-            kwds['coeff'] = coeff
-        super().__init__(**kwds)
+        super().__init__(dims=(2, 2), coeff=coeff, **kwds)
 
     @property
     def coeff(self):
         """
-        *coeff* is a tuple of lens distortion coefficients (k1, k2, p1, p2, k3).
+        *coeff* is an array of lens distortion coefficients (k1, k2, p1, p2, k3).
         """
         return self._state['coeff']
 
