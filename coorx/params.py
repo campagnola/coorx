@@ -100,3 +100,16 @@ class TransformParameter(Parameter):
         old_value = current_state.get(self.name)
         changed = value != old_value
         return value, changed
+
+
+class TransformListParameter(Parameter):
+    def __init__(self, name):
+        super().__init__(name)
+
+    def validate(self, new_value, old_value):
+        from . import create_transform, Transform
+        new_value = [
+            t if isinstance(t, Transform) else create_transform(**t) for t in new_value
+        ]
+        changed = new_value != old_value
+        return new_value, changed

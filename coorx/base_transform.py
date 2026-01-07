@@ -514,7 +514,9 @@ class Transform(object):
             graph = graph[0]
 
         self._state = {k: v for k, v in state.items() if k not in self.param_spec_dict()}
-        self.set_params(**{k: v for k, v in state.items() if k in self.param_spec_dict()})
+        params = {k: v for k, v in state.items() if k in self.param_spec_dict()}
+        self._state["dims"] = self._validate_dims(self._state.get("dims", None), **params)
+        self.set_params(**params)
         with contextlib.suppress(DependentTransformError):
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)

@@ -1,6 +1,7 @@
 from ._types import Mappable
 
 from .base_transform import Transform, DependentTransformError
+from .params import TransformListParameter
 
 
 class CompositeTransform(Transform):
@@ -19,6 +20,10 @@ class CompositeTransform(Transform):
     NonScaling = False
     Isometric = False
     Equidimensional = False
+
+    parameter_spec = [
+        TransformListParameter("transforms"),
+    ]
 
     def __init__(self, *transforms, **kwargs):
         trs = []
@@ -80,7 +85,9 @@ class CompositeTransform(Transform):
     def set_params(self, transforms):
         from . import create_transform
 
-        self.transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms]
+        self.transforms = [
+            t if isinstance(t, Transform) else create_transform(**t) for t in transforms
+        ]
         for i in range(len(self.transforms) - 1):
             if self.transforms[i].systems[1] != self.transforms[i + 1].systems[0]:
                 raise TypeError(

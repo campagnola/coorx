@@ -37,7 +37,7 @@ class LogTransform(Transform):
         ),
     ]
 
-    def __init__(self, base, dims=None, **kwargs):
+    def __init__(self, base=None, dims=None, **kwargs):
         super().__init__(dims, base=base, **kwargs)
 
     @property
@@ -149,8 +149,11 @@ class LensDistortionTransform(Transform):
         ArrayParameter("coeff", dtype=float, shape=(5,), default=lambda shape: np.array([0, 0, 0, 0, 0])),
     ]
 
-    def __init__(self, coeff=None, **kwds):
-        super().__init__(dims=(2, 2), coeff=coeff, **kwds)
+    def __init__(self, **kwds):
+        kwds.setdefault('dims', (2, 2))
+        if kwds['dims'] != (2, 2):
+            raise ValueError("LensDistortionTransform only supports 2D transforms")
+        super().__init__(**kwds)
 
     @property
     def coeff(self):

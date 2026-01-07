@@ -737,7 +737,10 @@ class SRT3DTransform(Transform):
     ]
 
     def __init__(self, offset=None, scale=None, angle=None, axis=None, init=None, **kwds):
-        super().__init__(dims=(3, 3), **kwds, offset=offset, scale=scale, angle=angle, axis=axis)
+        kwds.setdefault('dims', (3, 3))
+        if kwds['dims'] != (3, 3):
+            raise ValueError("SRT3DTransform must have dims (3, 3)")
+        super().__init__(**kwds, offset=offset, scale=scale, angle=angle, axis=axis)
 
         # TODO the following looks like untested code
         # if all(p is None for p in (offset, scale, angle, axis)):
@@ -774,7 +777,7 @@ class SRT3DTransform(Transform):
     @property
     def rotation(self):
         """Return (angle, axis) of rotation"""
-        return self._state["angle"].copy(), np.array(self._state["axis"]).copy()
+        return self._state["angle"], self._state["axis"].copy()
 
     @rotation.setter
     def rotation(self, angle_axis):
@@ -1060,7 +1063,10 @@ class PerspectiveTransform(Transform):
     ]
 
     def __init__(self, affine=None, **kwds):
-        super().__init__(dims=(3, 3), **kwds, affine=affine)
+        kwds.setdefault('dims', (3, 3))
+        if kwds['dims'] != (3, 3):
+            raise ValueError("PerspectiveTransform must have dims (3, 3)")
+        super().__init__(**kwds, affine=affine)
 
     @property
     def affine(self):
@@ -1143,7 +1149,10 @@ class BilinearTransform(Transform):
     ]
 
     def __init__(self, **kwds):
-        super().__init__(dims=(2, 2), **kwds)
+        kwds.setdefault('dims', (2, 2))
+        if kwds['dims'] != (2, 2):
+            raise ValueError("BilinearTransform must have dims (2, 2)")
+        super().__init__(**kwds)
 
     def set_mapping(self, points1, points2):
         """Set to a transformation matrix that maps points1 onto points2.
@@ -1214,7 +1223,10 @@ class Homography2DTransform(Transform):
     ]
 
     def __init__(self, **kwds):
-        super().__init__(dims=(2, 2), **kwds)
+        kwds.setdefault('dims', (2, 2))
+        if kwds['dims'] != (2, 2):
+            raise ValueError("Homography2DTransform must have dims (2, 2)")
+        super().__init__(**kwds)
 
     def matrix(self):
         return self._state["matrix"].copy()

@@ -1,8 +1,7 @@
-from __future__ import division
-
 import numpy as np
 
 from .base_transform import Transform
+from .params import ArrayParameter, TransformParameter
 
 
 class AxisSelectionEmbeddedTransform(Transform):
@@ -11,52 +10,57 @@ class AxisSelectionEmbeddedTransform(Transform):
 
     For example, you could use a 2D transform to affect just the x,y axes in a 3D space.
     """
+
+    Linear = False
+    Orthogonal = False
+    NonScaling = False
+    Isometric = False
+    Equidimensional = False
+
+    parameter_spec = [
+        ArrayParameter("axes", dtype=int, shape=("dims0",), default=lambda shape: np.arange(shape[0])),
+        TransformParameter("transform"),
+    ]
+
     def __init__(self, axes, transform, **kwds):
-        super().__init__(**kwds)
-        self.axes = axes
-        self.subtr = transform
+        super().__init__(**kwds, axes=axes, transform=transform)
 
     def _map(self, arr):
         out = arr.copy()
-        out[:, self.axes] = self.subtr.map(arr[:, self.axes])
+        out[:, self._state["axes"]] = self._state["transform"].map(arr[:, self._state["axes"]])
         return out
 
     def _imap(self, arr):
         out = arr.copy()
-        out[:, self.axes] = self.subtr.imap(arr[:, self.axes])
+        out[:, self._state["axes"]] = self._state["transform"].imap(arr[:, self._state["axes"]])
         return out
-
-    @property
-    def params(self):
-        return {'axes': self.axes, 'transform': self.subtr}
-
-    def set_params(self, axes, transform):
-        self.axes = axes
-        if isinstance(transform, Transform):
-            self.subtr = transform
-        else:
-            from . import create_transform
-            self.subtr = create_transform(**transform)
-        self._update()
 
 
 class HomogeneousEmbeddedTransform(Transform):
     """Wraps any transform that uses homogeneous coordinates,
     allowing to operate with nonhomogeneous inputs/outputs instead.
     """
+
+    Linear = False
+    Orthogonal = False
+    NonScaling = False
+    Isometric = False
+    Equidimensional = False
+
+    parameter_spec = [
+        TransformParameter("transform"),
+    ]
+
     def __init__(self, transform, **kwds):
         expected_dims = (transform.dims[0]-1, transform.dims[1]-1)
-        kwds.setdefault('dims', expected_dims)
-        assert kwds['dims'] == expected_dims, "HomogeneousEmbeddedTransform dims must be %s" % (expected_dims,)
-        super().__init__(**kwds)
-        self.subtr = transform
+        super().__init__(dims=expected_dims, **kwds)
 
     def _map(self, arr):
-        out = self.subtr.map(self._to_homogeneous(arr))
+        out = self._state["transform"].map(self._to_homogeneous(arr))
         return self._from_homogeneous(out)
 
     def _imap(self, arr):
-        out = self.subtr.imap(self._to_homogeneous(arr))
+        out = self._state["transform"].imap(self._to_homogeneous(arr))
         return self._from_homogeneous(out)
 
     @staticmethod
@@ -69,15 +73,3 @@ class HomogeneousEmbeddedTransform(Transform):
     @staticmethod
     def _from_homogeneous(arr):
         return arr[:, :-1] / arr[:, -1:]
-
-    @property
-    def params(self):
-        return {'transform': self.subtr}
-
-    def set_params(self, transform):
-        if isinstance(transform, Transform):
-            self.subtr = transform
-        else:
-            from . import create_transform
-            self.subtr = create_transform(**transform)
-        self._update()
