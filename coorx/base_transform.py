@@ -335,19 +335,19 @@ class Transform(object):
     @property
     def params(self):
         """Return a dict of parameters specifying this transform."""
-        raise deepcopy(self._state)
+        return deepcopy(self._state)
 
     def set_params(self, **kwds):
         """Set parameters specifying this transform.
 
-        Parameter names must be the same as the keys in self.params.
+        Parameter names must be the same as the keys in self._state.
         """
         any_changed = False
         for n, v in kwds.items():
             this_changed = False
-            if n not in self.params:
+            if n not in self._state:
                 raise NameError(f"Transform {self.__class__.__name__} has no parameter '{n}'")
-            curr_val = self.params[n]
+            curr_val = self._state[n]
             if np.isscalar(curr_val):
                 if not np.isscalar(v):
                     raise TypeError(f"Parameter '{n}' must be a scalar")
