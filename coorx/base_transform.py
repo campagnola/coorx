@@ -35,12 +35,13 @@ class ChangeEvent:
 
 class CallbackRegistry:
     def __init__(self):
-        self._callbacks = []
+        # List of (is_weakref, callback or weakref) tuples
+        self._callbacks: list[tuple[bool, Callable]] = []
         self.lock = threading.Lock()
 
     def add(self, cb, keep_reference):
         if keep_reference:
-            def cb_ref(): return cb
+            cb_ref = (False, cb)
         else:
             weak_self = weakref.ref(self)
 
@@ -50,22 +51,34 @@ class CallbackRegistry:
                     registry.remove(dead_ref)
 
             if inspect.ismethod(cb):
-                cb_ref = weakref.WeakMethod(cb, cleanup)
+                cb_ref = (True, weakref.WeakMethod(cb, cleanup))
             else:
-                cb_ref = weakref.ref(cb, cleanup)
+                cb_ref = (True, weakref.ref(cb, cleanup))
 
         with self.lock:
             self._callbacks.append(cb_ref)
 
     def remove(self, cb):
         with self.lock:
-            # Clean up dead weak refs as we go
-            self._callbacks = [cb_ref for cb_ref in self._callbacks if cb_ref() not in (cb, None)]
+            new_callbacks = []
+            for is_ref, maybe_cb in self._callbacks:
+                if is_ref:
+                    cb_from_ref = maybe_cb()
+                    if cb_from_ref is None:
+                        # Clean up dead weak refs, too
+                        continue
+                    if cb_from_ref == cb:
+                        continue
+                else:
+                    if maybe_cb == cb:
+                        continue
+                new_callbacks.append((is_ref, maybe_cb))
+            self._callbacks = new_callbacks
 
     def __iter__(self):
         with self.lock:
             # Make a snapshot of callbacks to invoke
-            callbacks = [cb_ref() for cb_ref in self._callbacks]
+            callbacks = [cb_ref() if is_ref else cb_ref for is_ref, cb_ref in self._callbacks]
         return iter([cb for cb in callbacks if cb is not None])
 
 
