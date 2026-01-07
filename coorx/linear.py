@@ -5,7 +5,7 @@ import scipy.optimize
 from . import matrices
 from ._types import Dims
 from .base_transform import Transform
-from .params import ArrayParameter
+from .params import ArrayParameter, TupleParameter
 
 
 class NullTransform(Transform):
@@ -149,6 +149,7 @@ class TTransform(Transform):
     Orthogonal = True
     NonScaling = False
     Isometric = False
+    Equidimensional = True
 
     parameter_spec = [
         ArrayParameter(

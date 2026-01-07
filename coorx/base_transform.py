@@ -127,6 +127,9 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
+    # If True, then input and output dimensionality must be the same.
+    Equidimensional = None
+
     # Specification of parameters for this transform. Each subclass should
     # define its own parameter_spec list.
     parameter_spec = []
@@ -173,6 +176,8 @@ class Transform(object):
                 raise ValueError(f"dims must be an int or a tuple of two ints, not {dims}")
             for k, v in inferred_dims.items():
                 assert v == dims, f"Length of {k} ({len(dims[k])}) does not match dims {dims}"
+            if self.Equidimensional and dims[0] != dims[1]:
+                raise ValueError("Equidimensional transforms must have equal input and output dims")
             return dims
         elif len(inferred_dims) == 0:
             raise ValueError("dims must be specified if no parameters use dims")
