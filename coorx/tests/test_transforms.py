@@ -375,14 +375,13 @@ class TTransform(unittest.TestCase):
     def test_t_transform(self):
         # Check that TTransform maps exactly like AffineTransform
         pts = np.random.normal(size=(10, 3))
-
         translate = (1e6, 0.2, 0)
+        mapped = pts + translate
+        imapped = pts - translate
         tt = coorx.TTransform(offset=translate)
-        at = coorx.AffineTransform(dims=(3, 3))
-        at.translate(translate)
 
-        assert np.allclose(tt.map(pts), at.map(pts))
-        assert np.allclose(tt.inverse.map(pts), at.inverse.map(pts))
+        assert np.allclose(tt.map(pts), mapped)
+        assert np.allclose(tt.inverse.map(pts), imapped)
 
         # test save/restore
         tt2 = coorx.TTransform(dims=(3, 3))

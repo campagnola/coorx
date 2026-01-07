@@ -3,7 +3,9 @@ import numpy.linalg
 import scipy.optimize
 
 from . import matrices
+from ._types import Dims
 from .base_transform import Transform
+from .params import ArrayParameter
 
 
 class NullTransform(Transform):
@@ -148,27 +150,17 @@ class TTransform(Transform):
     NonScaling = False
     Isometric = False
 
-    @classmethod
-    def prototype_state(cls, dims):
-        return {"offset": np.zeros(dims[0], dtype=float)}
+    parameter_spec = [
+        ArrayParameter(
+            "offset",
+            dtype=float,
+            shape=('dims0',),
+            default=0,
+        ),
+    ]
 
-    def __init__(self, offset=None, dims=None, **kwargs):
-        dims = self._dims_from_params(dims=dims, params={"offset": offset})
-        if offset is not None:
-            offset = np.asarray(offset)
-            if offset.ndim != 1:
-                raise TypeError("offset must be 1-D array or similar")
-            d = len(offset)
-            if dims is not None:
-                assert dims == (d, d), f"Dims {dims} do not match offset length {len(offset)}"
-            dims = (d, d)
-            kwargs["offset"] = offset
-        if dims is None:
-            raise ValueError("Either offset or dims must be provided")
-        super().__init__(dims, **kwargs)
-
-        if self.dims[0] != self.dims[1]:
-            raise ValueError("Input and output dimensionality must be equal")
+    def __init__(self, offset=None, dims: Dims = None, **kwargs):
+        super().__init__(dims, offset=offset, **kwargs)
 
     def _map(self, coords):
         """Return translated coordinates.

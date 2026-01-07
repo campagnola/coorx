@@ -127,9 +127,9 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    @classmethod
-    def prototype_state(cls, dims):
-        return {}
+    # Specification of parameters for this transform. Each subclass should
+    # define its own parameter_spec list.
+    parameter_spec = []
 
     def __init__(
         self,
@@ -140,24 +140,61 @@ class Transform(object):
         cs_graph: StrOrNone = None,
         **kwargs,
     ):
-        if dims is None or np.isscalar(dims):
-            dims = (dims, dims)
-        if not isinstance(dims, tuple) or len(dims) != 2:
-            raise TypeError("dims must be length-2 tuple")
-        self._state = self.prototype_state(dims)
-        self._state.update(dims=dims, dynamic=dynamic)
+        self._state = {"dynamic": dynamic, "dims": self._validate_dims(dims, **kwargs)}
         self._init_with_no_state()
 
         # optional coordinate system tracking
         if from_cs is not None:
             self.set_systems(from_cs, to_cs, cs_graph)
-        # the state needs prototype values for all params
         self.set_params(**kwargs)
 
     def _init_with_no_state(self):
         self._change_callbacks = CallbackRegistry()
         self._inverse = None
         self._systems = (None, None)
+
+    def _validate_dims(self, dims: None | int | tuple[int, int], **kwargs):
+        """Determine dimensionality from parameters or *dims* argument.
+
+        If *dims* has a value, then it must be a tuple (in, out) or int and it must agree with the
+        length of all provided parameters. If *dims* is not provided, then it is determined from the
+        length of the parameters that use dims, which must all be in agreement.
+        """
+        params = {
+            spec.name: kwargs[spec.name]
+            for spec in self.parameter_spec
+            if spec.uses_dims and spec.name in kwargs
+        }
+        inferred_dims = {k: (len(v), len(v)) for k, v in params.items() if v is not None}
+        if dims is not None:
+            if np.isscalar(dims):
+                dims = (dims, dims)
+            if not isinstance(dims, tuple) or len(dims) != 2:
+                raise ValueError(f"dims must be an int or a tuple of two ints, not {dims}")
+            for k, v in inferred_dims.items():
+                assert v == dims, f"Length of {k} ({len(dims[k])}) does not match dims {dims}"
+            return dims
+        elif len(inferred_dims) == 0:
+            raise ValueError("dims must be specified if no parameters use dims")
+
+        if len(inferred_dims) == 0:
+            msg = f"Could not determine dimensionality of transform. "
+            param_names = ' '.join(list(params.keys()))
+            if len(params) == 1:
+                msg += f"Specify dims or {param_names}."
+            else:
+                msg += f"Specify dims or at least one of {param_names}."
+            raise ValueError(msg)
+
+        keys = list(inferred_dims.keys())
+        dims = inferred_dims[keys[0]]
+        for k in keys[1:]:
+            if inferred_dims[k] != dims:
+                raise ValueError(
+                    f"Could not determine dimensionality of transform: length of {k}"
+                    f"({inferred_dims[k]}) does not match length of {keys[0]} ({dims})"
+                )
+        return dims
 
     @property
     def dims(self):
@@ -178,37 +215,7 @@ class Transform(object):
 
     @dynamic.setter
     def dynamic(self, d):
-        self._state['dynamic'] = d
-
-    def _dims_from_params(self, params: dict, dims=None):
-        """Determine dimensionality from parameters.
-
-        If *dims* is provided, then it must be a tuple (in, out) and it must agree with the length of all provided parameters.
-        If *dims* is not provided, then it is determined from length of parameters, which must be in agreement.
-        """
-        assert len(params) > 0
-        inferred_dims = {k: (len(v), len(v)) for k, v in params.items() if v is not None}
-        if dims is not None:
-            for k, v in inferred_dims.items():
-                assert v == dims, f"Length of {k} ({len(dims[k])}) does not match dims {dims}"
-            return dims
-
-        if len(inferred_dims) == 0:
-            msg = f"Could not determine dimensionality of transform. "
-            param_names = ' '.join(list(params.keys()))
-            if len(params) == 1:
-                msg += f"Specify dims or {param_names}."
-            else:
-                msg += f"Specify dims or at least one of {param_names}."
-            raise Exception(msg)
-
-        keys = list(inferred_dims.keys())
-        dims = inferred_dims[keys[0]]
-        for k in keys[1:]:
-            assert (
-                inferred_dims[k] == dims
-            ), f"Length of {k} ({len(params[k])}) does not match length of {keys[0]} ({len(params[keys[0]])})"
-        return dims
+        self._state['dynamic'] = d  # no spec, so not through set_params
 
     @property
     def systems(self) -> tuple[CoordinateSystem | None, CoordinateSystem | None]:
@@ -343,29 +350,22 @@ class Transform(object):
         Parameter names must be the same as the keys in self._state.
         """
         any_changed = False
-        for n, v in kwds.items():
-            this_changed = False
-            if n not in self._state:
-                raise NameError(f"Transform {self.__class__.__name__} has no parameter '{n}'")
-            curr_val = self._state[n]
-            if np.isscalar(curr_val):
-                if not np.isscalar(v):
-                    raise TypeError(f"Parameter '{n}' must be a scalar")
-                this_changed = this_changed or curr_val != v
-            elif isinstance(curr_val, np.ndarray):
-                v = np.asarray(v, dtype=curr_val.dtype)
-                if v.shape != curr_val.shape:
-                    raise ValueError(
-                        f"Parameter '{n}' must have shape {curr_val.shape}, not {v.shape}"
-                    )
-                this_changed = this_changed or not np.all(v == curr_val)
-            else:
-                raise TypeError(f"Cannot set parameter '{n}' of type {type(curr_val)}")
+        for name in kwds:
+            validator = self.get_validator(name)
+            value, this_changed = validator.validate(kwds, self._state)
+
             if this_changed:
                 any_changed = True
-                self._state[n] = v
+                self._state[name] = value
         if any_changed:
             self._update()
+
+    def get_validator(self, param_name: str):
+        if not hasattr(type(self), '_param_spec_dict'):
+            type(self)._param_spec_dict = {p.name: p for p in type(self).parameter_spec}
+        if param_name not in self._param_spec_dict:
+            raise NameError(f"Transform {self.__class__.__name__} has no parameter '{param_name}'")
+        return self._param_spec_dict[param_name]
 
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
@@ -562,10 +562,7 @@ class Transform(object):
 
 class InverseTransform(Transform):
     def __init__(self, transform):
-        Transform.__init__(self)
-        self._inverse = transform
-        self._map = transform._imap
-        self._imap = transform._map
+        super().__init__(dims=transform.dims[::-1], inverse=transform)
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         from .util import DependentTransformError
@@ -582,49 +579,45 @@ class InverseTransform(Transform):
         )
 
     def copy(self, from_cs=None, to_cs=None):
-        return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
+        return self._state['inverse'].copy(from_cs=to_cs, to_cs=from_cs).inverse
 
     def set_params(self, inverse):
         if isinstance(inverse, Transform):
-            self._inverse = inverse
+            self._state['inverse'] = inverse
         else:
             from . import create_transform
 
-            self._inverse = create_transform(**inverse)
-        self._map = self._inverse._imap
-        self._imap = self._inverse._map
+            self._state['inverse'] = create_transform(**inverse)
+        self._map = self._state['inverse']._imap
+        self._imap = self._state['inverse']._map
         self._update()
 
     @property
-    def params(self):
-        return {'inverse': self._inverse}
-
-    @property
     def dims(self):
-        return self._inverse.dims[::-1]
+        return self._state['inverse'].dims[::-1]
 
     @property
     def systems(self):
-        return self._inverse.systems[::-1]
+        return self._state['inverse'].systems[::-1]
 
     @property
     def Linear(self):
-        return self._inverse.Linear
+        return self._state['inverse'].Linear
 
     @property
     def Orthogonal(self):
-        return self._inverse.Orthogonal
+        return self._state['inverse'].Orthogonal
 
     @property
     def NonScaling(self):
-        return self._inverse.NonScaling
+        return self._state['inverse'].NonScaling
 
     @property
     def Isometric(self):
-        return self._inverse.Isometric
+        return self._state['inverse'].Isometric
 
     def __repr__(self):
-        return "<Inverse of %r>" % repr(self._inverse)
+        return f"<Inverse of {self._state['inverse']!r}>"
 
 
 # import here to avoid import cycle; needed for Transform.__mul__.
