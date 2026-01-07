@@ -86,6 +86,14 @@ class TransposeTransform(Transform):
     def __init__(self, axis_order: None | tuple[int, ...] = None, *args, **kwargs):
         super().__init__(*args, **kwargs, axis_order=axis_order)
 
+    @property
+    def axis_order(self):
+        return self._state['axis_order']
+
+    @axis_order.setter
+    def axis_order(self, order):
+        self.set_params(axis_order=order)
+
     def _map(self, coords):
         """Return the input array with columns swapped."""
         return coords[..., self.axis_order]
@@ -115,13 +123,6 @@ class TransposeTransform(Transform):
                 to_cs=tr.systems[1],
             )
         return super().__rmul__(tr)
-
-    def set_params(self, axis_order=None):
-        if axis_order is not None:
-            if len(axis_order) != self.dims[0]:
-                raise ValueError("Axis order must have length equal to transform dimensionality")
-            self.axis_order = axis_order
-        self._update()
 
 
 class TTransform(Transform):
@@ -169,7 +170,7 @@ class TTransform(Transform):
         coords : ndarray
             Mapped coordinates: coords + translation
         """
-        return coords + self.offset[np.newaxis, :]
+        return coords + self._state["offset"][np.newaxis, :]
 
     def _imap(self, coords):
         """Return inverse-mapped coordinates.
@@ -185,7 +186,7 @@ class TTransform(Transform):
         coords : ndarray
             Mapped coordinates: coords - translation
         """
-        return coords - self.offset[np.newaxis, :]
+        return coords - self._state["offset"][np.newaxis, :]
 
     @property
     def offset(self):

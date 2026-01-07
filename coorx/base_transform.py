@@ -365,12 +365,18 @@ class Transform(object):
         if any_changed:
             self._update()
 
-    def get_validator(self, param_name: str):
-        if not hasattr(type(self), '_param_spec_dict'):
-            type(self)._param_spec_dict = {p.name: p for p in type(self).parameter_spec}
-        if param_name not in self._param_spec_dict:
-            raise NameError(f"Transform {self.__class__.__name__} has no parameter '{param_name}'")
-        return self._param_spec_dict[param_name]
+    @classmethod
+    def get_validator(cls, param_name: str):
+        if param_name not in cls.param_spec_dict():
+            raise NameError(f"Transform {cls.__name__} has no parameter '{param_name}'")
+        return cls.param_spec_dict()[param_name]
+
+    @classmethod
+    def param_spec_dict(cls):
+        """Return a dict mapping parameter names to Parameter instances for this class."""
+        if not hasattr(cls, '_param_spec_dict'):
+            cls._param_spec_dict = {p.name: p for p in cls.parameter_spec}
+        return cls._param_spec_dict
 
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
@@ -501,7 +507,8 @@ class Transform(object):
         else:
             graph = graph[0]
 
-        self._state = state
+        self._state = {k: v for k, v in state.items() if k not in self.param_spec_dict()}
+        self.set_params(**{k: v for k, v in state.items() if k in self.param_spec_dict()})
         from .util import DependentTransformError
 
         with contextlib.suppress(DependentTransformError):
@@ -537,14 +544,14 @@ class Transform(object):
 
         return {
             'type': type(self).__name__,
-            'state': {k: to_simple(v) for k, v in self.__getstate__().items()},
+            **{k: to_simple(v) for k, v in self.__getstate__().items()},
         }
 
     @classmethod
     def from_state(cls, state):
         """Return a Transform instance created from saved state."""
         tr = cls.__new__(cls)
-        tr.__setstate__(state.get("state", {}))
+        tr.__setstate__(state)
         return tr
 
     def __eq__(self, tr):
