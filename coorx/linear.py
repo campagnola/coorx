@@ -162,9 +162,10 @@ class TTransform(Transform):
             if dims is not None:
                 assert dims == (d, d), f"Dims {dims} do not match offset length {len(offset)}"
             dims = (d, d)
+            kwargs["offset"] = offset
         if dims is None:
             raise ValueError("Either offset or dims must be provided")
-        super().__init__(dims, offset=offset, **kwargs)
+        super().__init__(dims, **kwargs)
 
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
