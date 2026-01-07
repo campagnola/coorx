@@ -11,6 +11,7 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+
 import contextlib
 import inspect
 import threading
@@ -35,6 +36,42 @@ class ChangeEvent:
         if self.source_event is not None:
             s += self.source_event.sources
         return s
+
+
+class CallbackRegistry:
+    def __init__(self):
+        self._callbacks = []
+        self.lock = threading.Lock()
+
+    def add(self, cb, keep_reference):
+        if keep_reference:
+            def cb_ref(): return cb
+        else:
+            weak_self = weakref.ref(self)
+
+            def cleanup(dead_ref):
+                registry = weak_self()
+                if registry is not None:
+                    registry.remove(dead_ref)
+
+            if inspect.ismethod(cb):
+                cb_ref = weakref.WeakMethod(cb, cleanup)
+            else:
+                cb_ref = weakref.ref(cb, cleanup)
+
+        with self.lock:
+            self._callbacks.append(cb_ref)
+
+    def remove(self, cb):
+        with self.lock:
+            # Clean up dead weak refs as we go
+            self._callbacks = [cb_ref for cb_ref in self._callbacks if cb_ref() not in (cb, None)]
+
+    def __iter__(self):
+        with self.lock:
+            # Make a snapshot of callbacks to invoke
+            callbacks = [cb_ref() for cb_ref in self._callbacks]
+        return iter([cb for cb in callbacks if cb is not None])
 
 
 class Transform(object):
@@ -96,8 +133,7 @@ class Transform(object):
         self._dims = tuple(dims)
         self._inverse = None
         self._dynamic = dynamic
-        self._change_callbacks = []
-        self._change_callbacks_lock = threading.Lock()
+        self._change_callbacks = CallbackRegistry()
         self._systems = (None, None)
 
         # optional coordinate system tracking
@@ -140,7 +176,7 @@ class Transform(object):
         return dims
 
     @property
-    def systems(self) -> tuple[CoordinateSystem|None, CoordinateSystem|None]:
+    def systems(self) -> tuple[CoordinateSystem | None, CoordinateSystem | None]:
         """The CoordinateSystem instances mapped from and to by this transform."""
         return self._systems
 
@@ -325,36 +361,18 @@ class Transform(object):
 
         return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
-    def add_change_callback(self, cb: Callable[[ChangeEvent], None]):
-        """Add a change callback. Bound methods are stored as weak references to prevent reference cycles."""
-        if inspect.ismethod(cb):
-            # Use WeakMethod for bound methods to avoid keeping objects alive
-            cb_ref = weakref.WeakMethod(cb)
-        else:
-            # For regular functions, we can't use weak refs, but make the interface consistent
-            cb_ref = lambda: cb
-
-        with self._change_callbacks_lock:
-            # Clean up dead weak refs if the list is getting long
-            # This prevents accumulation when a transform is reused across many CompositeTransforms
-            # but never actually changes (never calls _update)
-            if len(self._change_callbacks) > 20:
-                self._change_callbacks[:] = [cb for cb in self._change_callbacks if cb() is not None]
-
-            self._change_callbacks.append(cb_ref)
+    def add_change_callback(self, cb: Callable[[ChangeEvent], None], keep_reference: bool = False):
+        """Add a callback that will be called whenever parameters of this transform change. If
+        keep_reference is False, the callback will be held with a weak reference. This allows the
+        object and its context to be garbage collected. Typically, keep_reference should be False
+        whenever using a bound method, and True when using a standalone function whose side effects
+        are desired even if no other references to that function exist.
+        """
+        self._change_callbacks.add(cb, keep_reference)
 
     def remove_change_callback(self, cb):
         """Remove a change callback."""
-        with self._change_callbacks_lock:
-            # Find and remove the callback, cleaning up dead weak refs as we go
-            to_remove = []
-            for i, cb_ref in enumerate(self._change_callbacks):
-                stored_cb = cb_ref()
-                if stored_cb in (cb, None):
-                    to_remove.append(i)
-
-            for i in reversed(to_remove):
-                self._change_callbacks.pop(i)
+        self._change_callbacks.remove(cb)
 
     def _update(self, source_event=None):
         """
@@ -363,21 +381,10 @@ class Transform(object):
         event = ChangeEvent(transform=self, source_event=source_event)
 
         # Get a snapshot of callbacks to invoke (under lock to prevent races)
-        with self._change_callbacks_lock:
-            callbacks_to_invoke = []
-            live_refs = []
-            for cb_ref in getattr(self, "_change_callbacks", []):
-                cb = cb_ref()
-                if cb is not None:
-                    callbacks_to_invoke.append(cb)
-                    live_refs.append(cb_ref)
-            self._change_callbacks[:] = live_refs
-
-        # Invoke callbacks outside the lock to avoid deadlocks if callbacks modify callback list
-        for cb in callbacks_to_invoke:
+        for cb in self._change_callbacks:
             try:
                 cb(event)
-            except Exception as exc:
+            except Exception:
                 print(f"Error invoking callback {cb}")
                 raise
 
@@ -443,14 +450,13 @@ class Transform(object):
     def __setstate__(self, state):
         self._dims = tuple(state.pop('dims'))
         if not hasattr(self, '_change_callbacks'):
-            self._change_callbacks = []
-        if not hasattr(self, '_change_callbacks_lock'):
-            self._change_callbacks_lock = threading.Lock()
+            self._change_callbacks = CallbackRegistry()
         if not hasattr(self, '_inverse'):
             self._inverse = None
         from_cs, to_cs, graph = state.pop('systems', (None, None, None))
         self.__dict__.update(state)
         from .util import DependentTransformError
+
         with contextlib.suppress(DependentTransformError):
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)
@@ -474,6 +480,7 @@ class Transform(object):
     def save_state(self):
         """Return serializable parameters that specify this transform. Distinct from __getstate__
         for no good long-term reason, but we need to support yaml serialization somehow for now."""
+
         def to_simple(o):
             if isinstance(o, Transform):
                 return o.save_state()
@@ -499,10 +506,10 @@ class Transform(object):
         tr = cls.__new__(cls)
         tr._inverse = None
         tr._dynamic = False
-        tr._change_callbacks = []
-        tr._change_callbacks_lock = threading.Lock()
+        tr._change_callbacks = CallbackRegistry()
         tr._dims = tuple(state.pop('dims'))
         from .util import DependentTransformError
+
         with contextlib.suppress(DependentTransformError):
             tr._systems = (None, None)
             tr.set_systems(*state.pop('systems', (None, None, None)))
@@ -561,6 +568,7 @@ class InverseTransform(Transform):
             self._inverse = inverse
         else:
             from . import create_transform
+
             self._inverse = create_transform(**inverse)
         self._map = self._inverse._imap
         self._imap = self._inverse._map

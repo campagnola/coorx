@@ -110,7 +110,7 @@ class CompositeTransform(Transform):
             t.remove_change_callback(self._subtr_changed)
         self._transforms = tr
         for t in self._transforms:
-            t.add_change_callback(self._subtr_changed)
+            t.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
     @property
@@ -219,7 +219,7 @@ class CompositeTransform(Transform):
             The transform to use.
         """
         self.transforms.append(tr)
-        tr.add_change_callback(self._subtr_changed)
+        tr.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
     def prepend(self, tr):
@@ -232,7 +232,7 @@ class CompositeTransform(Transform):
             The transform to use.
         """
         self.transforms.insert(0, tr)
-        tr.add_change_callback(self._subtr_changed)
+        tr.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
     def _subtr_changed(self, event):
@@ -242,7 +242,7 @@ class CompositeTransform(Transform):
     def __setitem__(self, index, tr):
         self._transforms[index].remove_change_callback(self._subtr_changed)
         self._transforms[index] = tr
-        tr.add_change_callback(self._subtr_changed)
+        tr.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
     def __mul__(self, tr):
@@ -277,7 +277,7 @@ class SimplifiedCompositeTransform(CompositeTransform):
     def __init__(self, chain):
         CompositeTransform.__init__(self)
         self._chain = chain
-        chain.add_change_callback(self.source_changed)
+        chain.add_change_callback(self.source_changed, keep_reference=False)
         self.source_changed(None)
 
     def source_changed(self, event):
