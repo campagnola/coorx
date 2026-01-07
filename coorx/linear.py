@@ -148,9 +148,12 @@ class TTransform(Transform):
     NonScaling = False
     Isometric = False
 
+    @classmethod
+    def prototype_state(cls, dims):
+        return {"offset": np.zeros(dims[0], dtype=float)}
+
     def __init__(self, offset=None, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={"offset": offset})
-
         if offset is not None:
             offset = np.asarray(offset)
             if offset.ndim != 1:
@@ -160,22 +163,11 @@ class TTransform(Transform):
                 assert dims == (d, d), f"Dims {dims} do not match offset length {len(offset)}"
             dims = (d, d)
         if dims is None:
-            dims = (3, 3)
-
-        try:
-            dims = tuple(dims)
-            assert len(dims) == 2
-        except (TypeError, AssertionError):
-            raise TypeError("dims must be length-2 tuple")
-
-        super().__init__(dims, **kwargs)
+            raise ValueError("Either offset or dims must be provided")
+        super().__init__(dims, offset=offset, **kwargs)
 
         if self.dims[0] != self.dims[1]:
             raise ValueError("Input and output dimensionality must be equal")
-
-        self._offset = np.zeros(self.dims[0], dtype=float)
-        if offset is not None:
-            self.offset = offset
 
     def _map(self, coords):
         """Return translated coordinates.
@@ -211,22 +203,11 @@ class TTransform(Transform):
 
     @property
     def offset(self):
-        return self._offset.copy()
+        return self._state['offset'].copy()
 
     @offset.setter
     def offset(self, t):
-        t = np.asarray(t)
-        if t.shape != (self.dims[0],):
-            raise TypeError(
-                f"Offset must have length equal to transform dimensionality ({self.dims[0]:d})"
-            )
-        if not hasattr(self, "_offset"):
-            self._offset = np.zeros(self.dims[0], dtype=float)
-        if np.all(t == self._offset):
-            return
-
-        self._offset[:] = t
-        self._update()  # inform listeners there has been a change
+        self.set_params(offset=t)
 
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
@@ -273,15 +254,6 @@ class TTransform(Transform):
 
     def __repr__(self):
         return f"<TTransform offset={self.offset} at 0x{id(self)}>"
-
-    @property
-    def params(self):
-        return {"offset": self.offset}
-
-    def set_params(self, offset=None):
-        if offset is not None:
-            self.offset = offset
-        self._update()
 
 
 class STTransform(Transform):

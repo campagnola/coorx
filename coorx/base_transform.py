@@ -127,6 +127,10 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
+    @classmethod
+    def prototype_state(cls, dims):
+        return {}
+
     def __init__(
         self,
         dims: Dims = None,
@@ -134,17 +138,21 @@ class Transform(object):
         from_cs: StrOrNone = None,
         to_cs: StrOrNone = None,
         cs_graph: StrOrNone = None,
+        **kwargs,
     ):
         if dims is None or np.isscalar(dims):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
-        self._state = {"dims": tuple(dims), "dynamic": dynamic}
+        self._state = self.prototype_state(dims)
+        self._state.update(dims=dims, dynamic=dynamic)
         self._init_with_no_state()
 
         # optional coordinate system tracking
         if from_cs is not None:
             self.set_systems(from_cs, to_cs, cs_graph)
+        # the state needs prototype values for all params
+        self.set_params(**kwargs)
 
     def _init_with_no_state(self):
         self._change_callbacks = CallbackRegistry()
@@ -469,8 +477,7 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        state = self.params.copy()
-        state["dims"] = self.dims
+        state = self._state.copy()
         if self.systems[0] is None:
             state['systems'] = (None, None, None)
         else:
@@ -518,41 +525,26 @@ class Transform(object):
             else:
                 return [to_simple(e) for e in np.asarray(o).tolist()]
 
-        if self.systems[0] is None:
-            systems = (None, None, None)
-        else:
-            systems = (self.systems[0].name, self.systems[1].name, self.systems[0].graph.name)
         return {
             'type': type(self).__name__,
-            'dims': self.dims,
-            'systems': systems,
-            'params': {k: to_simple(v) for k, v in self.params.items()},
+            'state': {k: to_simple(v) for k, v in self.__getstate__().items()},
         }
 
     @classmethod
     def from_state(cls, state):
         """Return a Transform instance created from saved state."""
         tr = cls.__new__(cls)
-        tr._inverse = None
-        tr._dynamic = False
-        tr._change_callbacks = CallbackRegistry()
-        tr._dims = tuple(state.pop('dims'))
-        from .util import DependentTransformError
-
-        with contextlib.suppress(DependentTransformError):
-            tr._systems = (None, None)
-            tr.set_systems(*state.pop('systems', (None, None, None)))
-        tr.set_params(**state['params'])
+        tr.__setstate__(state)
         return tr
 
     def __eq__(self, tr):
         if type(self) is not type(tr):
             return False
-        if self.params.keys() != tr.params.keys():
+        if self._state.keys() != tr._state.keys():
             return False
-        for k in self.params:
-            v1 = self.params[k]
-            v2 = tr.params[k]
+        for k in self._state:
+            v1 = self._state[k]
+            v2 = tr._state[k]
             if np.isscalar(v1):
                 if not (np.isscalar(v2) and v1 == v2):
                     return False
