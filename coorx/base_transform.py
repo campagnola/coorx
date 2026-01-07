@@ -616,6 +616,10 @@ class InverseTransform(Transform):
         self._update()
 
     @property
+    def inverse(self):
+        return self._state['inverse']
+
+    @property
     def dims(self):
         return self._state['inverse'].dims[::-1]
 

@@ -1,4 +1,5 @@
 """Test garbage collection behavior with weak/strong callback references."""
+
 import gc
 import unittest
 import weakref
@@ -11,6 +12,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_bound_method_weak_reference_default(self):
         """By default, bound method callbacks should use weak references."""
+
         class Listener:
             def __init__(self):
                 self.calls = 0
@@ -26,7 +28,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Verify callback works
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.calls, 2)  # set_params triggers twice
+        self.assertEqual(listener.calls, 1)
 
         # Delete listener - callback should stop being invoked
         weak_listener = weakref.ref(listener)
@@ -40,6 +42,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_bound_method_strong_reference_explicit(self):
         """With keep_reference=True, bound methods should be kept alive."""
+
         class Listener:
             def __init__(self):
                 self.calls = 0
@@ -54,8 +57,9 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         t.add_change_callback(listener.on_change, keep_reference=True)
 
         # Verify callback works
+        self.assertEqual(listener.calls, 0)
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.calls, 2)
+        self.assertEqual(listener.calls, 1)
 
         # Delete listener - but transform still holds reference
         weak_listener = weakref.ref(listener)
@@ -66,7 +70,6 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         self.assertIsNotNone(weak_listener(), "Listener should be kept alive by transform")
 
         # Callback should still work
-        weak_listener().calls = 0
         t.set_params(offset=(3, 4))
         self.assertEqual(weak_listener().calls, 2)
 
@@ -84,11 +87,11 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Verify callback works
         t.set_params(offset=(2, 3))
-        self.assertEqual(call_count[0], 2)
+        self.assertEqual(call_count[0], 1)
 
         # Function should keep working (strong ref)
         t.set_params(offset=(3, 4))
-        self.assertEqual(call_count[0], 4)
+        self.assertEqual(call_count[0], 2)
 
     def test_composite_transform_gc_with_weak_callbacks(self):
         """CompositeTransform should be collectible when using weak callbacks."""
@@ -142,6 +145,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_multiple_weak_methods_from_same_object(self):
         """Multiple weak method callbacks from same object all work correctly."""
+
         class MultiMethodListener:
             def __init__(self):
                 self.method1_calls = 0
@@ -167,9 +171,9 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # All three should be called
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.method1_calls, 2)
-        self.assertEqual(listener.method2_calls, 2)
-        self.assertEqual(listener.method3_calls, 2)
+        self.assertEqual(listener.method1_calls, 1)
+        self.assertEqual(listener.method2_calls, 1)
+        self.assertEqual(listener.method3_calls, 1)
 
         # Delete listener - all callbacks should stop
         weak_listener = weakref.ref(listener)
@@ -183,6 +187,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_remove_specific_weak_method_among_multiple(self):
         """Removing one weak method callback leaves others working."""
+
         class MultiMethodListener:
             def __init__(self):
                 self.method1_calls = 0
@@ -203,16 +208,16 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Verify both work
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.method1_calls, 2)
-        self.assertEqual(listener.method2_calls, 2)
+        self.assertEqual(listener.method1_calls, 1)
+        self.assertEqual(listener.method2_calls, 1)
 
         # Remove only method1
         t.remove_change_callback(listener.on_change1)
 
         # Only method2 should be called
         t.set_params(offset=(3, 4))
-        self.assertEqual(listener.method1_calls, 2)  # No change
-        self.assertEqual(listener.method2_calls, 4)  # Incremented
+        self.assertEqual(listener.method1_calls, 1)  # No change
+        self.assertEqual(listener.method2_calls, 2)  # Incremented
 
     def test_mix_weak_and_strong_callbacks(self):
         """Mix of weak (method) and strong (function) callbacks work together."""
@@ -237,8 +242,8 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Both should be called
         t.set_params(offset=(2, 3))
-        self.assertEqual(function_calls[0], 2)
-        self.assertEqual(listener.calls, 2)
+        self.assertEqual(function_calls[0], 1)
+        self.assertEqual(listener.calls, 1)
 
         # Delete listener - only function should continue
         weak_listener = weakref.ref(listener)
@@ -249,10 +254,11 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Only strong callback should be called
         t.set_params(offset=(3, 4))
-        self.assertEqual(function_calls[0], 4)  # Still called
+        self.assertEqual(function_calls[0], 2)  # Still called
 
     def test_strong_method_callback_keeps_object_alive(self):
         """Strong method callbacks keep their object alive."""
+
         class Listener:
             def __init__(self):
                 self.calls = 0
@@ -267,7 +273,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         t.add_change_callback(listener.on_change, keep_reference=True)
 
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.calls, 2)
+        self.assertEqual(listener.calls, 1)
 
         # Delete listener reference
         weak_listener = weakref.ref(listener)
@@ -278,7 +284,6 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         self.assertIsNotNone(weak_listener(), "Strong callback should keep listener alive")
 
         # Should still be called
-        weak_listener().calls = 0
         t.set_params(offset=(3, 4))
         self.assertEqual(weak_listener().calls, 2)
 
@@ -312,6 +317,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_weak_callback_removes_itself_during_invocation(self):
         """Weak callback can safely remove itself during invocation."""
+
         class SelfRemovingListener:
             def __init__(self, transform):
                 self.transform = transform
@@ -357,25 +363,23 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         t.add_change_callback(listener.on_change)  # weak
 
-        # First set_params triggers twice, adds callback after first invocation
         t.set_params(offset=(2, 3))
-        self.assertEqual(listener.calls, 2)
-        self.assertEqual(second_calls[0], 1)  # Called in second update
+        self.assertEqual(listener.calls, 1)
+        self.assertEqual(second_calls[0], 0)
 
-        # Both should be called
-        t.set_params(offset=(3, 4))
-        self.assertEqual(listener.calls, 4)
-        self.assertEqual(second_calls[0], 3)
+        # thereafter both should be called
+        t.set_params(offset=(4, 5))
+        self.assertEqual(listener.calls, 2)
+        self.assertEqual(second_calls[0], 1)
 
     def test_nested_composites_all_use_weak_refs(self):
         """Nested CompositeTransforms all use weak refs and are collectible."""
         inner1 = coorx.CompositeTransform(
-            coorx.TTransform(offset=(1, 0)),
-            coorx.STTransform(scale=(2, 2), offset=(0, 0))
+            coorx.TTransform(offset=(1, 0)), coorx.STTransform(scale=(2, 2), offset=(0, 0))
         )
         inner2 = coorx.CompositeTransform(
             coorx.TTransform(offset=(0, 1)),
-            coorx.AffineTransform(matrix=[[1, 0], [0, 1]], offset=(1, 1))
+            coorx.AffineTransform(matrix=[[1, 0], [0, 1]], offset=(1, 1)),
         )
         outer = coorx.CompositeTransform(inner1, inner2)
 
@@ -462,9 +466,11 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         invocation_order.clear()
         t.set_params(offset=(2, 3))
 
-        # Verify order is preserved (each callback invoked twice due to set_params)
-        self.assertEqual(invocation_order, [1, 2, 4, 3, 1, 2, 4, 3],
-                        "Callbacks should be invoked in addition order")
+        self.assertEqual(
+            invocation_order,
+            [1, 2, 4, 3],
+            "Callbacks should be invoked in addition order",
+        )
 
     def test_callback_order_preserved_after_removal(self):
         """Callback order should be preserved when removing callbacks."""
@@ -490,6 +496,9 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         t.add_change_callback(callback3, keep_reference=True)
         t.add_change_callback(callback4, keep_reference=True)
 
+        t.set_params(offset=(7, 8))  # Initial trigger to confirm all added
+        self.assertEqual(invocation_order, [1, 2, 3, 4], "Initial callback order should be correct")
+
         # Remove the middle one
         t.remove_change_callback(callback2)
 
@@ -497,9 +506,9 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         invocation_order.clear()
         t.set_params(offset=(2, 3))
 
-        # Should be 1, 3, 4 (twice) - order preserved, callback2 missing
-        self.assertEqual(invocation_order, [1, 3, 4, 1, 3, 4],
-                        "Callback order should be preserved after removal")
+        self.assertEqual(
+            invocation_order, [1, 3, 4], "Callback order should be preserved after removal"
+        )
 
     def test_callback_order_with_weak_refs_collected(self):
         """Callback order preserved when weak refs are collected mid-list."""
@@ -526,7 +535,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         # Verify initial order
         invocation_order.clear()
         t.set_params(offset=(2, 3))
-        self.assertEqual(invocation_order, [1, 2, 3, 1, 2, 3])
+        self.assertEqual(invocation_order, [1, 2, 3])
 
         # Delete weak listener
         del listener
@@ -535,8 +544,9 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         # Verify order still correct with weak ref gone
         invocation_order.clear()
         t.set_params(offset=(3, 4))
-        self.assertEqual(invocation_order, [1, 3, 1, 3],
-                        "Order should be preserved when weak ref is collected")
+        self.assertEqual(
+            invocation_order, [1, 3], "Order should be preserved when weak ref is collected"
+        )
 
 
 if __name__ == '__main__':
