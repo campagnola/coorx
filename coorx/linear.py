@@ -14,9 +14,6 @@ class NullTransform(Transform):
     NonScaling = True
     Isometric = True
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def _map(self, coords):
         """Return the input array unmodified.
 
@@ -370,38 +367,6 @@ class STTransform(Transform):
     def params(self):
         return {"scale": self.scale, "offset": self.offset}
 
-    def set_params(self, scale=None, offset=None):
-        need_update = False
-
-        if not hasattr(self, "_scale"):
-            self._scale = np.ones(self.dims[0], dtype=float)
-
-        if scale is not None:
-            scale = np.asarray(scale)
-            if scale.shape != (self.dims[0],):
-                raise TypeError(
-                    f"Scale must have length equal to transform dimensionality ({self.dims[0]:d})"
-                )
-            if not np.all(scale == self._scale):
-                self._scale[:] = scale
-                need_update = True
-
-        if not hasattr(self, "_offset"):
-            self._offset = np.zeros(self.dims[0], dtype=float)
-
-        if offset is not None:
-            offset = np.asarray(offset)
-            if offset.shape != (self.dims[0],):
-                raise TypeError(
-                    f"Offset must have length equal to transform dimensionality ({self.dims[0]:d})"
-                )
-            if not np.all(offset == self._offset):
-                self._offset[:] = offset
-                need_update = True
-
-        if need_update:
-            self._update()  # inform listeners there has been a change
-
     def translate(self, offset):
         """Change the translation of this transform by the amount given.
 
@@ -635,41 +600,6 @@ class AffineTransform(Transform):
     @property
     def params(self):
         return {"matrix": self.matrix, "offset": self.offset}
-
-    def set_params(self, matrix=None, offset=None):
-        need_update = False
-
-        if not hasattr(self, "_matrix"):
-            self._matrix = np.eye(max(self.dims))[: self.dims[1], : self.dims[0]]
-            self._inv_matrix = None
-
-        if matrix is not None:
-            m = np.asarray(matrix)
-            if m.shape[::-1] != self.dims:
-                raise ValueError(f"Matrix shape must be {self.dims[::-1]}")
-            if np.any(m != self._matrix):
-                self._matrix = m
-                self._inv_matrix = None
-                need_update = True
-
-        if not hasattr(self, "_offset"):
-            self._offset = np.zeros(self.dims[1], dtype=float)
-
-        if offset is not None:
-            if not hasattr(self, "_offset"):
-                self._offset = np.zeros(self.dims[1], dtype=float)
-            o = np.asarray(offset)
-            if o.ndim != 1 or len(o) != self.dims[1]:
-                raise ValueError(
-                    f"Offset length must be the same as transform output dimension ({self.dims[1]:d})"
-                )
-            if np.any(o != self._offset):
-                self._offset = o
-                self._inv_matrix = None
-                need_update = True
-
-        if need_update:
-            self._update()
 
     @property
     def inv_matrix(self):
@@ -1044,16 +974,11 @@ class SRT3DTransform(Transform):
     def _imap(self, arr):
         return self._get_affine()._imap(arr)
 
-    def set_params(self, offset=None, scale=None, angle=None, axis=None):
+    def set_params(self, **kwargs):
         if not hasattr(self, "_state"):
             self.reset(update=False)
-        need_update = False
-        need_update |= self._set_param("offset", offset)
-        need_update |= self._set_param("scale", scale)
-        need_update |= self._set_param("angle", angle)
-        need_update |= self._set_param("axis", axis)
-
-        if need_update:
+        changes = super().set_params(**kwargs)
+        if len(changes) > 0:
             self._update_affine()
 
     def set_mapping(self, points1, points2):
@@ -1132,25 +1057,6 @@ class SRT3DTransform(Transform):
 
         self.set_params(**params)
         return err_func(self, points1, points2)
-
-    def _set_param(self, param, value):
-        if value is None:
-            return False
-        current_value = self._state[param]
-        if np.isscalar(current_value):
-            assert np.isscalar(value)
-            if value == current_value:
-                return False
-        else:
-            value = np.asarray(value)
-            if len(value) != len(current_value):
-                raise ValueError(
-                    f"Cannot set parameter of length {len(current_value)} with value of length {len(value)}"
-                )
-            if np.all(current_value == value):
-                return False
-        self._state[param] = value
-        return True
 
     def _update_affine(self):
         self._affine = None
@@ -1368,11 +1274,6 @@ class BilinearTransform(Transform):
     @property
     def params(self):
         return {"matrix": self.matrix, "inv_matrix": self.inv_matrix}
-
-    def set_params(self, matrix, inv_matrix):
-        self._matrix = matrix
-        self._inv_matrix = inv_matrix
-        self._update()
 
 
 class Homography2DTransform(Transform):

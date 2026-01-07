@@ -11,6 +11,7 @@ import contextlib
 import inspect
 import threading
 import weakref
+from copy import deepcopy
 from typing import Callable
 
 import numpy as np
@@ -138,20 +139,38 @@ class Transform(object):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
-        self._dims = tuple(dims)
-        self._inverse = None
-        self._dynamic = dynamic
-        self._change_callbacks = CallbackRegistry()
-        self._systems = (None, None)
+        self._state = {"dims": tuple(dims), "dynamic": dynamic}
+        self._init_with_no_state()
 
         # optional coordinate system tracking
         if from_cs is not None:
             self.set_systems(from_cs, to_cs, cs_graph)
 
+    def _init_with_no_state(self):
+        self._change_callbacks = CallbackRegistry()
+        self._inverse = None
+        self._systems = (None, None)
+
     @property
     def dims(self):
         """Tuple holding the (input, output) dimensions for this transform."""
-        return self._dims
+        return self._state['dims']
+
+    @property
+    def dynamic(self):
+        """Boolean flag that indicates whether this transform is expected to
+        change frequently.
+
+        Transforms that are flagged as dynamic will not be collapsed in
+        ``CompositeTransform.simplified``. This allows changes to the transform
+        to propagate through the chain without requiring the chain to be
+        re-simplified.
+        """
+        return self._state['dynamic']
+
+    @dynamic.setter
+    def dynamic(self, d):
+        self._state['dynamic'] = d
 
     def _dims_from_params(self, params: dict, dims=None):
         """Determine dimensionality from parameters.
@@ -306,32 +325,39 @@ class Transform(object):
         return self._inverse
 
     @property
-    def dynamic(self):
-        """Boolean flag that indicates whether this transform is expected to
-        change frequently.
-
-        Transforms that are flagged as dynamic will not be collapsed in
-        ``ChainTransform.simplified``. This allows changes to the transform
-        to propagate through the chain without requiring the chain to be
-        re-simplified.
-        """
-        return self._dynamic
-
-    @dynamic.setter
-    def dynamic(self, d):
-        self._dynamic = d
-
-    @property
     def params(self):
         """Return a dict of parameters specifying this transform."""
-        raise NotImplementedError(f"{self.__class__.__name__}.params")
+        raise deepcopy(self._state)
 
     def set_params(self, **kwds):
         """Set parameters specifying this transform.
 
         Parameter names must be the same as the keys in self.params.
         """
-        raise NotImplementedError(f"{self.__class__.__name__}.set_params")
+        any_changed = False
+        for n, v in kwds.items():
+            this_changed = False
+            if n not in self.params:
+                raise NameError(f"Transform {self.__class__.__name__} has no parameter '{n}'")
+            curr_val = self.params[n]
+            if np.isscalar(curr_val):
+                if not np.isscalar(v):
+                    raise TypeError(f"Parameter '{n}' must be a scalar")
+                this_changed = this_changed or curr_val != v
+            elif isinstance(curr_val, np.ndarray):
+                v = np.asarray(v, dtype=curr_val.dtype)
+                if v.shape != curr_val.shape:
+                    raise ValueError(
+                        f"Parameter '{n}' must have shape {curr_val.shape}, not {v.shape}"
+                    )
+                this_changed = this_changed or not np.all(v == curr_val)
+            else:
+                raise TypeError(f"Cannot set parameter '{n}' of type {type(curr_val)}")
+            if this_changed:
+                any_changed = True
+                self._state[n] = v
+        if any_changed:
+            self._update()
 
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
@@ -456,19 +482,14 @@ class Transform(object):
         return state
 
     def __setstate__(self, state):
-        self._dims = tuple(state.pop('dims'))
-        if not hasattr(self, '_change_callbacks'):
-            self._change_callbacks = CallbackRegistry()
-        if not hasattr(self, '_inverse'):
-            self._inverse = None
+        self._init_with_no_state()
         from_cs, to_cs, graph = state.pop('systems', (None, None, None))
-        self.__dict__.update(state)
+        self._state = state
         from .util import DependentTransformError
 
         with contextlib.suppress(DependentTransformError):
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)
-        self.set_params(**state)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform."""
