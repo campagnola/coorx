@@ -1,15 +1,29 @@
 import numpy as np
 
+from coorx import create_transform
+
 
 class Parameter:
     def __init__(self, name):
         self.name = name
-        self.uses_dims = False
 
-    def validate(self, new_params, current_state):
-        value = new_params.get(self.name)
-        old_value = current_state.get(self.name)
+    def validate(self, value, old_value, dims):
+        """Return the validated value for this parameter and whether it has changed.
+        Raise an exception if the value is invalid.
+        """
         return value, value != old_value
+    
+    def check_dims(self, value, dims) -> bool | None:
+        """Return True if using *value* for this parameter is compatible with *dims*.
+        Return None if the parameter does not depend on dims.
+        """
+        return None
+
+    def infer_dims(self, value) -> tuple[float | None, float | None]:
+        """Return the dims that would be required to use *value* for this parameter.
+        Return None for either dim if the parameter does not constrain it.
+        """
+        return (None, None)
 
 
 class FloatParameter(Parameter):
@@ -17,68 +31,105 @@ class FloatParameter(Parameter):
         super().__init__(name)
         self.default = default
 
-    def validate(self, new_params, current_state):
-        value = new_params.get(self.name)
+    def validate(self, value, old_value, dims):
         if value is None and self.default is not None:
             value = self.default
         try:
             value = float(value)
         except Exception as e:
             raise ValueError(f"Parameter '{self.name}' must be a float") from e
-        old_value = current_state.get(self.name)
-        changed = value != old_value
-        return value, changed
+        return value, value != old_value
 
 
 class TupleParameter(Parameter):
-    def __init__(self, name, length):
+    def __init__(self, name, length, dtype):
         super().__init__(name)
+        if length is not None and length not in ('dims0', 'dims1') and not isinstance(length, int):
+            raise ValueError("length must be None, integer, or 'dims0'/'dims1'")
         self.length = length
-        self.uses_dims = isinstance(length, str)
+        self.dtype = dtype
 
-    def validate(self, new_params, current_state):
-        value = new_params.get(self.name)
+    def validate(self, value, old_value, dims):
+        # make sure value is tuple-like
+        try:
+            value = tuple(value)
+        except Exception:
+            raise TypeError(f"Parameter '{self.name}' must be tuple-like")
+
+        # check length
         length = self.length
-        if isinstance(length, str):
-            length = current_state["dims"][0] if length == "dims0" else current_state["dims"][1]
-        if not (isinstance(value, (tuple, list)) and len(value) == length):
-            raise ValueError(f"Parameter '{self.name}' must be a tuple/list of length {length}")
-        value = tuple(value)
-        old_value = current_state.get(self.name)
-        changed = value != old_value
-        return value, changed
+        if length in ('dims0', 'dims1'):
+            length = {'dims0': dims[0], 'dims1': dims[1]}[length]
+        if length is not None and len(value) != length:
+            raise ValueError(f"Parameter '{self.name}' must have length {length}")
+        
+        # convert elements to dtype
+        if self.dtype is not None:
+            try:
+                value = tuple(self.dtype(v) for v in value)
+            except Exception:
+                raise TypeError(f"Elements of parameter '{self.name}' must be of type {self.dtype.__name__}")
+            
+        return value, value != old_value
+
+    def check_dims(self, value, dims):
+        if isinstance(self.length, str):
+            expected_length = dims[0] if self.length == "dims0" else dims[1]
+            return len(value) == expected_length
+        return None
+
+    def infer_dims(self, value):
+        if isinstance(self.length, str):
+            return (len(value), None) if self.length == "dims0" else (None, len(value))
+        return (None, None)
 
 
 class ArrayParameter(Parameter):
     def __init__(self, name, dtype=float, shape=None, default=None):
         super().__init__(name)
+        if not isinstance(shape, tuple) and shape is not None:
+            raise ValueError("shape must be a tuple or None")
+        if shape is not None:
+            for x in shape:
+                if not (x is None or isinstance(x, int) or x in ("dims0", "dims1")):
+                    raise ValueError("shape elements must be None, integer, or 'dims0'/'dims1'")
         self.dtype = dtype
         self.shape = shape
-        self.uses_dims = shape is not None and any(isinstance(dim, str) for dim in shape)
         self.default = default
 
-    def validate(self, new_params, current_state):
-        value = new_params.get(self.name)
+    def validate(self, value, old_value, dims):
+        # determine shape constraints
         shape = self.shape
         if shape is not None:
-            for i, dim in enumerate(shape):
-                if dim == "dims0":
-                    dim = current_state["dims"][0]
-                elif dim == "dims1":
-                    dim = current_state["dims"][1]
-                shape = shape[:i] + (dim,) + shape[i + 1 :]
+            str_dims = {"dims0": dims[0], "dims1": dims[1]}
+            shape = tuple([str_dims.get(dim, dim) for dim in shape])
+
+        # handle default
         if value is None:
+            if self.default is None:
+                raise ValueError(f"Parameter '{self.name}' cannot be None")
+            if shape is None or None in shape:
+                raise ValueError(f"Parameter '{self.name}' has undefined shape, cannot use callable default")
             if callable(self.default):
                 value = self.default(shape)
             elif self.default is not None:
                 value = np.ones(shape, dtype=self.dtype) * self.default
-            else:
-                raise ValueError(f"Parameter '{self.name}' cannot be None")
-        else:
+
+        # check array / dtype
+        try:
             value = np.asarray(value, dtype=self.dtype)
-            if shape is not None and value.shape != shape:
-                raise ValueError(f"Parameter '{self.name}' must have shape {shape}, got {value.shape}")
-        return value, not np.array_equal(value, current_state.get(self.name))
+        except Exception:
+            dtype_err = ' of type ' + self.dtype.__name__ if self.dtype is not None else ''
+            raise TypeError(f"Parameter '{self.name}' must be an array{dtype_err}")
+
+        # check shape
+        if shape is not None:
+            assert len(shape) == value.ndim, f"Parameter '{self.name}' must have ndim {len(shape)}, got {value.ndim}"
+            for i, dim in enumerate(shape):
+                if dim is not None and value.shape[i] != dim:
+                    raise ValueError(f"Parameter '{self.name}' must have shape[{i}]=={shape[i]}, got {value.shape[i]}")
+
+        return value, not np.array_equal(value, old_value)
 
 
 class TransformParameter(Parameter):
@@ -91,6 +142,11 @@ class TransformParameter(Parameter):
         value = new_params.get(self.name)
         from .base_transform import Transform
 
+        if isinstance(value, dict):
+            try:
+                value = create_transform(**value)
+            except Exception as e:
+                raise ValueError(f"Transform for parameter {self.name} could not be created from {value}") from e
         if not isinstance(value, Transform):
             raise TypeError(f"Parameter '{self.name}' must be a Transform instance")
         if value is None and callable(self.default):

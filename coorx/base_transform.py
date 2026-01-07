@@ -16,6 +16,8 @@ from typing import Callable
 
 import numpy as np
 
+from coorx.params import Parameter
+
 from ._types import Dims, StrOrNone, Mappable
 from .systems import CoordinateSystemGraph, CoordinateSystem
 
@@ -138,7 +140,7 @@ class Transform(object):
 
     # Specification of parameters for this transform. Each subclass should
     # define its own parameter_spec list.
-    parameter_spec = []
+    parameter_spec : list[Parameter] = []
 
     def __init__(
         self,
@@ -169,42 +171,44 @@ class Transform(object):
         length of all provided parameters. If *dims* is not provided, then it is determined from the
         length of the parameters that use dims, which must all be in agreement.
         """
-        params = {
-            spec.name: kwargs[spec.name]
-            for spec in self.parameter_spec
-            if spec.uses_dims and spec.name in kwargs
-        }
-        inferred_dims = {k: (len(v), len(v)) for k, v in params.items() if v is not None}
         if dims is not None:
-            if np.isscalar(dims):
+            # make sure dims agrees with all parameters that use dims
+            if isinstance(dims, int):
                 dims = (dims, dims)
             if not isinstance(dims, tuple) or len(dims) != 2:
                 raise ValueError(f"dims must be an int or a tuple of two ints, not {dims}")
-            for k, v in inferred_dims.items():
-                assert v == dims, f"Length of {k} ({len(dims[k])}) does not match dims {dims}"
-            if self.Equidimensional and dims[0] != dims[1]:
-                raise ValueError("Equidimensional transforms must have equal input and output dims")
-            return dims
-        elif len(inferred_dims) == 0:
-            raise ValueError("dims must be specified if no parameters use dims")
+            for spec in self.parameter_spec:
+                if spec.name in kwargs:
+                   spec.check_dims(kwargs[spec.name], dims)
+        else:
+            # infer dims from parameters
+            dims = [None, None]            
+            for spec in self.parameter_spec:
+                if spec.name not in kwargs:
+                    continue
+                this_param_dims = spec.infer_dims(kwargs[spec.name])
+                for i, dim in enumerate(this_param_dims):
+                    if dim is not None:
+                        if dims[i] is None:
+                            dims[i] = dim
+                        elif dims[i] != dim:
+                            raise ValueError(
+                                f"Could not determine dimensionality of transform: parameter {spec.name}"
+                                f"({this_param_dims}) does not match previously inferred dims ({dims})"
+                            )
 
-        if len(inferred_dims) == 0:
-            msg = f"Could not determine dimensionality of transform. "
-            param_names = ' '.join(list(params.keys()))
-            if len(params) == 1:
-                msg += f"Specify dims or {param_names}."
-            else:
-                msg += f"Specify dims or at least one of {param_names}."
-            raise ValueError(msg)
+            # check that dims are now fully specified
+            if dims[0] is None or dims[1] is None:
+                if dims[0] is None and dims[1] is None:
+                    extra = ""
+                elif dims[0] is None:
+                    extra = "input "
+                else:
+                    extra = "output "
+                raise ValueError("Could not determine {extra}dimensionality of transform; specify dims or parameters that imply dims.")            
 
-        keys = list(inferred_dims.keys())
-        dims = inferred_dims[keys[0]]
-        for k in keys[1:]:
-            if inferred_dims[k] != dims:
-                raise ValueError(
-                    f"Could not determine dimensionality of transform: length of {k}"
-                    f"({inferred_dims[k]}) does not match length of {keys[0]} ({dims})"
-                )
+        if self.Equidimensional and dims[0] != dims[1]:
+            raise ValueError("Equidimensional transforms must have equal input and output dims")
         return dims
 
     @property
