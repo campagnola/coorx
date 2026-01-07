@@ -20,6 +20,12 @@ from ._types import Dims, StrOrNone, Mappable
 from .systems import CoordinateSystemGraph, CoordinateSystem
 
 
+class DependentTransformError(Exception):
+    """Raised when an operation is not allowed on certain dependent transforms."""
+
+    pass
+
+
 class ChangeEvent:
     def __init__(self, transform, source_event=None):
         self.transform = transform
@@ -509,8 +515,6 @@ class Transform(object):
 
         self._state = {k: v for k, v in state.items() if k not in self.param_spec_dict()}
         self.set_params(**{k: v for k, v in state.items() if k in self.param_spec_dict()})
-        from .util import DependentTransformError
-
         with contextlib.suppress(DependentTransformError):
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)
@@ -586,8 +590,6 @@ class InverseTransform(Transform):
         return None
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
-        from .util import DependentTransformError
-
         raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
     def as_affine(self):

@@ -5,12 +5,6 @@ import numpy as np
 from .base_transform import Transform
 
 
-class DependentTransformError(Exception):
-    """Raised when an operation is not allowed on certain dependent transforms."""
-
-    pass
-
-
 class AxisSelectionEmbeddedTransform(Transform):
     """Wraps any transform in a larger-dimensional transform that passes specific axes to the wrapped
     transform, while keeping other axes unchanged.

@@ -1,9 +1,8 @@
 from .util import (
-    DependentTransformError,
     AxisSelectionEmbeddedTransform,
     HomogeneousEmbeddedTransform,
 )
-from .base_transform import Transform, InverseTransform
+from .base_transform import Transform, InverseTransform, DependentTransformError
 from .composite import CompositeTransform, SimplifiedCompositeTransform
 from .linear import (
     NullTransform,
