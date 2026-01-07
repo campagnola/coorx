@@ -27,17 +27,14 @@ class LogTransform(Transform):
     NonScaling = False
     Isometric = False
 
-    def __init__(self, base=None, dims=None, **kwargs):
-        if base is not None:
-            base = np.asarray(base)
-            if base.ndim != 1:
-                raise TypeError("Base must be 1-D array-like")
+    @classmethod
+    def prototype_state(cls, dims):
+        return {'base': np.array([None] * dims[0])}
+
+    def __init__(self, base, dims=None, **kwargs):
         dims = self._dims_from_params(dims=dims, params={'base': base})
 
-        super().__init__(dims, **kwargs)
-
-        if base is not None:
-            self.base = base
+        super().__init__(dims, base=base, **kwargs)
 
     @property
     def base(self) -> list[float | None]:
@@ -46,19 +43,22 @@ class LogTransform(Transform):
         applied to each axis of the input vector. If any axis has a base == None,
         then that axis is not affected (identity transformation).
         """
-        return self._base.copy()
+        return self._state['base'].copy()
 
     @base.setter
     def base(self, s):
-        if not hasattr(self, "_base"):
-            self._base = [None] * self.dims[0]
-        self._base[:] = s
+        self.set_params(base=s)
 
-    def _map(self, coords, base=None):
+    def _map(self, coords):
+        return self._map_with_base(coords, self._state['base'])
+
+    def _imap(self, coords):
+        return self._map_with_base(coords, [b if b is None else -b for b in self.base])
+
+    @staticmethod
+    def _map_with_base(coords, base):
         # Ensure output dtype can handle floating point values including NaN
         ret = _empty_array_like(coords)
-        if base is None:
-            base = self.base
         with warnings.catch_warnings():
             warnings.simplefilter(
                 "ignore", RuntimeWarning
@@ -74,19 +74,8 @@ class LogTransform(Transform):
         ret[~np.isfinite(ret)] = np.nan  # set all non-finite values to NaN
         return ret
 
-    def _imap(self, coords):
-        return self._map(coords, [b if b is None else -b for b in self.base])
-
-    @property
-    def params(self):
-        return {'base': self.base}
-
-    def set_params(self, base):
-        self.base = base
-        self._update()
-
     def __repr__(self):
-        return f"<LogTransform base={self.base}>"
+        return f"<LogTransform base={self._state['base']}>"
 
 
 def _empty_array_like(data):
@@ -97,7 +86,7 @@ def _empty_array_like(data):
 class PolarTransform(Transform):
     """Polar transform
 
-    Maps (theta, r, z) to (x, y, z), where `x = r*cos(theta)`
+    Maps (theta, r, ...) to (x, y, ...), where `x = r*cos(theta)`
     and `y = r*sin(theta)`.
     """
 
@@ -107,8 +96,6 @@ class PolarTransform(Transform):
     Isometric = False
 
     def __init__(self, dims=None, **kwargs):
-        if dims is None:
-            dims = (3, 3)
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
@@ -128,13 +115,6 @@ class PolarTransform(Transform):
         for i in range(2, coords.shape[-1]):  # copy any further axes
             ret[..., i] = coords[..., i]
         return ret
-
-    @property
-    def params(self):
-        return {}
-
-    def set_params(self):
-        self._update()
 
 
 # class SphericalTransform(Transform):
@@ -156,15 +136,26 @@ class LensDistortionTransform(Transform):
     and p1, p2 are tangential distortion coefficients.
     """
 
-    def __init__(self, coeff=(0, 0, 0, 0, 0), **kwds):
+    @classmethod
+    def prototype_state(cls, dims):
+        return {'coeff': np.array([0, 0, 0, 0, 0])}
+    
+    def __init__(self, coeff=None, **kwds):
         kwds.setdefault('dims', (2, 2))
-        assert kwds['dims'] == (2, 2)
+        assert kwds['dims'] == (2, 2), "LensDistortionTransform only supports 2D transforms."
+        if coeff is not None:
+            kwds['coeff'] = coeff
         super().__init__(**kwds)
-        self.coeff = coeff
+
+    @property
+    def coeff(self):
+        """
+        *coeff* is a tuple of lens distortion coefficients (k1, k2, p1, p2, k3).
+        """
+        return self._state['coeff']
 
     def set_coeff(self, coeff):
-        self.coeff = coeff
-        self._update()
+        self.set_params(coeff=coeff)
 
     def _map(self, arr):
         k1, k2, p1, p2, k3 = self.coeff
@@ -222,9 +213,9 @@ class LensDistortionTransform(Transform):
                 jac[:, :, i] = (forward_perturbed - forward) / eps
 
             # Solve Jacobian * delta = -residual for delta
+            delta = np.zeros_like(undistorted)
             try:
                 # Use np.linalg.solve for each point
-                delta = np.zeros_like(undistorted)
                 for i in range(arr.shape[0]):
                     delta[i] = np.linalg.solve(jac[i], -residual[i])
 
@@ -238,11 +229,3 @@ class LensDistortionTransform(Transform):
                 undistorted += delta
 
         return undistorted
-
-    @property
-    def params(self):
-        return {'coeff': self.coeff}
-
-    def set_params(self, coeff):
-        self.set_coeff(coeff)
-        self._update()
