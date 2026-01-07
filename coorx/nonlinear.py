@@ -138,7 +138,7 @@ class LensDistortionTransform(Transform):
 
     @classmethod
     def prototype_state(cls, dims):
-        return {'coeff': (0, 0, 0, 0, 0)}
+        return {'coeff': np.array([0, 0, 0, 0, 0])}
     
     def __init__(self, coeff=None, **kwds):
         kwds.setdefault('dims', (2, 2))
