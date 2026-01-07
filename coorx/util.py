@@ -18,7 +18,7 @@ class AxisSelectionEmbeddedTransform(Transform):
     Equidimensional = False
 
     parameter_spec = [
-        ArrayParameter("axes", dtype=int, shape=("dims0",), default=lambda shape: np.arange(shape[0])),
+        ArrayParameter("axes", dtype=int, default=lambda shape: np.arange(shape[0])),
         TransformParameter("transform"),
     ]
 
@@ -52,8 +52,14 @@ class HomogeneousEmbeddedTransform(Transform):
     ]
 
     def __init__(self, transform, **kwds):
-        expected_dims = (transform.dims[0]-1, transform.dims[1]-1)
-        super().__init__(dims=expected_dims, **kwds)
+        expected_dims = (transform.dims[0] - 1, transform.dims[1] - 1)
+        kwds.setdefault("dims", expected_dims)
+        if kwds["dims"] != expected_dims:
+            raise ValueError(
+                f"Transform has dims {transform.dims}, expected "
+                f"{(transform.dims[0]-1, transform.dims[1]-1)} for HomogeneousEmbeddedTransform"
+            )
+        super().__init__(**kwds, transform=transform)
 
     def _map(self, arr):
         out = self._state["transform"].map(self._to_homogeneous(arr))

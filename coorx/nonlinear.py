@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 
 from .base_transform import Transform
-from .params import ArrayParameter
+from .params import ArrayParameter, TupleParameter
 
 
 class LogTransform(Transform):
@@ -32,22 +32,20 @@ class LogTransform(Transform):
     Equidimensional = True
 
     parameter_spec = [
-        ArrayParameter(
-            "base", dtype=float, shape=("dims0",), default=lambda shape: np.array([None] * shape[0])
-        ),
+        TupleParameter("base", length="dims0", default=lambda shape: np.array([None] * shape[0])),
     ]
 
     def __init__(self, base=None, dims=None, **kwargs):
         super().__init__(dims, base=base, **kwargs)
 
     @property
-    def base(self) -> list[float | None]:
+    def base(self) -> tuple[float | None]:
         """
         *base* is a tuple containing the log base values that should be
         applied to each axis of the input vector. If any axis has a base == None,
         then that axis is not affected (identity transformation).
         """
-        return self._state['base'].copy()
+        return self._state['base']
 
     @base.setter
     def base(self, s):
@@ -146,7 +144,9 @@ class LensDistortionTransform(Transform):
     Equidimensional = True
 
     parameter_spec = [
-        ArrayParameter("coeff", dtype=float, shape=(5,), default=lambda shape: np.array([0, 0, 0, 0, 0])),
+        ArrayParameter(
+            "coeff", dtype=float, shape=(5,), default=lambda shape: np.array([0, 0, 0, 0, 0])
+        ),
     ]
 
     def __init__(self, **kwds):

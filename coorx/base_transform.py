@@ -4,8 +4,9 @@ from typing import Callable
 
 import numpy as np
 
-from .params import Parameter
 from ._types import Dims, StrOrNone, Mappable
+from .events import CallbackRegistry, ChangeEvent
+from .params import Parameter, TransformParameter
 from .systems import CoordinateSystemGraph, CoordinateSystem
 
 
@@ -64,7 +65,7 @@ class Transform(object):
 
     # Specification of parameters for this transform. Each subclass should
     # define its own parameter_spec list.
-    parameter_spec : list[Parameter] = []
+    parameter_spec: list[Parameter] = []
 
     def __init__(
         self,
@@ -88,7 +89,7 @@ class Transform(object):
         self._inverse = None
         self._systems = (None, None)
 
-    def _validate_dims(self, dims: None | int | tuple[int, int], **kwargs):
+    def _validate_dims(self, dims: None | int | tuple[int, int] | list[int], **kwargs):
         """Determine dimensionality from parameters or *dims* argument.
 
         If *dims* has a value, then it must be a tuple (in, out) or int and it must agree with the
@@ -99,14 +100,15 @@ class Transform(object):
             # make sure dims agrees with all parameters that use dims
             if isinstance(dims, int):
                 dims = (dims, dims)
-            if not isinstance(dims, tuple) or len(dims) != 2:
-                raise ValueError(f"dims must be an int or a tuple of two ints, not {dims}")
+            # todo yaml loads tuples as lists; accept that too?
+            if not isinstance(dims, (tuple, list)) or len(dims) != 2:
+                raise ValueError(f"dims must be an int or a tuple/list of two ints, not {dims}")
             for spec in self.parameter_spec:
                 if spec.name in kwargs:
-                   spec.check_dims(kwargs[spec.name], dims)
+                    spec.check_dims(kwargs[spec.name], dims)
         else:
             # infer dims from parameters
-            dims = [None, None]            
+            dims = [None, None]
             for spec in self.parameter_spec:
                 if spec.name not in kwargs:
                     continue
@@ -121,6 +123,11 @@ class Transform(object):
                                 f"({this_param_dims}) does not match previously inferred dims ({dims})"
                             )
 
+            if 0 in dims:
+                raise ValueError("Transform dimensionality cannot be zero")
+            if self.Equidimensional and None in dims:
+                # enforce equidimensionality
+                dims = (dims[0] or dims[1], dims[1] or dims[0])
             # check that dims are now fully specified
             if dims[0] is None or dims[1] is None:
                 if dims[0] is None and dims[1] is None:
@@ -129,11 +136,14 @@ class Transform(object):
                     extra = "input "
                 else:
                     extra = "output "
-                raise ValueError("Could not determine {extra}dimensionality of transform; specify dims or parameters that imply dims.")            
+                raise ValueError(
+                    f"Could not determine {extra}dimensionality of transform; specify dims or "
+                    "parameters that imply dims."
+                )
 
         if self.Equidimensional and dims[0] != dims[1]:
             raise ValueError("Equidimensional transforms must have equal input and output dims")
-        return dims
+        return tuple(dims)
 
     @property
     def dims(self):
@@ -291,7 +301,7 @@ class Transform(object):
         any_changed = False
         for name in kwds:
             validator = self.get_validator(name)
-            value, this_changed = validator.validate(kwds, self._state)
+            value, this_changed = validator.validate(kwds[name], self._state.get(name), self.dims)
 
             if this_changed:
                 any_changed = True
@@ -505,6 +515,10 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
+    parameter_spec = [
+        TransformParameter("inverse"),
+    ]
+
     def __init__(self, transform):
         super().__init__(inverse=transform)
 

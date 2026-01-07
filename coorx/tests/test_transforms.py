@@ -76,6 +76,7 @@ def test_pickling():
         QT(
             dims=(3, 3),
             affine={
+                'type': 'AffineTransform',
                 'matrix': [[1, 0, 0, 0], [0, 1, 0, 0], [0.001, 0.002, 1, 0], [0, 0, 0, 1]],
                 'offset': [0, 0, 0, 0],
             },
@@ -193,7 +194,8 @@ class CompositeTransform(unittest.TestCase):
         # Make dummy classes for easier distinguishing the transforms
 
         class DummyTrans(coorx.Transform):
-            pass
+            def _validate_dims(self, dims, **kwargs):
+                return dims
 
         class TransA(DummyTrans):
             pass
@@ -680,7 +682,7 @@ class SRT3DTransformTest(unittest.TestCase):
         tr = coorx.SRT3DTransform(scale=(1, 2, 3), offset=(10, 5, 3), angle=120, axis=(1, 1, 2))
         s = eval(str(tr.save_state()))
         assert s["type"] == "SRT3DTransform"
-        assert s["dims"] == (3, 3)
+        assert tuple(s["dims"]) == (3, 3)
 
     @unittest.skipIf(not HAVE_VISPY, "vispy could not be imported")
     def test_as_vispy(self):

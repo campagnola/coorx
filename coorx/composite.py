@@ -36,29 +36,7 @@ class CompositeTransform(Transform):
 
     def _init_with_no_state(self):
         super()._init_with_no_state()
-        self._transforms = []
         self._simplified = None
-
-    def _validate_dims(self, dims, **kwargs):
-        return None
-
-    @property
-    def systems(self):
-        return self.transforms[0].systems[0], self.transforms[-1].systems[1]
-
-    def set_systems(self, from_cs, to_cs, cs_graph=None):
-        raise DependentTransformError("Cannot set systems on a CompositeTransform")
-
-    def copy(self, from_cs=None, to_cs=None):
-        if from_cs is not None or to_cs is not None:
-            raise ValueError("Cannot set systems on a CompositeTransform")
-        return super().copy()
-
-    @property
-    def dims(self):
-        if len(self.transforms) == 0:
-            return (None, None)
-        return (self.transforms[-1].dims[0], self.transforms[0].dims[1])
 
     @property
     def transforms(self):
@@ -80,43 +58,57 @@ class CompositeTransform(Transform):
             mapped = chain.map(coords)
 
         """
-        return self._transforms
-
-    def set_params(self, transforms):
-        from . import create_transform
-
-        self.transforms = [
-            t if isinstance(t, Transform) else create_transform(**t) for t in transforms
-        ]
-        for i in range(len(self.transforms) - 1):
-            if self.transforms[i].systems[1] != self.transforms[i + 1].systems[0]:
-                raise TypeError(
-                    f"Coordinate systems of transform {self.transforms[i]} "
-                    f"({self.transforms[i].systems[1]}) does not map to {self.transforms[i+1]} "
-                    f"({self.transforms[i+1].systems[0]})"
-                )
-        self._simplified = None
-        self._update()
+        return self._state.get("transforms", [])
 
     @transforms.setter
-    def transforms(self, tr):
-        if not hasattr(self, '_transforms'):
-            self._transforms = []
-        if isinstance(tr, Transform):
-            tr = [tr]
-        if not isinstance(tr, list):
-            raise TypeError("Transform chain must be a list")
+    def transforms(self, value):
+        self.set_params(transforms=value)
+
+    def _validate_dims(self, dims, **kwargs):
+        return None
+
+    @property
+    def systems(self):
+        return self.transforms[0].systems[0], self.transforms[-1].systems[1]
+
+    def set_systems(self, from_cs, to_cs, cs_graph=None):
+        raise DependentTransformError("Cannot set systems on a CompositeTransform")
+
+    def copy(self, from_cs=None, to_cs=None):
+        if from_cs is not None or to_cs is not None:
+            raise ValueError("Cannot set systems on a CompositeTransform")
+        return super().copy()
+
+    @property
+    def dims(self):
+        if len(self.transforms) == 0:
+            return (None, None)
+        return self.transforms[-1].dims[0], self.transforms[0].dims[1]
+
+    def set_params(self, transforms=None):
+        from . import create_transform
+
+        transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms or []]
+        for i in range(len(transforms) - 1):
+            if transforms[i].systems[1] != transforms[i + 1].systems[0]:
+                raise TypeError(
+                    f"Coordinate systems of transform {transforms[i]} "
+                    f"({transforms[i].systems[1]}) does not map to {transforms[i+1]} "
+                    f"({transforms[i+1].systems[0]})"
+                )
 
         # Avoid extra effort if we already have the correct chain
-        if len(tr) == len(self._transforms):
-            changed = any(tr[i] is not self._transforms[i] for i in range(len(tr)))
+        curr_xforms = self._state.get("transforms", [])
+        if len(transforms) == len(curr_xforms):
+            changed = any(transforms[i] is not curr_xforms[i] for i in range(len(transforms)))
             if not changed:
                 return
 
-        for t in self._transforms:
+        for t in curr_xforms:
             t.remove_change_callback(self._subtr_changed)
-        self._transforms = tr
-        for t in self._transforms:
+        self._state["transforms"] = transforms
+        self._simplified = None
+        for t in transforms:
             t.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
@@ -130,28 +122,28 @@ class CompositeTransform(Transform):
     @property
     def Linear(self):
         b = True
-        for tr in self._transforms:
+        for tr in self.transforms:
             b &= tr.Linear
         return b
 
     @property
     def Orthogonal(self):
         b = True
-        for tr in self._transforms:
+        for tr in self.transforms:
             b &= tr.Orthogonal
         return b
 
     @property
     def NonScaling(self):
         b = True
-        for tr in self._transforms:
+        for tr in self.transforms:
             b &= tr.NonScaling
         return b
 
     @property
     def Isometric(self):
         b = True
-        for tr in self._transforms:
+        for tr in self.transforms:
             b &= tr.Isometric
         return b
 
@@ -247,8 +239,8 @@ class CompositeTransform(Transform):
         self._update(event)
 
     def __setitem__(self, index, tr):
-        self._transforms[index].remove_change_callback(self._subtr_changed)
-        self._transforms[index] = tr
+        self.transforms[index].remove_change_callback(self._subtr_changed)
+        self.transforms[index] = tr
         tr.add_change_callback(self._subtr_changed, keep_reference=False)
         self._update()
 
