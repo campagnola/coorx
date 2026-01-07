@@ -304,7 +304,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
         # Transform should still work
         shared_transform.set_params(offset=(5, 6))
-        self.assertGreater(call_count[0], 0, "Callback should still work")
+        self.assertEqual(call_count[0], 1, "Callback should still work")
 
         # Transform should still map
         result = shared_transform.map([[0, 0]])
