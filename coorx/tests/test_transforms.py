@@ -732,7 +732,7 @@ class TransformInverse(unittest.TestCase):
     def test_inverse(self):
         m = np.random.normal(size=(3, 3))
         transforms = [
-            NT(),
+            NT(dims=3),
             ST(scale=(1e-4, 2e5, 1), offset=(10, -6e9, 0)),
             AT(m),
             RT(m),

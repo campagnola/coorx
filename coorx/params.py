@@ -8,8 +8,26 @@ class Parameter:
 
     def validate(self, new_params, current_state):
         value = new_params.get(self.name)
-        old_value = current_state[self.name]
-        return value, value == old_value
+        old_value = current_state.get(self.name)
+        return value, value != old_value
+
+
+class FloatParameter(Parameter):
+    def __init__(self, name, default=None):
+        super().__init__(name)
+        self.default = default
+
+    def validate(self, new_params, current_state):
+        value = new_params.get(self.name)
+        if value is None and self.default is not None:
+            value = self.default
+        try:
+            value = float(value)
+        except Exception as e:
+            raise ValueError(f"Parameter '{self.name}' must be a float") from e
+        old_value = current_state.get(self.name)
+        changed = value != old_value
+        return value, changed
 
 
 class TupleParameter(Parameter):
@@ -26,7 +44,7 @@ class TupleParameter(Parameter):
         if not (isinstance(value, (tuple, list)) and len(value) == length):
             raise ValueError(f"Parameter '{self.name}' must be a tuple/list of length {length}")
         value = tuple(value)
-        old_value = current_state[self.name]
+        old_value = current_state.get(self.name)
         changed = value != old_value
         return value, changed
 
@@ -50,7 +68,9 @@ class ArrayParameter(Parameter):
                     dim = current_state["dims"][1]
                 shape = shape[:i] + (dim,) + shape[i + 1 :]
         if value is None:
-            if self.default is not None:
+            if callable(self.default):
+                value = self.default(shape)
+            elif self.default is not None:
                 value = np.ones(shape, dtype=self.dtype) * self.default
             else:
                 raise ValueError(f"Parameter '{self.name}' cannot be None")
@@ -62,9 +82,10 @@ class ArrayParameter(Parameter):
 
 
 class TransformParameter(Parameter):
-    def __init__(self, name, shape=None):
+    def __init__(self, name, dims=None, default=None):
         super().__init__(name)
-        self.shape = shape
+        self.dims = dims
+        self.default = default
 
     def validate(self, new_params, current_state):
         value = new_params.get(self.name)
@@ -72,4 +93,10 @@ class TransformParameter(Parameter):
 
         if not isinstance(value, Transform):
             raise TypeError(f"Parameter '{self.name}' must be a Transform instance")
-        return super().validate(new_params, current_state)
+        if value is None and callable(self.default):
+            value = self.default()
+        if self.dims is not None and value.dims != self.dims:
+            raise ValueError(f"Parameter '{self.name}' must have dims {self.dims}, got {value.dims}")
+        old_value = current_state.get(self.name)
+        changed = value != old_value
+        return value, changed

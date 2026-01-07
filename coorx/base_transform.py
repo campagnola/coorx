@@ -495,7 +495,12 @@ class Transform(object):
 
     def __setstate__(self, state):
         self._init_with_no_state()
-        from_cs, to_cs, graph = state.pop('systems', (None, None, None))
+        from_cs, to_cs, *graph = state.pop('systems', (None, None, None))
+        if len(graph) == 0:
+            graph = None
+        else:
+            graph = graph[0]
+
         self._state = state
         from .util import DependentTransformError
 
@@ -539,7 +544,7 @@ class Transform(object):
     def from_state(cls, state):
         """Return a Transform instance created from saved state."""
         tr = cls.__new__(cls)
-        tr.__setstate__(state)
+        tr.__setstate__(state.get("state", {}))
         return tr
 
     def __eq__(self, tr):
@@ -567,7 +572,11 @@ class Transform(object):
 
 class InverseTransform(Transform):
     def __init__(self, transform):
-        super().__init__(dims=transform.dims[::-1], inverse=transform)
+        super().__init__(inverse=transform)
+
+    def _validate_dims(self, dims, **kwargs):
+        # dims are determined by the inverse transform
+        return None
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         from .util import DependentTransformError
@@ -575,7 +584,7 @@ class InverseTransform(Transform):
         raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
     def as_affine(self):
-        affine = self._inverse.as_affine()
+        affine = self._state["inverse"].as_affine()
         return type(affine)(
             matrix=affine.inv_matrix,
             offset=affine.inv_matrix @ affine.inv_offset,

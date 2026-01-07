@@ -18,25 +18,24 @@ class CompositeTransform(Transform):
     Orthogonal = False
     NonScaling = False
     Isometric = False
+    Equidimensional = False
 
     def __init__(self, *transforms, **kwargs):
-        super().__init__(**kwargs)
-        self._transforms = []
-        self._simplified = None
-
-        # Set input transforms
         trs = []
         for tr in transforms:
             if isinstance(tr, (tuple, list)):
                 trs.extend(tr)
             else:
                 trs.append(tr)
-        self.transforms = trs
-        for i in range(len(trs) - 1):
-            if trs[i].systems[1] != trs[i + 1].systems[0]:
-                raise TypeError(
-                    f"Coordinate systems of transform {trs[i]} ({trs[i].systems[1]}) does not map to {trs[i+1]} ({trs[i+1].systems[0]})"
-                )
+        super().__init__(**kwargs, transforms=trs)
+
+    def _init_with_no_state(self):
+        super()._init_with_no_state()
+        self._transforms = []
+        self._simplified = None
+
+    def _validate_dims(self, dims, **kwargs):
+        return None
 
     @property
     def systems(self):
@@ -80,14 +79,17 @@ class CompositeTransform(Transform):
         """
         return self._transforms
 
-    @property
-    def params(self):
-        return {'transforms': self.transforms}
-
     def set_params(self, transforms):
         from . import create_transform
 
         self.transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms]
+        for i in range(len(self.transforms) - 1):
+            if self.transforms[i].systems[1] != self.transforms[i + 1].systems[0]:
+                raise TypeError(
+                    f"Coordinate systems of transform {self.transforms[i]} "
+                    f"({self.transforms[i].systems[1]}) does not map to {self.transforms[i+1]} "
+                    f"({self.transforms[i+1].systems[0]})"
+                )
         self._simplified = None
         self._update()
 
