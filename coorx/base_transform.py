@@ -6,6 +6,7 @@ API Issues to work out:
     works by mapping a selection of points across a grid within the original
     rect.
 """
+import contextlib
 
 import numpy as np
 
@@ -57,12 +58,10 @@ class Transform(object):
     # transformed vectors:  T(a + b) = T(a) + T(b)
     Additive = None
 
-    # List of keys that will be saved and restored in __getstate__ and __setstate__
-    state_keys = []
-
     def __init__(
         self,
         dims: Dims = None,
+        dynamic: bool = False,
         from_cs: StrOrNone = None,
         to_cs: StrOrNone = None,
         cs_graph: StrOrNone = None,
@@ -71,9 +70,9 @@ class Transform(object):
             dims = (dims, dims)
         if not isinstance(dims, tuple) or len(dims) != 2:
             raise TypeError("dims must be length-2 tuple")
-        self._dims = dims
+        self._dims = tuple(dims)
         self._inverse = None
-        self._dynamic = False
+        self._dynamic = dynamic
         self._change_callbacks = []
         self._systems = (None, None)
 
@@ -117,7 +116,7 @@ class Transform(object):
         return dims
 
     @property
-    def systems(self):
+    def systems(self) -> tuple[CoordinateSystem|None, CoordinateSystem|None]:
         """The CoordinateSystem instances mapped from and to by this transform."""
         return self._systems
 
@@ -200,6 +199,14 @@ class Transform(object):
                 ret.shape[1],
             ), f"Transform maps to {self.dims[1]}D, but mapping generated {ret.shape[1]}D"
             return self._restore_shape(ret, original_shape)
+        elif hasattr(obj, '__len__') and len(obj) == self.dims[0]:
+            try:
+                # fudge for single points passed as list/tuple-like objects
+                arr = np.asarray(obj)
+                ret = self._map(arr)
+                return type(obj)(*ret)
+            except Exception as e:
+                raise TypeError(f"Cannot directly map object through Transforms: {obj}") from e
         else:
             raise TypeError(f"Cannot use argument for mapping: {obj}")
 
@@ -258,15 +265,6 @@ class Transform(object):
         """
         raise NotImplementedError(f"{self.__class__.__name__}.set_params")
 
-    def save_state(self):
-        """Return serializable parameters that specify this transform."""
-        return {
-            'type': type(self).__name__,
-            'dims': self.dims,
-            'systems': tuple([None if sys is None else sys.save_state() for sys in self.systems]),
-            'params': self.params,
-        }
-
     def as_affine(self):
         """Return an equivalent affine transform if possible."""
         raise NotImplementedError()
@@ -314,7 +312,7 @@ class Transform(object):
         Called to inform any listeners that this transform has changed.
         """
         event = ChangeEvent(transform=self, source_event=source_event)
-        for cb in self._change_callbacks:
+        for cb in getattr(self, "_change_callbacks", []):
             try:
                 cb(event)
             except Exception as exc:
@@ -355,7 +353,7 @@ class Transform(object):
            is returned.
         """
         # switch to __rmul__ attempts.
-        # Don't use the "return NotImplemted" trick, because that won't work if
+        # Don't use the "return NotImplemented" trick, because that won't work if
         # self and tr are of the same type.
         return tr.__rmul__(self)
 
@@ -368,12 +366,12 @@ class Transform(object):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"
 
     def __getstate__(self):
-        state = {key_name: getattr(self, key_name) for key_name in self.state_keys}
-        state["_dims"] = self.dims
+        state = self.params.copy()
+        state["dims"] = self.dims
         if self.systems[0] is None:
-            state['_systems'] = (None, None, None)
+            state['systems'] = (None, None, None)
         else:
-            state['_systems'] = (
+            state['systems'] = (
                 self.systems[0].name,
                 self.systems[1].name,
                 self.systems[0].graph.name,
@@ -381,15 +379,22 @@ class Transform(object):
         return state
 
     def __setstate__(self, state):
-        from_cs, to_cs, graph = state.pop('_systems', (None, None, None))
+        self._dims = tuple(state.pop('dims'))
+        if not hasattr(self, '_change_callbacks'):
+            self._change_callbacks = []
+        if not hasattr(self, '_inverse'):
+            self._inverse = None
+        from_cs, to_cs, graph = state.pop('systems', (None, None, None))
         self.__dict__.update(state)
-        self._systems = (None, None)
-        self.set_systems(from_cs, to_cs, graph)
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            self._systems = (None, None)
+            self.set_systems(from_cs, to_cs, graph)
+        self.set_params(**state)
 
     def copy(self, from_cs=None, to_cs=None):
         """Return a copy of this transform."""
-        tr = self.__class__(dims=self.dims)
-        state = self.__getstate__()
+        state = self.save_state()
         if from_cs is not None or to_cs is not None:
             from_cs = from_cs or self.systems[0]
             to_cs = to_cs or self.systems[1]
@@ -398,8 +403,45 @@ class Transform(object):
                 graph = from_cs.graph.name
             if graph is None and to_cs is not None and not isinstance(to_cs, str):
                 graph = to_cs.graph.name
-            state['_systems'] = (from_cs, to_cs, graph)
-        tr.__setstate__(state)
+            state['systems'] = (from_cs, to_cs)
+            state['graph'] = graph
+        return self.from_state(state)
+
+    def save_state(self):
+        """Return serializable parameters that specify this transform. Distinct from __getstate__
+        for no good long-term reason, but we need to support yaml serialization somehow for now."""
+        def to_simple(o):
+            if isinstance(o, Transform):
+                return o.save_state()
+            elif np.isscalar(o) or o is None:
+                return o
+            else:
+                return [to_simple(e) for e in np.asarray(o).tolist()]
+
+        if self.systems[0] is None:
+            systems = (None, None, None)
+        else:
+            systems = (self.systems[0].name, self.systems[1].name, self.systems[0].graph.name)
+        return {
+            'type': type(self).__name__,
+            'dims': self.dims,
+            'systems': systems,
+            'params': {k: to_simple(v) for k, v in self.params.items()},
+        }
+
+    @classmethod
+    def from_state(cls, state):
+        """Return a Transform instance created from saved state."""
+        tr = cls.__new__(cls)
+        tr._inverse = None
+        tr._dynamic = False
+        tr._change_callbacks = []
+        tr._dims = tuple(state.pop('dims'))
+        from .util import DependentTransformError
+        with contextlib.suppress(DependentTransformError):
+            tr._systems = (None, None)
+            tr.set_systems(*state.pop('systems', (None, None, None)))
+        tr.set_params(**state['params'])
         return tr
 
     def __eq__(self, tr):
@@ -426,8 +468,6 @@ class Transform(object):
 
 
 class InverseTransform(Transform):
-    state_keys = ["_inverse"]
-
     def __init__(self, transform):
         Transform.__init__(self)
         self._inverse = transform
@@ -451,11 +491,19 @@ class InverseTransform(Transform):
     def copy(self, from_cs=None, to_cs=None):
         return self._inverse.copy(from_cs=to_cs, to_cs=from_cs).inverse
 
-    def __setstate__(self, state):
-        inverse = state["_inverse"]
-        self._inverse = inverse
-        self._map = inverse._imap
-        self._imap = inverse._map
+    def set_params(self, inverse):
+        if isinstance(inverse, Transform):
+            self._inverse = inverse
+        else:
+            from . import create_transform
+            self._inverse = create_transform(**inverse)
+        self._map = self._inverse._imap
+        self._imap = self._inverse._map
+        self._update()
+
+    @property
+    def params(self):
+        return {'inverse': self._inverse}
 
     @property
     def dims(self):
