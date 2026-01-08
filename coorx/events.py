@@ -24,7 +24,7 @@ class CallbackRegistry:
     def __init__(self):
         # List of (is_weakref, callback or weakref) tuples
         self._callbacks: list[tuple[bool, Callable]] = []
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()  # Use reentrant lock to allow add() to call remove()
 
     def _real_callbacks(self):
         """Return (callback, is_weakref, maybe_weakref) tuples for all live callbacks."""

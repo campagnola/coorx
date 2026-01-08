@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-All commands likely require running python from a particular environment. If this is not specified in an agent instruction file, then prompt the user.
+All commands likely require running python from a particular environment. If this is not specified in an agent instruction file, then prompt the user. Run `python` directly from the requested environment (don't use `conda run` since it eats stdout from its subprocesses).
 
 ### Testing
 - **Run all tests**: `python -m pytest coorx/tests`
