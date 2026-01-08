@@ -98,7 +98,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         t1 = coorx.TTransform(offset=(1, 2))
         t2 = coorx.STTransform(scale=(2, 3), offset=(4, 5))
 
-        composite = coorx.CompositeTransform(t1, t2)
+        composite = coorx.CompositeTransform([t1, t2])
 
         # Verify composite works
         result = composite.map([[0, 0]])
@@ -123,7 +123,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         t1 = coorx.TTransform(offset=(1, 2))
         t2 = coorx.STTransform(scale=(2, 3), offset=(4, 5))
 
-        composite = coorx.CompositeTransform(t1, t2)
+        composite = coorx.CompositeTransform([t1, t2])
 
         # Verify composite works
         result = composite.map([[0, 0]])
@@ -302,7 +302,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         # Create and delete many composites
         for i in range(50):
             t = coorx.STTransform(scale=(2, 3), offset=(i, i))
-            composite = coorx.CompositeTransform(shared_transform, t)
+            composite = coorx.CompositeTransform([shared_transform, t])
             del composite
 
         gc.collect()
@@ -374,14 +374,14 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
 
     def test_nested_composites_all_use_weak_refs(self):
         """Nested CompositeTransforms all use weak refs and are collectible."""
-        inner1 = coorx.CompositeTransform(
+        inner1 = coorx.CompositeTransform([
             coorx.TTransform(offset=(1, 0)), coorx.STTransform(scale=(2, 2), offset=(0, 0))
-        )
-        inner2 = coorx.CompositeTransform(
+        ])
+        inner2 = coorx.CompositeTransform([
             coorx.TTransform(offset=(0, 1)),
             coorx.AffineTransform(matrix=[[1, 0], [0, 1]], offset=(1, 1)),
-        )
-        outer = coorx.CompositeTransform(inner1, inner2)
+        ])
+        outer = coorx.CompositeTransform([inner1, inner2])
 
         weak_inner1 = weakref.ref(inner1)
         weak_inner2 = weakref.ref(inner2)
@@ -399,7 +399,7 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         """SimplifiedCompositeTransform uses weak refs and is collectible."""
         t1 = coorx.TTransform(offset=(1, 2))
         t2 = coorx.STTransform(scale=(2, 3), offset=(4, 5))
-        composite = coorx.CompositeTransform(t1, t2)
+        composite = coorx.CompositeTransform([t1, t2])
 
         # Access simplified version
         simplified = composite.simplified

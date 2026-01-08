@@ -211,7 +211,8 @@ class TransformListParameter(Parameter):
 
     def validate(self, new_value, old_value, dims):
         from . import create_transform, Transform
-
+        if new_value is None:
+            new_value = []
         new_value = [t if isinstance(t, Transform) else create_transform(**t) for t in new_value]
         changed = new_value != old_value
         return new_value, changed
