@@ -549,5 +549,234 @@ class TestCallbackReferenceSemantics(unittest.TestCase):
         )
 
 
+class TestDuplicateCallbackHandling(unittest.TestCase):
+    """Test duplicate callback handling behavior with different policies."""
+
+    def test_duplicate_callback_error_mode_default(self):
+        """Test that duplicate callbacks raise ValueError by default."""
+        def callback(event):
+            pass
+
+        t = coorx.TTransform(offset=(1, 2))
+
+        # First registration should succeed
+        t.add_change_callback(callback, keep_reference=True)
+
+        # Second registration should raise ValueError by default
+        with self.assertRaises(ValueError) as cm:
+            t.add_change_callback(callback, keep_reference=True)
+        self.assertIn("already registered", str(cm.exception))
+
+    def test_duplicate_callback_error_mode_explicit(self):
+        """Test explicit error mode for duplicate callbacks."""
+        def callback(event):
+            pass
+
+        t = coorx.TTransform(offset=(1, 2))
+
+        # First registration
+        t.add_change_callback(callback, keep_reference=True)
+
+        # Second registration with explicit error mode should raise
+        with self.assertRaises(ValueError) as cm:
+            t.add_change_callback(callback, keep_reference=True, duplicates='error')
+        self.assertIn("already registered", str(cm.exception))
+
+    def test_duplicate_callback_ignore_mode(self):
+        """Test ignore mode for duplicate callbacks."""
+        call_count = [0]
+
+        def callback(event):
+            call_count[0] += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+
+        # First registration
+        t.add_change_callback(callback, keep_reference=True)
+
+        # Second registration with ignore mode should not raise
+        t.add_change_callback(callback, keep_reference=True, duplicates='ignore')
+
+        # Should only be called once per change
+        t.set_params(offset=(2, 3))
+        self.assertEqual(call_count[0], 1, "Callback should only be registered once")
+
+    def test_duplicate_callback_allow_mode(self):
+        """Test allow mode for duplicate callbacks."""
+        call_count = [0]
+
+        def callback(event):
+            call_count[0] += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+
+        # First registration
+        t.add_change_callback(callback, keep_reference=True)
+
+        # Second registration with allow mode
+        t.add_change_callback(callback, keep_reference=True, duplicates='allow')
+
+        # Should be called twice per change (registered twice)
+        t.set_params(offset=(2, 3))
+        self.assertEqual(call_count[0], 2, "Callback should be registered twice")
+
+    def test_weak_to_strong_reference_upgrade_ignore_mode(self):
+        """Test upgrading weak reference to strong reference with ignore mode."""
+        class TestListener:
+            def __init__(self):
+                self.call_count = 0
+
+            def callback(self, event):
+                self.call_count += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+        listener = TestListener()
+
+        # Register with weak reference first
+        t.add_change_callback(listener.callback, keep_reference=False)
+
+        # Verify it works
+        t.set_params(offset=(2, 3))
+        self.assertEqual(listener.call_count, 1)
+
+        # Register same callback with strong reference and ignore mode
+        # This should upgrade the weak reference to a strong reference
+        t.add_change_callback(listener.callback, keep_reference=True, duplicates='ignore')
+
+        # Delete original reference to listener
+        weak_listener = weakref.ref(listener)
+        del listener
+        gc.collect()
+
+        # Listener should NOT be collected (strong reference should keep it alive)
+        self.assertIsNotNone(weak_listener(), "Listener should be kept alive by strong reference upgrade")
+
+        # Callback should still work and only be called once per change
+        t.set_params(offset=(3, 4))
+        self.assertEqual(weak_listener().call_count, 2, "Upgraded callback should still work")
+
+    def test_strong_to_weak_ignore_mode_keeps_strong(self):
+        """Test that strong reference is preserved when adding weak with ignore mode."""
+        class TestListener:
+            def __init__(self):
+                self.call_count = 0
+
+            def callback(self, event):
+                self.call_count += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+        listener = TestListener()
+
+        # Register with strong reference first
+        t.add_change_callback(listener.callback, keep_reference=True)
+
+        # Try to register with weak reference using ignore mode
+        t.add_change_callback(listener.callback, keep_reference=False, duplicates='ignore')
+
+        # Delete original reference
+        weak_listener = weakref.ref(listener)
+        del listener
+        gc.collect()
+
+        # Should NOT be collected (strong reference should be preserved)
+        self.assertIsNotNone(weak_listener(), "Strong reference should be preserved")
+
+        # Should still work
+        t.set_params(offset=(2, 3))
+        self.assertEqual(weak_listener().call_count, 1)
+
+    def test_duplicate_method_callbacks_error_mode(self):
+        """Test duplicate method callbacks raise error by default."""
+        class TestListener:
+            def callback(self, event):
+                pass
+
+        t = coorx.TTransform(offset=(1, 2))
+        listener = TestListener()
+
+        # First registration
+        t.add_change_callback(listener.callback, keep_reference=True)
+
+        # Second registration should raise
+        with self.assertRaises(ValueError):
+            t.add_change_callback(listener.callback, keep_reference=True)
+
+    def test_duplicate_method_callbacks_ignore_mode(self):
+        """Test duplicate method callbacks with ignore mode."""
+        class TestListener:
+            def __init__(self):
+                self.call_count = 0
+
+            def callback(self, event):
+                self.call_count += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+        listener = TestListener()
+
+        # First registration (weak by default for methods)
+        t.add_change_callback(listener.callback)
+
+        # Second registration with ignore mode
+        t.add_change_callback(listener.callback, keep_reference=False, duplicates='ignore')
+
+        # Should only be called once
+        t.set_params(offset=(2, 3))
+        self.assertEqual(listener.call_count, 1)
+
+    def test_different_callbacks_not_considered_duplicates(self):
+        """Test that different callbacks from same object are not duplicates."""
+        class TestListener:
+            def __init__(self):
+                self.callback1_calls = 0
+                self.callback2_calls = 0
+
+            def callback1(self, event):
+                self.callback1_calls += 1
+
+            def callback2(self, event):
+                self.callback2_calls += 1
+
+        t = coorx.TTransform(offset=(1, 2))
+        listener = TestListener()
+
+        # Register both methods - should not be considered duplicates
+        t.add_change_callback(listener.callback1, keep_reference=True)
+        t.add_change_callback(listener.callback2, keep_reference=True)
+
+        # Both should be called
+        t.set_params(offset=(2, 3))
+        self.assertEqual(listener.callback1_calls, 1)
+        self.assertEqual(listener.callback2_calls, 1)
+
+    def test_callback_registry_direct_usage(self):
+        """Test CallbackRegistry class directly."""
+        from coorx.events import CallbackRegistry
+
+        registry = CallbackRegistry()
+        call_count = [0]
+
+        def callback(*args, **kwargs):
+            call_count[0] += 1
+
+        # Test basic add and invoke
+        registry.add(callback, keep_reference=True)
+        registry("test")
+        self.assertEqual(call_count[0], 1)
+
+        # Test duplicate error mode
+        with self.assertRaises(ValueError):
+            registry.add(callback, keep_reference=True, duplicates='error')
+
+        # Test duplicate ignore mode
+        registry.add(callback, keep_reference=True, duplicates='ignore')
+        registry("test")
+        self.assertEqual(call_count[0], 2)  # Still only called once
+
+        # Test duplicate allow mode
+        registry.add(callback, keep_reference=True, duplicates='allow')
+        registry("test")
+        self.assertEqual(call_count[0], 4)  # Called twice now
+
+
 if __name__ == '__main__':
     unittest.main()
