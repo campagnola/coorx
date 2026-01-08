@@ -4,15 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-### Testing
-- **Run all tests**: `fish -c "mamba activate acq4-torch; python -m pytest"`
-- **Run specific test file**: `fish -c "mamba activate acq4-torch; python -m pytest coorx/tests/test_transforms.py"`
-- **Run single test**: `fish -c "mamba activate acq4-torch; python -m pytest coorx/tests/test_transforms.py::CompositeTransform::test_as_affine"`
-- **Collect tests only**: `fish -c "mamba activate acq4-torch; python -m pytest --collect-only"`
+All commands likely require running python from a particular environment. If this is not specified in an agent instruction file, then prompt the user.
 
-### Environment
-- **Activate environment**: Always use `fish -c "mamba activate acq4-torch; <command>"` since mamba is not available in bash
-- **Install package in development mode**: `fish -c "mamba activate acq4-torch; pip install -e ."`
+### Testing
+- **Run all tests**: `python -m pytest coorx/tests`
+- **Run specific test file**: `python -m pytest coorx/tests/test_transforms.py`
+- **Run single test**: `python -m pytest coorx/tests/test_transforms.py::CompositeTransform::test_as_affine`
+- **Collect tests only**: `python -m pytest --collect-only`
 
 ## Architecture
 
@@ -44,9 +42,10 @@ Coorx implements object-oriented coordinate system transforms with an emphasis o
 ### Image Support (`image.py`)
 - Image class that tracks coordinate system of pixel data
 - Integrates with transform system for spatial transformations
+- Basic manipulations like crop, scale, and rotate track transformations to allow mapping between pixels of original and final images
 
 ### Testing Infrastructure
 - Custom pytest plugin (`conftest.py`) for Jupyter notebook testing
 - Pristine state checking and execution comparison for `.ipynb` files
-- 374+ parameterized tests covering all transform combinations
 - Visual diff support for image outputs using ASCII art representation
+- Many parameterized tests covering all transform combinations
