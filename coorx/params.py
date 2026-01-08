@@ -210,6 +210,7 @@ class TransformListParameter(Parameter):
         super().__init__(name)
 
     def validate(self, new_value, old_value, dims):
+        raise NotImplementedError("this isn't being used yet")
         from . import create_transform, Transform
         if new_value is None:
             new_value = []

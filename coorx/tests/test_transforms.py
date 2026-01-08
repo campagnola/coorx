@@ -211,14 +211,14 @@ class CompositeTransform(unittest.TestCase):
 
         # Test Composite creation
         assert coorx.CompositeTransform().transforms == []
-        assert coorx.CompositeTransform(a).transforms == [a]
-        assert coorx.CompositeTransform(a, b).transforms == [a, b]
-        assert coorx.CompositeTransform(a, b, c, a).transforms == [a, b, c, a]
+        assert coorx.CompositeTransform([a]).transforms == [a]
+        assert coorx.CompositeTransform([a, b]).transforms == [a, b]
+        assert coorx.CompositeTransform([a, b, c, a]).transforms == [a, b, c, a]
 
         # Test composition by multiplication
-        assert_composite_objects(a * b, coorx.CompositeTransform(b, a))
-        assert_composite_objects(a * b * c, coorx.CompositeTransform(c, b, a))
-        assert_composite_objects(a * b * c * a, coorx.CompositeTransform(a, c, b, a))
+        assert_composite_objects(a * b, coorx.CompositeTransform([b, a]))
+        assert_composite_objects(a * b * c, coorx.CompositeTransform([c, b, a]))
+        assert_composite_objects(a * b * c * a, coorx.CompositeTransform([a, c, b, a]))
 
         # Test adding/prepending to transform
         composite = coorx.CompositeTransform()
@@ -240,8 +240,8 @@ class CompositeTransform(unittest.TestCase):
         # Create multiplied versions
         t123 = t1 * t2 * t3
         t321 = t3 * t2 * t1
-        c123 = coorx.CompositeTransform(t3, t2, t1)
-        c321 = coorx.CompositeTransform(t1, t2, t3)
+        c123 = coorx.CompositeTransform([t3, t2, t1])
+        c321 = coorx.CompositeTransform([t1, t2, t3])
         c123s = c123.simplified
         c321s = c321.simplified
 
@@ -253,8 +253,8 @@ class CompositeTransform(unittest.TestCase):
         # Test Mapping
         t1 = coorx.STTransform(scale=(2, 3))
         t2 = coorx.STTransform(offset=(3, 4))
-        composite12 = coorx.CompositeTransform(t1, t2)
-        composite21 = coorx.CompositeTransform(t2, t1)
+        composite12 = coorx.CompositeTransform([t1, t2])
+        composite21 = coorx.CompositeTransform([t2, t1])
 
         assert composite12.transforms == [t1, t2]
         assert composite21.transforms == [t2, t1]
@@ -289,7 +289,7 @@ class CompositeTransform(unittest.TestCase):
         # Test inverse of composite
         t1 = coorx.STTransform(scale=(2, 3))
         t2 = coorx.STTransform(offset=(3, 4))
-        composite = coorx.CompositeTransform(t1, t2)
+        composite = coorx.CompositeTransform([t1, t2])
         composite_inv = composite.inverse
 
         assert composite_inv.map(composite.map((1, 1))).tolist() == [1, 1]
@@ -299,12 +299,12 @@ class CompositeTransform(unittest.TestCase):
         t2 = coorx.TTransform(offset=(3, 4, 5))
         t3 = coorx.TTransform(offset=(13, 4.1, 7)).inverse
         composite = t1 * t2 * t3
-        explicit = coorx.CompositeTransform(t3, t2, t1)
+        explicit = coorx.CompositeTransform([t3, t2, t1])
         assert composite.map((1, 1, 1)).tolist() == t1.map(t2.map(t3.map((1, 1, 1)))).tolist()
         assert composite.map((1, 1, 1)).tolist() == explicit.map((1, 1, 1)).tolist()
 
         composite = t3 * t2 * t1
-        explicit = coorx.CompositeTransform(t1, t2, t3)
+        explicit = coorx.CompositeTransform([t1, t2, t3])
         assert composite.map((1, 1, 1)).tolist() == t3.map(t2.map(t1.map((1, 1, 1)))).tolist()
         assert composite.map((1, 1, 1)).tolist() == explicit.map((1, 1, 1)).tolist()
 
@@ -315,14 +315,14 @@ class CompositeTransform(unittest.TestCase):
         t3.rotate(90, (0, 0, 1))
         t3 = t3.inverse
         t4 = coorx.NullTransform(dims=3)
-        composite = coorx.CompositeTransform(t1, t2, t3, t4)
+        composite = coorx.CompositeTransform([t1, t2, t3, t4])
         affine = composite.as_affine()
         assert isinstance(affine, coorx.AffineTransform)
 
     def test_full_matrix(self):
         t1 = coorx.STTransform(scale=(2, 3, 5))
         t2 = coorx.STTransform(offset=(3, 4, 2))
-        composite = coorx.CompositeTransform(t1, t2.inverse)
+        composite = coorx.CompositeTransform([t1, t2.inverse])
         assert np.allclose(composite.full_matrix, np.dot(t2.inverse.full_matrix, t1.full_matrix))
 
     def test_save_state(self):
@@ -332,7 +332,7 @@ class CompositeTransform(unittest.TestCase):
         matrix[:2, :2] = [[0, -0.1], [0.1, 0]]
         t3 = coorx.AffineTransform(matrix, offset=(1, 2, 3))
         data = np.random.normal(size=(10, 3))
-        composite = coorx.CompositeTransform(t1, t2, t3)
+        composite = coorx.CompositeTransform([t1, t2, t3])
         state = eval(str(composite.save_state()))
         assert state['type'] == 'CompositeTransform'
 
@@ -346,7 +346,7 @@ class CompositeTransform(unittest.TestCase):
 
         t1 = coorx.STTransform(scale=(2, 3, 5))
         t2 = coorx.STTransform(offset=(3, 4, 0))
-        composite = coorx.CompositeTransform(t1, t2)
+        composite = coorx.CompositeTransform([t1, t2])
         as_vispy = composite.as_vispy()
         assert isinstance(as_vispy, ChainTransform)
         assert np.allclose(as_vispy.map((1, 1, 1))[:3], composite.map((1, 1, 1)))
@@ -712,7 +712,7 @@ class SRT3DTransformTest(unittest.TestCase):
         assert np.allclose(tr3.map([1, 1, 1]), [11, 12, 4])
 
         # test composite
-        tr4 = coorx.CompositeTransform(tr2, tr1)
+        tr4 = coorx.CompositeTransform([tr2, tr1])
         assert len(tr4.simplified.transforms) == 1
         assert isinstance(tr4.simplified.transforms[0], coorx.AffineTransform)
         assert np.all(tr3.matrix == tr4.simplified.transforms[0].matrix)
@@ -725,7 +725,7 @@ class SRT3DTransformTest(unittest.TestCase):
         tr2 = coorx.SRT3DTransform(scale=(10, 10, 1))
         tr3 = coorx.SRT3DTransform(scale=(1, 11, 111))
 
-        tr4 = coorx.CompositeTransform(tr2, tr1)
+        tr4 = coorx.CompositeTransform([tr2, tr1])
         tr4[0] = tr3
         assert np.all(tr4.transforms[0].full_matrix == tr3.full_matrix)
 

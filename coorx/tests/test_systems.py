@@ -227,7 +227,7 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
     mult_mapped = (cs3_from_cs2 * cs2_from_cs1).map(point)
     assert str(mult_mapped.system) == "cs3"
 
-    composite_mapped = CompositeTransform(cs2_from_cs1, cs3_from_cs2).map(point)
+    composite_mapped = CompositeTransform([cs2_from_cs1, cs3_from_cs2]).map(point)
     assert str(composite_mapped.system) == "cs3"
 
     with raises(TypeError, match=wrong_system):
@@ -237,7 +237,7 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
         cs2_from_cs1 * cs3_from_cs2
 
     with raises(TypeError, match=comp_impossible):
-        CompositeTransform(cs3_from_cs2, cs2_from_cs1)
+        CompositeTransform([cs3_from_cs2, cs2_from_cs1])
 
 
 def test_this_one_weird_situation():
@@ -274,7 +274,7 @@ def test_copy(type1, inverse1, inverse2):
 def test_composite_copy():
     cs2_from_cs1 = create_transform("AffineTransform", **PARAMS["AffineTransform"], dims=(3, 3), systems=("cs1", "cs2"))
     cs3_from_cs2 = create_transform("STTransform", **PARAMS["STTransform"], dims=(3, 3), systems=("cs2", "cs3"))
-    cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
+    cs3_from_cs1 = CompositeTransform([cs2_from_cs1, cs3_from_cs2])
     with pytest.raises(ValueError):
         cs3_from_cs1.copy(from_cs="cs4")
     with pytest.raises(ValueError):
@@ -294,7 +294,7 @@ def test_as_affine_systems(type1):
         assert np.allclose(explicitly_looped, point)
         mult_loop = xform.inverse * xform
         assert np.allclose(mult_loop.as_affine().map(point), point)
-        comp_loop = CompositeTransform(xform, xform.inverse)
+        comp_loop = CompositeTransform([xform, xform.inverse])
         assert np.allclose(comp_loop.as_affine().map(point), point)
 
 
@@ -307,11 +307,11 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     if inverse_composite:
         cs1_from_cs2 = STTransform(scale=[3, 2, 1], offset=[10, 20, 30], from_cs="cs1", to_cs="cs2").inverse
         cs2_from_cs3 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs3", to_cs="cs2")
-        cs3_from_cs1 = CompositeTransform(cs2_from_cs3, cs1_from_cs2).inverse
+        cs3_from_cs1 = CompositeTransform([cs2_from_cs3, cs1_from_cs2]).inverse
     else:
         cs2_from_cs1 = STTransform(scale=[3, 2, 1], offset=[10, 20, 30], from_cs="cs1", to_cs="cs2")
         cs3_from_cs2 = STTransform(scale=[1, 1, 1], offset=[0, 0, -1], from_cs="cs2", to_cs="cs3")
-        cs3_from_cs1 = CompositeTransform(cs2_from_cs1, cs3_from_cs2)
+        cs3_from_cs1 = CompositeTransform([cs2_from_cs1, cs3_from_cs2])
     if inverse1:
         cs4_from_cs3 = create_transform(type1, **PARAMS[type1], dims=(3, 3), systems=("cs4", "cs3")).inverse
     else:
@@ -326,7 +326,7 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     mult_mapped = (cs4_from_cs3 * cs3_from_cs1).map(pt_cs1)
     assert str(mult_mapped.system) == "cs4"
 
-    composite_mapped = CompositeTransform(cs3_from_cs1, cs4_from_cs3).map(pt_cs1)
+    composite_mapped = CompositeTransform([cs3_from_cs1, cs4_from_cs3]).map(pt_cs1)
     assert str(composite_mapped.system) == "cs4"
 
     with raises(TypeError, match=wrong_system):
@@ -340,7 +340,7 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
         cs3_from_cs1 * cs4_from_cs3
 
     with raises(TypeError, match=comp_impossible):
-        CompositeTransform(cs4_from_cs3, cs3_from_cs1)
+        CompositeTransform([cs4_from_cs3, cs3_from_cs1])
 
     # check it works on the other side, too
     pt_cs0 = Point([0., 2., 0.], "cs0")
@@ -354,7 +354,7 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     mult_mapped = (cs3_from_cs1 * cs0_to_cs1).map(pt_cs0)
     assert str(mult_mapped.system) == "cs3"
 
-    composite_mapped = CompositeTransform(cs0_to_cs1, cs3_from_cs1).map(pt_cs0)
+    composite_mapped = CompositeTransform([cs0_to_cs1, cs3_from_cs1]).map(pt_cs0)
     assert str(composite_mapped.system) == "cs3"
 
     with raises(TypeError, match=wrong_system):
@@ -364,4 +364,4 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
         cs0_to_cs1 * cs3_from_cs1
 
     with raises(TypeError):
-        CompositeTransform(cs3_from_cs1, cs0_to_cs1)
+        CompositeTransform([cs3_from_cs1, cs0_to_cs1])

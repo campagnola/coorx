@@ -92,12 +92,13 @@ class CompositeTransform(Transform):
                 )
 
         # Avoid extra effort if we already have the correct chain
-        curr_xforms = self._state.get("transforms", [])
-        if len(transforms) == len(curr_xforms):
+        curr_xforms = self._state.get("transforms")
+        if curr_xforms is not None and len(transforms) == len(curr_xforms):
             changed = any(transforms[i] is not curr_xforms[i] for i in range(len(transforms)))
             if not changed:
                 return
 
+        curr_xforms = curr_xforms or []
         for t in curr_xforms:
             t.remove_change_callback(self._subtr_changed)
         self._state["transforms"] = transforms
