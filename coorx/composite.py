@@ -80,6 +80,7 @@ class CompositeTransform(Transform):
         return self.transforms[-1].dims[0], self.transforms[0].dims[1]
 
     def set_params(self, transforms=None):
+        self._state.setdefault("transforms", [])
         from . import create_transform
 
         transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms or []]
@@ -92,13 +93,12 @@ class CompositeTransform(Transform):
                 )
 
         # Avoid extra effort if we already have the correct chain
-        curr_xforms = self._state.get("transforms")
-        if curr_xforms is not None and len(transforms) == len(curr_xforms):
+        curr_xforms = self._state["transforms"]
+        if len(transforms) == len(curr_xforms):
             changed = any(transforms[i] is not curr_xforms[i] for i in range(len(transforms)))
             if not changed:
                 return
 
-        curr_xforms = curr_xforms or []
         for t in curr_xforms:
             t.remove_change_callback(self._subtr_changed)
         self._state["transforms"] = transforms
