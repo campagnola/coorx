@@ -109,7 +109,7 @@ class CompositeTransform(Transform):
         self._state["transforms"] = transforms
         self._simplified = None
         for t in transforms:
-            t.add_change_callback(self._subtr_changed, keep_reference=False)
+            t.add_change_callback(self._subtr_changed, keep_reference=False, duplicates='ignore')
         self._update()
 
     @property

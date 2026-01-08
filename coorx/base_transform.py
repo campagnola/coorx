@@ -358,14 +358,27 @@ class Transform(object):
 
         return import_qt_gui().QMatrix4x4(self.full_matrix.reshape(-1))
 
-    def add_change_callback(self, cb: Callable[[ChangeEvent], None], keep_reference: bool = False):
+    def add_change_callback(self, cb: Callable[[ChangeEvent], None], keep_reference: bool = False, duplicates: str = 'error'):
         """Add a callback that will be called whenever parameters of this transform change. If
         keep_reference is False, the callback will be held with a weak reference. This allows the
         object and its context to be garbage collected. Typically, keep_reference should be False
         whenever using a bound method, and True when using a standalone function whose side effects
         are desired even if no other references to that function exist.
+
+        Parameters
+        ----------
+        cb : Callable[[ChangeEvent], None]
+            The callback to register. It must accept a single argument, which will be a ChangeEvent
+            instance describing the change.
+        keep_reference : bool, optional
+            Whether to keep a strong reference to the callback, by default False.
+        duplicates : {'error', 'ignore', 'add'}, optional
+            How to handle duplicate registrations of the same callback.
+            'error' raises a ValueError, 'ignore' silently avoids adding duplicate callbacks
+            (although it will upgrade a weakly-referenced callback to strongly-referenced, if requested), 
+            'add' registers the callback multiple times. Default is 'error'.
         """
-        self._change_callbacks.add(cb, keep_reference)
+        self._change_callbacks.add(cb, keep_reference=keep_reference, duplicates=duplicates)
 
     def remove_change_callback(self, cb):
         """Remove a change callback."""
