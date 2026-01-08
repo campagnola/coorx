@@ -28,12 +28,23 @@ class CallbackRegistry:
 
     def _real_callbacks(self):
         """Return (callback, is_weakref, maybe_weakref) tuples for all live callbacks."""
-        return [(cb, is_ref, cb_ref) for is_ref, cb_ref in self._callbacks if (cb := (cb_ref() if is_ref else cb_ref)) is not None]
+        return [(cb, is_weakref, cb_ref) for is_weakref, cb_ref in self._callbacks if (cb := (cb_ref() if is_weakref else cb_ref)) is not None]
 
-    def add(self, cb, keep_reference):
+    def add(self, cb, keep_reference, duplicates='error'):
         """Register a callback.
         If keep_reference is False, a weak reference to the callback is stored,
         allowing it to be garbage collected if there are no other references.
+
+        Parameters
+        ----------
+        cb : Callable
+            The callback to register.
+        keep_reference : bool
+            Whether to keep a strong reference to the callback.
+        duplicates : {'error', 'ignore', 'add'}
+            How to handle duplicate registrations of the same callback.
+            'error' raises a ValueError, 'ignore' does nothing, 'add' registers
+            the callback multiple times.
         """
         if keep_reference:
             cb_ref = (False, cb)
@@ -53,12 +64,32 @@ class CallbackRegistry:
 
         with self.lock:
             # Prevent duplicate registrations
-            for other_cb, _, _ in self._real_callbacks():
-                if other_cb == cb:
-                    raise ValueError("Callback already registered")
-            
-            # Add the new callback
-            self._callbacks.append(cb_ref)
+            if duplicates == 'allow':
+                # Add the new callback regardless of previous registrations
+                self._callbacks.append(cb_ref)
+            else:
+                # check if we have registered this callback already
+                already_registered = False
+                is_weakref = False
+                for other_cb, is_weakref, _ in self._real_callbacks():
+                    if other_cb == cb:
+                        already_registered = True
+                        break
+                # if already registered, handle according to duplicates policy
+                if already_registered:
+                    if duplicates == 'error':
+                        raise ValueError("Callback already registered")
+                    elif duplicates == 'ignore':
+                        if keep_reference and is_weakref:
+                            # Upgrade weak reference to strong reference
+                            self.remove(cb)
+                            self._callbacks.append(cb_ref)
+                        else:
+                            # just ignore
+                            return
+                else:
+                    self._callbacks.append(cb_ref)
+
 
     def remove(self, cb):
         with self.lock:
