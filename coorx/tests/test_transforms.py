@@ -48,7 +48,7 @@ HT = coorx.HomogeneousEmbeddedTransform
 DT = coorx.LensDistortionTransform
 QT = coorx.PerspectiveTransform
 BT = coorx.BilinearTransform
-T2 = coorx.Homography2DTransform
+H2D = coorx.Homography2DTransform
 ST3 = coorx.SphericalTransform
 MST = coorx.MercatorSphericalTransform
 LAT = coorx.LambertAzimuthalEqualAreaTransform
@@ -87,10 +87,10 @@ def test_pickling():
         ),
         # DT(dims=(2, 2), coeff=(0.1, -0.05, 0.01, 0.0, 0.0)),
         # BT(dims=(2, 2)),
-        T2(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0.2), (1.8, 1.8), (-0.2, 1.6)]),
+        H2D(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0.2), (1.8, 1.8), (-0.2, 1.6)]),
         ST3(dims=(3, 3)),
-        MST(dims=(3, 3)),
-        LAT(dims=(3, 3)),
+        MST(dims=(2, 2)),
+        LAT(dims=(2, 2)),
     ]
     for tr in transforms:
         # Select appropriate points based on transform input dimensionality

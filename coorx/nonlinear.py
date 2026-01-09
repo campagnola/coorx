@@ -282,13 +282,16 @@ class SphericalTransform(Transform):
 
 
 class MercatorSphericalTransform(Transform):
-    """Maps (lon, lat, z) → (x, y, z) using Mercator projection (ignores r)."""
+    """Maps (lon, lat) → (x, y) using Mercator projection.
+    
+    lon and lat are specified in radians.
+    """
     Linear = False
     Orthogonal = False
     NonScaling = False
     Isometric = False
 
-    def __init__(self, dims=(3, 3), **kwargs):
+    def __init__(self, dims=(2, 2), **kwargs):
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
@@ -300,7 +303,6 @@ class MercatorSphericalTransform(Transform):
         ret = np.empty_like(coords)
         ret[..., 0] = x
         ret[..., 1] = y
-        ret[..., 2:] = coords[..., 2:]  # preserve extra axes like brightness
         return ret
 
     def _imap(self, coords):
@@ -312,7 +314,6 @@ class MercatorSphericalTransform(Transform):
         ret = np.empty_like(coords)
         ret[..., 0] = lon
         ret[..., 1] = lat
-        ret[..., 2:] = coords[..., 2:]  # preserve extra axes
         return ret
 
     @property
@@ -324,13 +325,13 @@ class MercatorSphericalTransform(Transform):
 
 
 class LambertAzimuthalEqualAreaTransform(Transform):
-    """Projects (lon, lat, z) → (x, y, z) using Lambert Azimuthal Equal-Area projection."""
+    """Projects (lon, lat) → (x, y) using Lambert Azimuthal Equal-Area projection."""
     Linear = False
     Orthogonal = False
     NonScaling = False
     Isometric = False
 
-    def __init__(self, dims=(3, 3), **kwargs):
+    def __init__(self, dims=(2, 2), **kwargs):
         super().__init__(dims, **kwargs)
 
     def _map(self, coords):
@@ -346,7 +347,6 @@ class LambertAzimuthalEqualAreaTransform(Transform):
         ret = np.empty_like(coords)
         ret[..., 0] = x
         ret[..., 1] = y
-        ret[..., 2:] = coords[..., 2:]  # preserve z or other axes
         return ret
 
     def _imap(self, coords):
@@ -367,7 +367,6 @@ class LambertAzimuthalEqualAreaTransform(Transform):
         ret = np.empty_like(coords)
         ret[..., 0] = lon
         ret[..., 1] = lat
-        ret[..., 2:] = coords[..., 2:]  # preserve z or other axes
         return ret
 
     @property
