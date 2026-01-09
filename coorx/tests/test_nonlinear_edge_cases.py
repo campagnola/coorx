@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import coorx
-from coorx.nonlinear import LogTransform, PolarTransform, LensDistortionTransform
+from coorx.nonlinear import LogTransform, PolarTransform, LensDistortionTransform, SphericalTransform, MercatorSphericalTransform, LambertAzimuthalEqualAreaTransform
 
 
 class TestLogTransformEdgeCases:
@@ -549,6 +549,9 @@ class TestNonlinearTransformComposition:
             LogTransform(base=[2, 10], dims=(2, 2)),
             PolarTransform(dims=(2, 2)),
             LensDistortionTransform(coeff=(0.1, 0.05, 0.01, 0.01, 0.001)),
+            SphericalTransform(dims=(3, 3)),
+            MercatorSphericalTransform(dims=(3, 3)),
+            LambertAzimuthalEqualAreaTransform(dims=(3, 3)),
         ]
 
         for transform in transforms:
@@ -629,16 +632,28 @@ class TestNonlinearTransformComposition:
     @pytest.mark.parametrize("precision", [np.float32, np.float64])
     def test_nonlinear_precision_handling(self, precision):
         """Test nonlinear transforms with different floating-point precisions."""
-        # Test with different precisions, use positive values suitable for log transform
-        coords = np.array([[1, 2], [3, 4]], dtype=precision)
+        # Test with different precisions
 
-        transforms = [
+        # 2D coordinates for 2D transforms
+        coords_2d = np.array([[1, 2], [3, 4]], dtype=precision)
+
+        # 3D coordinates for 3D transforms (use suitable values for spherical)
+        coords_3d = np.array([[1, 1, 1], [2, 2, 2]], dtype=precision)
+
+        transforms_2d = [
             LogTransform(base=[2, 10], dims=(2, 2)),
             PolarTransform(dims=(2, 2)),
         ]
 
-        for transform in transforms:
-            result = transform.map(coords)
+        transforms_3d = [
+            SphericalTransform(dims=(3, 3)),
+            MercatorSphericalTransform(dims=(3, 3)),
+            LambertAzimuthalEqualAreaTransform(dims=(3, 3)),
+        ]
+
+        # Test 2D transforms
+        for transform in transforms_2d:
+            result = transform.map(coords_2d)
 
             # Result should maintain input precision when possible
             assert result.dtype == precision or result.dtype == np.float64
@@ -646,4 +661,590 @@ class TestNonlinearTransformComposition:
             # Round-trip test with appropriate tolerance for precision
             rtol = 1e-5 if precision == np.float32 else 1e-12
             back = transform.imap(result)
-            np.testing.assert_allclose(coords, back, rtol=rtol)
+            np.testing.assert_allclose(coords_2d, back, rtol=rtol)
+
+        # Test 3D transforms
+        for transform in transforms_3d:
+            result = transform.map(coords_3d)
+
+            # Result should maintain input precision when possible
+            assert result.dtype == precision or result.dtype == np.float64
+
+            # Round-trip test with appropriate tolerance for precision
+            rtol = 1e-4 if precision == np.float32 else 1e-10  # Slightly relaxed for 3D
+            back = transform.imap(result)
+            np.testing.assert_allclose(coords_3d, back, rtol=rtol)
+
+
+class TestSphericalTransformEdgeCases:
+    """Test SphericalTransform with edge cases and critical geometries."""
+
+    def test_spherical_transform_cardinal_directions(self):
+        """Test SphericalTransform with points along cardinal axes."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Test cardinal directions: +X, -X, +Y, -Y, +Z, -Z
+        cartesian_coords = np.array([
+            [1.0, 0.0, 0.0],    # +X axis
+            [-1.0, 0.0, 0.0],   # -X axis
+            [0.0, 1.0, 0.0],    # +Y axis
+            [0.0, -1.0, 0.0],   # -Y axis
+            [0.0, 0.0, 1.0],    # +Z axis (north pole)
+            [0.0, 0.0, -1.0],   # -Z axis (south pole)
+        ], dtype=np.float64)
+
+        # Convert Cartesian → Spherical using _map (not _imap)
+        spherical = st.map(cartesian_coords)
+
+        # Check expected spherical coordinates
+        # [lon, lat, r] where lon=arctan2(y,x), lat=arcsin(z/r), r=sqrt(x²+y²+z²)
+        expected = np.array([
+            [0.0, 0.0, 1.0],              # +X: lon=0, lat=0, r=1
+            [math.pi, 0.0, 1.0],          # -X: lon=π, lat=0, r=1
+            [math.pi/2, 0.0, 1.0],        # +Y: lon=π/2, lat=0, r=1
+            [-math.pi/2, 0.0, 1.0],       # -Y: lon=-π/2, lat=0, r=1
+            [0.0, math.pi/2, 1.0],        # +Z: lon=0 (arbitrary), lat=π/2, r=1
+            [0.0, -math.pi/2, 1.0],       # -Z: lon=0 (arbitrary), lat=-π/2, r=1
+        ], dtype=np.float64)
+
+        np.testing.assert_allclose(spherical, expected, atol=1e-14)
+
+    def test_spherical_transform_origin(self):
+        """Test SphericalTransform with origin point."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Origin should have r=0, with lon and lat undefined (NaN)
+        origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
+        spherical = st.map(origin)
+
+        # r should be 0
+        assert spherical[0, 2] == 0
+        # lon and lat should be NaN due to division by zero in arctan2 and arcsin
+        assert np.isnan(spherical[0, 0]) or spherical[0, 0] == 0  # arctan2(0,0) can return 0
+        assert np.isnan(spherical[0, 1])  # arcsin(0/0) = NaN
+
+    def test_spherical_transform_round_trip_accuracy(self):
+        """Test round-trip accuracy: cartesian → spherical → cartesian."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Test various cartesian coordinates
+        cartesian_coords = np.array([
+            [1, 1, 1],           # First octant
+            [-1, 1, 1],          # Second octant
+            [-1, -1, 1],         # Third octant
+            [1, -1, 1],          # Fourth octant
+            [1, 1, -1],          # Fifth octant
+            [-1, 1, -1],         # Sixth octant
+            [-1, -1, -1],        # Seventh octant
+            [1, -1, -1],         # Eighth octant
+            [2, 3, 4],           # Different radii
+            [0.1, 0.2, 0.3],     # Small values
+        ])
+
+        spherical = st.map(cartesian_coords)
+        cartesian_back = st.imap(spherical)
+
+        np.testing.assert_allclose(cartesian_coords, cartesian_back, rtol=1e-14, atol=1e-15)
+
+    def test_spherical_transform_pole_singularities(self):
+        """Test SphericalTransform at north and south poles where longitude is undefined."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Points at poles with different "longitudes" should all map to same cartesian point
+        north_pole_coords = np.array([
+            [0, math.pi/2, 1],        # North pole, lon=0
+            [math.pi/4, math.pi/2, 1], # North pole, lon=π/4
+            [math.pi/2, math.pi/2, 1], # North pole, lon=π/2
+            [math.pi, math.pi/2, 1],   # North pole, lon=π
+        ])
+
+        # Convert spherical → cartesian using _imap
+        cartesian = st.imap(north_pole_coords)
+
+        # All should map to [0, 0, 1] (north pole in cartesian)
+        expected_north = np.array([0, 0, 1])
+        for i in range(len(cartesian)):
+            np.testing.assert_allclose(cartesian[i], expected_north, atol=1e-14)
+
+        # Same test for south pole
+        south_pole_coords = np.array([
+            [0, -math.pi/2, 1],
+            [math.pi/4, -math.pi/2, 1],
+            [math.pi/2, -math.pi/2, 1],
+            [math.pi, -math.pi/2, 1],
+        ])
+
+        cartesian_south = st.imap(south_pole_coords)
+        expected_south = np.array([0, 0, -1])
+        for i in range(len(cartesian_south)):
+            np.testing.assert_allclose(cartesian_south[i], expected_south, atol=1e-14)
+
+    def test_spherical_transform_different_radii(self):
+        """Test SphericalTransform with various radius values."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Test same direction with different radii
+        radii = [0.1, 0.5, 1, 2, 10, 100]
+        lon, lat = math.pi/4, math.pi/6  # 45°, 30°
+
+        spherical_coords = np.array([[lon, lat, r] for r in radii])
+        cartesian = st.imap(spherical_coords)
+
+        # Check that all points lie on same ray from origin
+        for i in range(1, len(cartesian)):
+            # Direction vectors should be parallel
+            direction1 = cartesian[0] / np.linalg.norm(cartesian[0])
+            direction2 = cartesian[i] / np.linalg.norm(cartesian[i])
+            np.testing.assert_allclose(direction1, direction2, rtol=1e-14)
+
+        # Check that distances are correct
+        for i, r in enumerate(radii):
+            distance = np.linalg.norm(cartesian[i])
+            np.testing.assert_allclose(distance, r, rtol=1e-14)
+
+    def test_spherical_transform_extreme_values(self):
+        """Test SphericalTransform with extreme coordinate values."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Very large radius
+        large_coords = np.array([[0, 0, 1e6]])
+        cartesian_large = st.imap(large_coords)
+        spherical_back = st.map(cartesian_large)
+        np.testing.assert_allclose(large_coords, spherical_back, rtol=1e-12)
+
+        # Very small radius
+        small_coords = np.array([[math.pi/4, math.pi/6, 1e-6]])
+        cartesian_small = st.imap(small_coords)
+        spherical_small_back = st.map(cartesian_small)
+        np.testing.assert_allclose(small_coords, spherical_small_back, rtol=1e-10)
+
+    def test_spherical_transform_angle_wraparound(self):
+        """Test SphericalTransform with angles outside standard ranges."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Test longitude wraparound (angles outside [-π, π])
+        coords = np.array([
+            [0, 0, 1],           # Standard
+            [2*math.pi, 0, 1],   # Equivalent to 0
+            [3*math.pi, 0, 1],   # Equivalent to π
+            [-3*math.pi, 0, 1],  # Equivalent to π
+        ])
+
+        cartesian = st.map(coords)
+
+        # Should still produce valid results
+        assert np.isfinite(cartesian).all()
+
+        # Test latitude beyond [-π/2, π/2] - these are invalid but should not crash
+        invalid_lat_coords = np.array([
+            [0, math.pi, 1],     # Invalid latitude
+            [0, -math.pi, 1],    # Invalid latitude
+        ])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            cartesian_invalid = st.map(invalid_lat_coords)
+
+        # Should produce some result (though may be nonsensical)
+        assert cartesian_invalid.shape == invalid_lat_coords.shape
+
+
+class TestMercatorSphericalTransformEdgeCases:
+    """Test MercatorSphericalTransform with edge cases and critical latitudes."""
+
+    def test_mercator_transform_equator(self):
+        """Test MercatorSphericalTransform with points on the equator."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Points on equator (lat=0)
+        equator_coords = np.array([
+            [0, 0, 1],                    # lon=0, lat=0
+            [math.pi/2, 0, 1],           # lon=π/2, lat=0
+            [math.pi, 0, 1],             # lon=π, lat=0
+            [-math.pi/2, 0, 1],          # lon=-π/2, lat=0
+        ])
+
+        mercator = mt.map(equator_coords)
+
+        # On equator, y should be 0 (since log(tan(π/4 + 0/2)) = log(1) = 0)
+        expected = np.array([
+            [0, 0, 1],
+            [math.pi/2, 0, 1],
+            [math.pi, 0, 1],
+            [-math.pi/2, 0, 1],
+        ])
+
+        np.testing.assert_allclose(mercator, expected, atol=1e-14)
+
+    def test_mercator_transform_pole_clipping(self):
+        """Test MercatorSphericalTransform with latitudes near poles."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test latitudes very close to but not exactly at poles
+        near_pole_coords = np.array([
+            [0, math.pi/2 - 1e-6, 1],    # Very close to north pole
+            [0, -math.pi/2 + 1e-6, 1],   # Very close to south pole
+        ])
+
+        mercator = mt.map(near_pole_coords)
+
+        # Should produce large but finite y values
+        assert np.isfinite(mercator).all()
+        assert abs(mercator[0, 1]) > 10  # Should be large positive
+        assert abs(mercator[1, 1]) > 10  # Should be large negative (or absolute value)
+
+    def test_mercator_transform_round_trip_accuracy(self):
+        """Test round-trip accuracy: spherical → mercator → spherical."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test various spherical coordinates (avoiding poles)
+        spherical_coords = np.array([
+            [0, 0, 1],                      # Equator
+            [math.pi/4, math.pi/4, 1],      # 45° lat
+            [math.pi/2, math.pi/6, 1],      # 30° lat
+            [-math.pi/4, -math.pi/4, 1],    # -45° lat
+            [0, math.pi/3, 2],              # Different radius
+        ])
+
+        mercator = mt.map(spherical_coords)
+        spherical_back = mt.imap(mercator)
+
+        np.testing.assert_allclose(spherical_coords, spherical_back, rtol=1e-14, atol=1e-15)
+
+    def test_mercator_transform_longitude_preservation(self):
+        """Test that MercatorSphericalTransform preserves longitude exactly."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test various longitudes with same latitude
+        lat = math.pi/6  # 30°
+        longitudes = np.array([0, math.pi/4, math.pi/2, 3*math.pi/4, math.pi, -math.pi/2])
+
+        coords = np.array([[lon, lat, 1] for lon in longitudes])
+        mercator = mt.map(coords)
+
+        # x coordinate should exactly equal longitude
+        for i, lon in enumerate(longitudes):
+            assert mercator[i, 0] == lon
+
+    def test_mercator_transform_z_axis_preservation(self):
+        """Test that MercatorSphericalTransform preserves z and higher dimensions."""
+        mt = MercatorSphericalTransform(dims=(4, 4))
+
+        # Test with 4D coordinates including a "brightness" dimension
+        coords = np.array([
+            [0, 0, 5, 128],              # z=5, brightness=128
+            [math.pi/4, math.pi/4, 2, 255],  # z=2, brightness=255
+        ])
+
+        mercator = mt.map(coords)
+
+        # z and brightness should be unchanged
+        assert mercator[0, 2] == 5
+        assert mercator[0, 3] == 128
+        assert mercator[1, 2] == 2
+        assert mercator[1, 3] == 255
+
+    def test_mercator_transform_extreme_latitudes(self):
+        """Test MercatorSphericalTransform with latitudes very close to poles."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test with latitudes that should be clipped by the transform
+        extreme_coords = np.array([
+            [0, math.pi/2 - 1e-6, 1],     # Just under north pole
+            [0, -(math.pi/2 - 1e-6), 1],  # Just under south pole
+        ])
+
+        # Apply transform
+        mercator = mt.map(extreme_coords)
+
+        # Should produce finite results due to clipping in the implementation
+        assert np.isfinite(mercator).all()
+
+        # y values should be very large but finite
+        assert abs(mercator[0, 1]) > 100
+        assert abs(mercator[1, 1]) > 100
+
+    def test_mercator_transform_mathematical_accuracy(self):
+        """Test mathematical accuracy of Mercator projection formulas."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test specific known values
+        test_cases = [
+            # [lon, lat] -> expected [x, y]
+            ([0, 0], [0, 0]),  # Equator, prime meridian
+            ([math.pi/2, 0], [math.pi/2, 0]),  # Equator, 90°E
+            ([0, math.pi/4], [0, math.log(math.tan(math.pi/4 + math.pi/8))]),  # 45°N
+        ]
+
+        for (lon, lat), (expected_x, expected_y) in test_cases:
+            coords = np.array([[lon, lat, 1]])
+            mercator = mt.map(coords)
+
+            np.testing.assert_allclose(mercator[0, 0], expected_x, rtol=1e-14)
+            np.testing.assert_allclose(mercator[0, 1], expected_y, rtol=1e-14)
+            # z should be unchanged
+            assert mercator[0, 2] == 1
+
+    def test_mercator_transform_inverse_accuracy(self):
+        """Test accuracy of inverse Mercator projection."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test specific inverse cases
+        mercator_coords = np.array([
+            [0, 0, 1],                              # Origin
+            [math.pi/2, 1, 1],                     # Moderate y
+            [-math.pi/4, -0.5, 1],                 # Negative values
+        ])
+
+        spherical = mt.imap(mercator_coords)
+        mercator_back = mt.map(spherical)
+
+        np.testing.assert_allclose(mercator_coords, mercator_back, rtol=1e-14)
+
+    def test_mercator_transform_continuity(self):
+        """Test continuity of Mercator transform across longitude boundaries."""
+        mt = MercatorSphericalTransform(dims=(3, 3))
+
+        # Test points very close to longitude boundary at ±π
+        boundary_coords = np.array([
+            [math.pi - 1e-10, math.pi/6, 1],      # Just before +π
+            [-math.pi + 1e-10, math.pi/6, 1],     # Just after -π
+        ])
+
+        mercator = mt.map(boundary_coords)
+
+        # Should produce finite, reasonable results
+        assert np.isfinite(mercator).all()
+
+        # The y values should be identical (same latitude)
+        np.testing.assert_allclose(mercator[0, 1], mercator[1, 1], rtol=1e-12)
+
+
+class TestLambertAzimuthalEqualAreaTransformEdgeCases:
+    """Test LambertAzimuthalEqualAreaTransform with edge cases and projection geometry."""
+
+    def test_lambert_transform_north_pole_center(self):
+        """Test LambertAzimuthalEqualAreaTransform centered at north pole."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test projection center (north pole should map to origin)
+        north_pole = np.array([[0, math.pi/2, 1]])  # lon=0, lat=π/2
+        projected = lt.map(north_pole)
+
+        # Should map to origin (0, 0)
+        expected = np.array([[0, 0, 1]])
+        np.testing.assert_allclose(projected, expected, atol=1e-14)
+
+    def test_lambert_transform_equator_circle(self):
+        """Test LambertAzimuthalEqualAreaTransform with points on the equator."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Points on equator at various longitudes
+        equator_coords = np.array([
+            [0, 0, 1],              # lon=0, lat=0 (prime meridian)
+            [math.pi/2, 0, 1],      # lon=π/2, lat=0 (90°E)
+            [math.pi, 0, 1],        # lon=π, lat=0 (180°)
+            [-math.pi/2, 0, 1],     # lon=-π/2, lat=0 (90°W)
+        ])
+
+        projected = lt.map(equator_coords)
+
+        # All equator points should have same distance from origin (equal area property)
+        distances = [np.sqrt(projected[i, 0]**2 + projected[i, 1]**2) for i in range(len(projected))]
+
+        # All distances should be equal
+        for dist in distances:
+            np.testing.assert_allclose(dist, distances[0], rtol=1e-12)
+
+        # Expected distance for equator when centered at north pole
+        # k = sqrt(2 / (1 + sin(0))) = sqrt(2)
+        expected_distance = math.sqrt(2)
+        np.testing.assert_allclose(distances[0], expected_distance, rtol=1e-12)
+
+    def test_lambert_transform_round_trip_accuracy(self):
+        """Test round-trip accuracy: spherical → lambert → spherical."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test various spherical coordinates
+        spherical_coords = np.array([
+            [0, math.pi/2, 1],          # North pole (center)
+            [0, 0, 1],                  # Equator, prime meridian
+            [math.pi/2, 0, 1],          # Equator, 90°E
+            [math.pi, 0, 1],            # Equator, 180°
+            [0, math.pi/4, 1],          # 45°N, prime meridian
+            [math.pi/4, math.pi/4, 1],  # 45°N, 45°E
+            [math.pi/2, math.pi/6, 2],  # 30°N, 90°E, different radius
+        ])
+
+        lambert = lt.map(spherical_coords)
+        spherical_back = lt.imap(lambert)
+
+        np.testing.assert_allclose(spherical_coords, spherical_back, rtol=1e-14, atol=1e-15)
+
+    def test_lambert_transform_z_axis_preservation(self):
+        """Test that LambertAzimuthalEqualAreaTransform preserves z and higher dimensions."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(4, 4))
+
+        # Test with 4D coordinates
+        coords = np.array([
+            [0, 0, 3, 100],                    # z=3, value=100
+            [math.pi/4, math.pi/4, 1.5, 50],  # z=1.5, value=50
+        ])
+
+        lambert = lt.map(coords)
+
+        # z and extra dimensions should be unchanged
+        assert lambert[0, 2] == 3
+        assert lambert[0, 3] == 100
+        assert lambert[1, 2] == 1.5
+        assert lambert[1, 3] == 50
+
+    def test_lambert_transform_antipodal_point(self):
+        """Test LambertAzimuthalEqualAreaTransform with south pole (antipodal to center)."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test point very close to south pole but not exactly at it (to avoid divide by zero)
+        near_south_pole = np.array([[0, -math.pi/2 + 1e-10, 1]])  # Very close to lat=-π/2
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            projected = lt.map(near_south_pole)
+
+        # Should map to a large distance point, but finite due to numerical clipping
+        distance = math.sqrt(projected[0, 0]**2 + projected[0, 1]**2)
+
+        # The distance should be very large but finite
+        assert distance > 10  # Should be very large due to proximity to singularity
+        assert np.isfinite(distance)  # But still finite
+
+    def test_lambert_transform_mathematical_accuracy(self):
+        """Test mathematical accuracy of Lambert projection formulas."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test specific cases where we know the mathematical result
+        # For projection centered at north pole (φ₀ = π/2, λ₀ = 0)
+
+        # Equator at prime meridian: φ=0, λ=0
+        coords = np.array([[0, 0, 1]])
+        projected = lt.map(coords)
+
+        # k = sqrt(2 / (1 + sin(0))) = sqrt(2)
+        # x = k * cos(0) * sin(0) = 0
+        # y = -k * cos(0) * cos(0) = -sqrt(2)
+        expected = np.array([[0, -math.sqrt(2), 1]])
+        np.testing.assert_allclose(projected, expected, rtol=1e-14)
+
+    def test_lambert_transform_symmetry(self):
+        """Test symmetry properties of Lambert projection."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test longitude symmetry around prime meridian
+        coords_east = np.array([[math.pi/4, math.pi/4, 1]])   # 45°E, 45°N
+        coords_west = np.array([[-math.pi/4, math.pi/4, 1]])  # 45°W, 45°N
+
+        projected_east = lt.map(coords_east)
+        projected_west = lt.map(coords_west)
+
+        # Should be mirror images across y-axis
+        np.testing.assert_allclose(projected_east[0, 0], -projected_west[0, 0], rtol=1e-12)
+        np.testing.assert_allclose(projected_east[0, 1], projected_west[0, 1], rtol=1e-12)
+
+    def test_lambert_transform_edge_latitude_values(self):
+        """Test LambertAzimuthalEqualAreaTransform with latitude edge values."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test latitudes very close to south pole (opposite to projection center)
+        edge_coords = np.array([
+            [0, -math.pi/2 + 1e-6, 1],    # Very close to south pole
+            [math.pi/2, -math.pi/3, 1],   # 60°S
+        ])
+
+        projected = lt.map(edge_coords)
+
+        # Should produce finite results
+        assert np.isfinite(projected).all()
+
+        # Distance from origin should be large for points near south pole
+        distance_near_pole = math.sqrt(projected[0, 0]**2 + projected[0, 1]**2)
+        assert distance_near_pole > 1.5  # Should be well separated from center
+
+    def test_lambert_transform_inverse_accuracy(self):
+        """Test accuracy of inverse Lambert projection."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test specific projected coordinates
+        lambert_coords = np.array([
+            [0, 0, 1],                    # Origin (north pole)
+            [1, 0, 1],                    # Point on x-axis
+            [0, -1, 1],                   # Point on negative y-axis
+            [0.5, 0.5, 2],               # Diagonal point, different radius
+        ])
+
+        spherical = lt.imap(lambert_coords)
+        lambert_back = lt.map(spherical)
+
+        np.testing.assert_allclose(lambert_coords, lambert_back, rtol=1e-12, atol=1e-14)
+
+    def test_lambert_transform_area_preservation_property(self):
+        """Test that Lambert projection preserves area (equal-area property)."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Create a small spherical "rectangle" and verify its area is preserved
+        # Note: This is a qualitative test since exact area computation is complex
+
+        # Small region around 45°N, 0°
+        delta = math.pi/36  # 5 degrees
+        center_lat, center_lon = math.pi/4, 0
+
+        corners_spherical = np.array([
+            [center_lon - delta, center_lat - delta, 1],
+            [center_lon + delta, center_lat - delta, 1],
+            [center_lon + delta, center_lat + delta, 1],
+            [center_lon - delta, center_lat + delta, 1],
+        ])
+
+        corners_projected = lt.map(corners_spherical)
+
+        # Check that the projection produces a reasonable quadrilateral
+        # (exact area computation would require more complex geometry)
+        assert np.isfinite(corners_projected).all()
+
+        # Verify that points maintain reasonable relative positions
+        # The projected region should maintain its general shape properties
+        x_coords = corners_projected[:, 0]
+        y_coords = corners_projected[:, 1]
+
+        # Should span some reasonable range in both x and y
+        assert (x_coords.max() - x_coords.min()) > 0.01
+        assert (y_coords.max() - y_coords.min()) > 0.01
+
+    def test_lambert_transform_boundary_conditions(self):
+        """Test LambertAzimuthalEqualAreaTransform at projection boundaries."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(3, 3))
+
+        # Test coordinates that might cause numerical issues, avoiding exact south pole
+        boundary_coords = np.array([
+            [0, math.pi/2, 1],                    # Projection center (north pole)
+            [math.pi, -math.pi/2 + 1e-8, 1],     # Very close to south pole (avoiding singularity)
+            [0, 1e-15, 1],                       # Very close to equator
+            [math.pi - 1e-15, 0, 1],             # Very close to 180° longitude
+        ])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            projected = lt.map(boundary_coords)
+
+        # Results should be mostly finite (except possibly the near-south-pole case)
+        assert np.isfinite(projected[0]).all()  # North pole should be finite
+        assert np.isfinite(projected[2]).all()  # Near equator should be finite
+        assert np.isfinite(projected[3]).all()  # Near 180° should be finite
+
+        # Test round-trip accuracy for the stable cases (excluding near south pole)
+        stable_coords = boundary_coords[[0, 2, 3]]  # Skip the near-south-pole case
+        stable_projected = projected[[0, 2, 3]]
+
+        spherical_back = lt.imap(stable_projected)
+        projected_again = lt.map(spherical_back)
+
+        # Should be stable for non-singular cases
+        np.testing.assert_allclose(stable_projected, projected_again, rtol=1e-10, atol=1e-12)
