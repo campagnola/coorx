@@ -1222,11 +1222,17 @@ class Homography2DTransform(Transform):
         ArrayParameter("inv_matrix", dtype=float, shape=(3, 3), default=lambda shape: np.eye(3)),
     ]
 
-    def __init__(self, **kwds):
+    def __init__(self, src_quad=None, dst_quad=None, **kwds):
         kwds.setdefault('dims', (2, 2))
         if kwds['dims'] != (2, 2):
             raise ValueError("Homography2DTransform must have dims (2, 2)")
         super().__init__(**kwds)
+
+        # If quad points are provided, set the mapping
+        if src_quad is not None and dst_quad is not None:
+            self.set_mapping(src_quad, dst_quad)
+        elif src_quad is not None or dst_quad is not None:
+            raise ValueError("Both src_quad and dst_quad must be provided, or neither")
 
     def matrix(self):
         return self._state["matrix"].copy()
@@ -1244,3 +1250,62 @@ class Homography2DTransform(Transform):
         arr4 = self._prepare_for_mapping(arr)
         out = np.dot(arr4, self._state["inv_matrix"].T)
         return out[:, :2] / out[:, 2:3]
+
+    @staticmethod
+    def _prepare_for_mapping(points):
+        """Convert 2D points to homogeneous coordinates.
+
+        Convert [[x, y], ...] to [[x, y, 1], ...]
+        """
+        assert points.ndim >= 2
+        assert points.shape[-1] == 2
+        out = np.empty(points.shape[:-1] + (3,), dtype=points.dtype)
+        out[..., :2] = points
+        out[..., 2] = 1
+        return out
+
+    def set_mapping(self, points1, points2):
+        """Set to a transformation matrix that maps points1 onto points2.
+
+        Arguments must be array-like with shape (4, 2) - four point correspondences.
+        """
+        # convert inputs to (4, 2) arrays
+        points1 = self._prepare_arg_for_mapping(points1)[0]
+        points2 = self._prepare_arg_for_mapping(points2)[0]
+        assert (
+            points1.shape == points2.shape == (4, 2)
+        ), f"Input arrays must have shape (4, 2); got ({points1.shape}, {points2.shape})"
+
+        # solve for homography matrix using DLT (Direct Linear Transformation)
+        matrix = self._solve_homography(points1, points2)
+        inv_matrix = self._solve_homography(points2, points1)
+
+        self.set_params(matrix=matrix, inv_matrix=inv_matrix)
+
+    @staticmethod
+    def _solve_homography(src_pts, dst_pts):
+        """Solve for 3x3 homography matrix using DLT algorithm."""
+        # Build the system of equations Ah = 0
+        A = []
+        for i in range(4):
+            x, y = src_pts[i]
+            u, v = dst_pts[i]
+
+            # Two equations per point correspondence
+            A.append([-x, -y, -1, 0, 0, 0, u*x, u*y, u])
+            A.append([0, 0, 0, -x, -y, -1, v*x, v*y, v])
+
+        A = np.array(A, dtype=float)
+
+        # Solve Ah = 0 using SVD
+        _, _, Vt = np.linalg.svd(A)
+        h = Vt[-1, :]  # Last row of V (corresponding to smallest singular value)
+
+        # Reshape to 3x3 matrix
+        H = h.reshape(3, 3)
+
+        # Normalize so that H[2,2] = 1 (if non-zero)
+        if abs(H[2, 2]) > 1e-10:
+            H = H / H[2, 2]
+
+        return H
