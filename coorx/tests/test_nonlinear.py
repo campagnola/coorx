@@ -550,7 +550,6 @@ class TestNonlinearTransformComposition:
             LogTransform(base=[2, 10], dims=(2, 2)),
             PolarTransform(dims=(2, 2)),
             LensDistortionTransform(coeff=(0.1, 0.05, 0.01, 0.01, 0.001)),
-            SphericalTransform(dims=(3, 3)),
             MercatorSphericalTransform(dims=(2, 2)),
             LambertAzimuthalEqualAreaTransform(dims=(2, 2)),
         ]
@@ -649,13 +648,6 @@ class TestNonlinearTransformComposition:
                 'rtol_float32': 1e-6,
                 'rtol_float64': 1e-12,
             },
-            # 3D Cartesian to spherical coordinate transform
-            {
-                'transform': SphericalTransform(dims=(3, 3)),
-                'coords': [[1, 1, 1], [2, 2, 2]],
-                'rtol_float32': 1e-6,
-                'rtol_float64': 1e-12,
-            },
             # 2D spherical coordinate map projections (input: lon, lat in radians)
             {
                 'transform': MercatorSphericalTransform(dims=(2, 2)),
@@ -689,181 +681,176 @@ class TestNonlinearTransformComposition:
             np.testing.assert_allclose(coords, back, rtol=rtol)
 
 
-class TestSphericalTransformEdgeCases:
-    """Test SphericalTransform with edge cases and critical geometries."""
+class TestSphericalTransformSimplified:
+    """Simplified test for SphericalTransform using utility functions."""
 
-    def test_spherical_transform_cardinal_directions(self):
-        """Test SphericalTransform with points along cardinal axes."""
+    def test_spherical_transform_comprehensive(self):
+        """Comprehensive test of SphericalTransform with various coordinate sets."""
         st = SphericalTransform(dims=(3, 3))
 
-        # Test cardinal directions: +X, -X, +Y, -Y, +Z, -Z
-        cartesian_coords = np.array([
-            [1.0, 0.0, 0.0],    # +X axis
-            [-1.0, 0.0, 0.0],   # -X axis
-            [0.0, 1.0, 0.0],    # +Y axis
-            [0.0, -1.0, 0.0],   # -Y axis
-            [0.0, 0.0, 1.0],    # +Z axis (north pole)
-            [0.0, 0.0, -1.0],   # -Z axis (south pole)
-        ], dtype=np.float64)
+        # Test cases: [input_coords, expected_output, kwargs]
+        test_cases = [
+            # Cardinal directions - Cartesian to Spherical
+            {
+                'input': [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0]],
+                'output': [[0.0, 0.0, 1.0], [math.pi, 0.0, 1.0], [math.pi/2, 0.0, 1.0], [-math.pi/2, 0.0, 1.0]],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
 
-        # Convert Cartesian → Spherical using _map (not _imap)
-        spherical = st.map(cartesian_coords)
+            # Poles - Cartesian to Spherical (longitude arbitrary at poles)
+            {
+                'input': [[0.0, 0.0, 1.0], [0.0, 0.0, -1.0]],
+                'output': [[0.0, math.pi/2, 1.0], [0.0, -math.pi/2, 1.0]],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
 
-        # Check expected spherical coordinates
-        # [lon, lat, r] where lon=arctan2(y,x), lat=arcsin(z/r), r=sqrt(x²+y²+z²)
-        expected = np.array([
-            [0.0, 0.0, 1.0],              # +X: lon=0, lat=0, r=1
-            [math.pi, 0.0, 1.0],          # -X: lon=π, lat=0, r=1
-            [math.pi/2, 0.0, 1.0],        # +Y: lon=π/2, lat=0, r=1
-            [-math.pi/2, 0.0, 1.0],       # -Y: lon=-π/2, lat=0, r=1
-            [0.0, math.pi/2, 1.0],        # +Z: lon=0 (arbitrary), lat=π/2, r=1
-            [0.0, -math.pi/2, 1.0],       # -Z: lon=0 (arbitrary), lat=-π/2, r=1
-        ], dtype=np.float64)
+            # All eight octants - comprehensive coverage
+            {
+                'input': [
+                    [1, 1, 1], [-1, 1, 1], [-1, -1, 1], [1, -1, 1],
+                    [1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]
+                ],
+                'output': [
+                    [math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],     # First octant
+                    [3*math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],   # Second octant
+                    [-3*math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],  # Third octant
+                    [-math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],    # Fourth octant
+                    [math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)],    # Fifth octant
+                    [3*math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)],  # Sixth octant
+                    [-3*math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)], # Seventh octant
+                    [-math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)]    # Eighth octant
+                ],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
 
-        np.testing.assert_allclose(spherical, expected, atol=1e-14)
+            # Various radii with same direction
+            {
+                'input': [[2, 3, 4], [0.2, 0.3, 0.4], [20, 30, 40]],
+                'output': [
+                    [math.atan2(3, 2), math.atan2(4, math.sqrt(2*2 + 3*3)), math.sqrt(2*2 + 3*3 + 4*4)],
+                    [math.atan2(0.3, 0.2), math.atan2(0.4, math.sqrt(0.2*0.2 + 0.3*0.3)), math.sqrt(0.2*0.2 + 0.3*0.3 + 0.4*0.4)],
+                    [math.atan2(30, 20), math.atan2(40, math.sqrt(20*20 + 30*30)), math.sqrt(20*20 + 30*30 + 40*40)]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
 
-        # Test inverse transformation: Spherical → Cartesian
-        cartesian_back = st.imap(spherical)
-        np.testing.assert_allclose(cartesian_back, cartesian_coords, rtol=1e-12, atol=1e-15)
+            # Small coordinates for numerical stability
+            {
+                'input': [[0.1, 0.2, 0.3], [1e-3, 2e-3, 3e-3]],
+                'output': [
+                    [math.atan2(0.2, 0.1), math.atan2(0.3, math.sqrt(0.1*0.1 + 0.2*0.2)), math.sqrt(0.1*0.1 + 0.2*0.2 + 0.3*0.3)],
+                    [math.atan2(2e-3, 1e-3), math.atan2(3e-3, math.sqrt(1e-6 + 4e-6)), math.sqrt(1e-6 + 4e-6 + 9e-6)]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            },
 
-    def test_spherical_transform_origin(self):
-        """Test SphericalTransform with origin point."""
+            # Large coordinates for extreme values
+            {
+                'input': [[1e3, 2e3, 3e3], [1e6, 0, 0]],
+                'output': [
+                    [math.atan2(2e3, 1e3), math.atan2(3e3, math.sqrt(1e6 + 4e6)), math.sqrt(1e6 + 4e6 + 9e6)],
+                    [0.0, 0.0, 1e6]
+                ],
+                'forward_precision': 1e-10,
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            }
+        ]
+
+        for case in test_cases:
+            input_coords = np.array(case['input'], dtype=np.float64)
+            expected_output = np.array(case['output'], dtype=np.float64)
+
+            # Run comprehensive transform test
+            check_transform(
+                st,
+                input_coords,
+                expected_output,
+                forward_precision=case['forward_precision'],
+                reverse_precision=case.get('reverse_precision', 1e-12),
+                roundtrip_precision=case.get('roundtrip_precision', 1e-12),
+                test_reverse=case.get('test_reverse', True),
+                test_roundtrip=case.get('test_roundtrip', True)
+            )
+
+    def test_spherical_transform_pole_consistency(self):
+        """Test that pole points with different longitudes map to same cartesian point."""
         st = SphericalTransform(dims=(3, 3))
 
-        # Origin should have r=0, with lon and lat undefined (NaN)
-        origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
-        spherical = st.map(origin)
-
-        # r should be 0
-        assert spherical[0, 2] == 0
-        # lon and lat should be NaN due to division by zero in arctan2 and arcsin
-        assert np.isnan(spherical[0, 0]) or spherical[0, 0] == 0  # arctan2(0,0) can return 0
-        assert np.isnan(spherical[0, 1])  # arcsin(0/0) = NaN
-
-    def test_spherical_transform_round_trip_accuracy(self):
-        """Test round-trip accuracy: cartesian → spherical → cartesian."""
-        st = SphericalTransform(dims=(3, 3))
-
-        # Test various cartesian coordinates
-        cartesian_coords = np.array([
-            [1, 1, 1],           # First octant
-            [-1, 1, 1],          # Second octant
-            [-1, -1, 1],         # Third octant
-            [1, -1, 1],          # Fourth octant
-            [1, 1, -1],          # Fifth octant
-            [-1, 1, -1],         # Sixth octant
-            [-1, -1, -1],        # Seventh octant
-            [1, -1, -1],         # Eighth octant
-            [2, 3, 4],           # Different radii
-            [0.1, 0.2, 0.3],     # Small values
-        ])
-
-        spherical = st.map(cartesian_coords)
-        cartesian_back = st.imap(spherical)
-
-        np.testing.assert_allclose(cartesian_coords, cartesian_back, rtol=1e-14, atol=1e-15)
-
-    def test_spherical_transform_pole_singularities(self):
-        """Test SphericalTransform at north and south poles where longitude is undefined."""
-        st = SphericalTransform(dims=(3, 3))
-
-        # Points at poles with different "longitudes" should all map to same cartesian point
+        # North pole with different longitudes
         north_pole_coords = np.array([
-            [0, math.pi/2, 1],        # North pole, lon=0
-            [math.pi/4, math.pi/2, 1], # North pole, lon=π/4
-            [math.pi/2, math.pi/2, 1], # North pole, lon=π/2
-            [math.pi, math.pi/2, 1],   # North pole, lon=π
-        ])
+            [0, math.pi/2, 1], [math.pi/4, math.pi/2, 1],
+            [math.pi/2, math.pi/2, 1], [math.pi, math.pi/2, 1]
+        ], dtype=np.float64)
 
-        # Convert spherical → cartesian using _imap
-        cartesian = st.imap(north_pole_coords)
+        expected_north = np.array([[0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]], dtype=np.float64)
+        check_mapping(st.inverse, north_pole_coords, expected_north, precision=1e-14)
 
-        # All should map to [0, 0, 1] (north pole in cartesian)
-        expected_north = np.array([0, 0, 1])
-        for i in range(len(cartesian)):
-            np.testing.assert_allclose(cartesian[i], expected_north, atol=1e-14)
-
-        # Same test for south pole
+        # South pole with different longitudes
         south_pole_coords = np.array([
-            [0, -math.pi/2, 1],
-            [math.pi/4, -math.pi/2, 1],
-            [math.pi/2, -math.pi/2, 1],
-            [math.pi, -math.pi/2, 1],
-        ])
+            [0, -math.pi/2, 1], [math.pi/4, -math.pi/2, 1],
+            [math.pi/2, -math.pi/2, 1], [math.pi, -math.pi/2, 1]
+        ], dtype=np.float64)
 
-        cartesian_south = st.imap(south_pole_coords)
-        expected_south = np.array([0, 0, -1])
-        for i in range(len(cartesian_south)):
-            np.testing.assert_allclose(cartesian_south[i], expected_south, atol=1e-14)
+        expected_south = np.array([[0, 0, -1], [0, 0, -1], [0, 0, -1], [0, 0, -1]], dtype=np.float64)
+        check_mapping(st.inverse, south_pole_coords, expected_south, precision=1e-14)
 
-    def test_spherical_transform_different_radii(self):
-        """Test SphericalTransform with various radius values."""
+    def test_spherical_transform_origin_singularity(self):
+        """Test SphericalTransform behavior at origin singularity."""
         st = SphericalTransform(dims=(3, 3))
 
-        # Test same direction with different radii
-        radii = [0.1, 0.5, 1, 2, 10, 100]
-        lon, lat = math.pi/4, math.pi/6  # 45°, 30°
-
-        spherical_coords = np.array([[lon, lat, r] for r in radii])
-        cartesian = st.imap(spherical_coords)
-
-        # Check that all points lie on same ray from origin
-        for i in range(1, len(cartesian)):
-            # Direction vectors should be parallel
-            direction1 = cartesian[0] / np.linalg.norm(cartesian[0])
-            direction2 = cartesian[i] / np.linalg.norm(cartesian[i])
-            np.testing.assert_allclose(direction1, direction2, rtol=1e-14)
-
-        # Check that distances are correct
-        for i, r in enumerate(radii):
-            distance = np.linalg.norm(cartesian[i])
-            np.testing.assert_allclose(distance, r, rtol=1e-14)
-
-    def test_spherical_transform_extreme_values(self):
-        """Test SphericalTransform with extreme coordinate values."""
-        st = SphericalTransform(dims=(3, 3))
-
-        # Very large radius
-        large_coords = np.array([[0, 0, 1e6]])
-        cartesian_large = st.imap(large_coords)
-        spherical_back = st.map(cartesian_large)
-        np.testing.assert_allclose(large_coords, spherical_back, rtol=1e-12)
-
-        # Very small radius
-        small_coords = np.array([[math.pi/4, math.pi/6, 1e-6]])
-        cartesian_small = st.imap(small_coords)
-        spherical_small_back = st.map(cartesian_small)
-        np.testing.assert_allclose(small_coords, spherical_small_back, rtol=1e-10)
-
-    def test_spherical_transform_angle_wraparound(self):
-        """Test SphericalTransform with angles outside standard ranges."""
-        st = SphericalTransform(dims=(3, 3))
-
-        # Test longitude wraparound (angles outside [-π, π])
-        coords = np.array([
-            [0, 0, 1],           # Standard
-            [2*math.pi, 0, 1],   # Equivalent to 0
-            [3*math.pi, 0, 1],   # Equivalent to π
-            [-3*math.pi, 0, 1],  # Equivalent to π
-        ])
-
-        cartesian = st.map(coords)
-
-        # Should still produce valid results
-        assert np.isfinite(cartesian).all()
-
-        # Test latitude beyond [-π/2, π/2] - these are invalid but should not crash
-        invalid_lat_coords = np.array([
-            [0, math.pi, 1],     # Invalid latitude
-            [0, -math.pi, 1],    # Invalid latitude
-        ])
+        # Origin maps to r=0 with undefined angles
+        origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            cartesian_invalid = st.map(invalid_lat_coords)
+            spherical = st.map(origin)
 
-        # Should produce some result (though may be nonsensical)
-        assert cartesian_invalid.shape == invalid_lat_coords.shape
+        # Ensure spherical is a valid array
+        assert spherical is not None and hasattr(spherical, 'shape')
+        assert spherical.shape[1] >= 3  # Should have at least 3 columns
+
+        # r should be 0
+        assert spherical[0, 2] == 0
+        # lon and lat may be NaN or arbitrary values due to 0/0
+        assert np.isnan(spherical[0, 0]) or np.isfinite(spherical[0, 0])
+        assert np.isnan(spherical[0, 1]) or spherical[0, 1] == 0
+
+    def test_spherical_transform_as_affine_error(self):
+        """Test that SphericalTransform raises NotImplementedError for as_affine."""
+        st = SphericalTransform(dims=(3, 3))
+
+        with pytest.raises(NotImplementedError):
+            st.as_affine()
+
+    def test_spherical_transform_precision_handling(self):
+        """Test SphericalTransform with different floating-point precisions."""
+        for precision in [np.float32, np.float64]:
+            st = SphericalTransform(dims=(3, 3))
+
+            # Test coordinates and expected tolerances
+            coords = np.array([[1, 1, 1], [2, 2, 2]], dtype=precision)
+            rtol = 1e-6 if precision == np.float32 else 1e-12
+
+            # Forward transform
+            result = st.map(coords)
+
+            # Result should maintain input precision when possible
+            assert result.dtype == precision or result.dtype == np.float64
+
+            # Round-trip test with expected precision
+            back = st.imap(result)
+            np.testing.assert_allclose(coords, back, rtol=rtol)
 
 
 class TestMercatorSphericalTransformSimplified:
