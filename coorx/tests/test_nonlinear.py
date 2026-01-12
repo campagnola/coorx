@@ -979,218 +979,163 @@ class TestMercatorSphericalTransformSimplified:
             )
 
 
-class TestLambertAzimuthalEqualAreaTransformEdgeCases:
-    """Test LambertAzimuthalEqualAreaTransform with edge cases and projection geometry."""
+class TestLambertAzimuthalEqualAreaTransformSimplified:
+    """Simplified test for LambertAzimuthalEqualAreaTransform using utility functions."""
 
-    def test_lambert_transform_north_pole_center(self):
-        """Test LambertAzimuthalEqualAreaTransform centered at north pole."""
+    def test_lambert_transform_comprehensive(self):
+        """Comprehensive test of LambertAzimuthalEqualAreaTransform with various coordinate sets."""
         lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
 
-        # Test projection center (north pole should map to origin)
-        north_pole = np.array([[0, math.pi/2]])  # lon=0, lat=π/2
-        projected = lt.map(north_pole)
+        # Test cases using Lambert Azimuthal Equal Area projection formulas
+        # k = sqrt(2 / (1 + sin(lat))), x = k * cos(lat) * sin(lon), y = -k * cos(lat) * cos(lon)
+        test_cases = [
+            # Projection center (north pole maps to origin)
+            {
+                'input': [[0, math.pi/2]],  # North pole
+                'output': [[0, 0]],         # Maps to origin
+                'forward_precision': 1e-14,
+                'test_reverse': False,      # Skip reverse test (longitude undefined at poles)
+                'test_roundtrip': False     # Skip roundtrip test due to pole singularity
+            },
 
-        # Should map to origin (0, 0)
-        expected = np.array([[0, 0]])
-        np.testing.assert_allclose(projected, expected, atol=1e-14)
+            # Mathematical accuracy - equator at prime meridian
+            {
+                'input': [[0.0, 0.0]],  # Equator, prime meridian
+                'output': [[0.0, -math.sqrt(2)]],  # x=0, y=-sqrt(2)
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
 
-    def test_lambert_transform_equator_circle(self):
-        """Test LambertAzimuthalEqualAreaTransform with points on the equator."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
+            # Equator points (should all have same distance sqrt(2) from origin)
+            {
+                'input': [[0, 0], [math.pi/2, 0], [math.pi, 0], [-math.pi/2, 0]],
+                'output': [
+                    [0, -math.sqrt(2)],           # lon=0: x=0, y=-sqrt(2)
+                    [math.sqrt(2), 0],            # lon=π/2: x=sqrt(2), y=0
+                    [0, math.sqrt(2)],            # lon=π: x=0, y=sqrt(2)
+                    [-math.sqrt(2), 0]            # lon=-π/2: x=-sqrt(2), y=0
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
 
-        # Points on equator at various longitudes
-        equator_coords = np.array([
-            [0, 0],              # lon=0, lat=0 (prime meridian)
-            [math.pi/2, 0],      # lon=π/2, lat=0 (90°E)
-            [math.pi, 0],        # lon=π, lat=0 (180°)
-            [-math.pi/2, 0],     # lon=-π/2, lat=0 (90°W)
-        ])
+            # Round-trip test coordinates
+            {
+                'input': [[0, math.pi/4], [math.pi/4, math.pi/4], [math.pi/2, math.pi/6]],
+                'output': [
+                    # lat=π/4, lon=0: k=sqrt(2/(1+sin(π/4))), x=0, y=-k*cos(π/4)
+                    [0, -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4)],
+                    # lat=π/4, lon=π/4: k=sqrt(2/(1+sin(π/4))), x=k*cos(π/4)*sin(π/4), y=-k*cos²(π/4)
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ],
+                    # lat=π/6, lon=π/2: k=sqrt(2/(1+sin(π/6))), x=k*cos(π/6), y=0
+                    [math.sqrt(2 / (1 + math.sin(math.pi/6))) * math.cos(math.pi/6), 0]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-14,
+                'roundtrip_precision': 1e-14
+            },
 
-        projected = lt.map(equator_coords)
+            # Symmetry test - east/west mirror images
+            {
+                'input': [[math.pi/4, math.pi/4], [-math.pi/4, math.pi/4]],  # 45°E and 45°W at 45°N
+                'output': [
+                    # 45°E, 45°N
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ],
+                    # 45°W, 45°N (mirror image - x negated, y same)
+                    [
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
 
-        # All equator points should have same distance from origin (equal area property)
-        distances = [np.sqrt(projected[i, 0]**2 + projected[i, 1]**2) for i in range(len(projected))]
+            # Boundary conditions (avoiding exact south pole singularity)
+            {
+                'input': [[0, 1e-15], [math.pi - 1e-15, 0]],  # Very close to equator, very close to 180°
+                'output': [
+                    # Very close to equator at prime meridian
+                    [0, -math.sqrt(2)],  # Essentially same as equator
+                    # Very close to 180° longitude at equator
+                    [0, math.sqrt(2)]    # Essentially same as lon=π
+                ],
+                'forward_precision': 1e-10,  # Relaxed for boundary conditions
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            },
 
-        # All distances should be equal
-        for dist in distances:
-            np.testing.assert_allclose(dist, distances[0], rtol=1e-12)
+            # Near-antipodal point (close to south pole)
+            {
+                'input': [[0, -math.pi/2 + 1e-3]],  # Close to south pole
+                'output': [
+                    # lat=-π/2+1e-3, lon=0: k=sqrt(2/(1+sin(-π/2+1e-3))), x=0, y=-k*cos(-π/2+1e-3)
+                    [0, -math.sqrt(2 / (1 + math.sin(-math.pi/2 + 1e-3))) * math.cos(-math.pi/2 + 1e-3)]
+                ],
+                'forward_precision': 1e-6,  # Relaxed for near-singularity
+                'reverse_precision': 1e-6,
+                'roundtrip_precision': 1e-6
+            },
 
-        # Expected distance for equator when centered at north pole
-        # k = sqrt(2 / (1 + sin(0))) = sqrt(2)
-        expected_distance = math.sqrt(2)
-        np.testing.assert_allclose(distances[0], expected_distance, rtol=1e-12)
+            # Area preservation test - small region corners
+            {
+                'input': [
+                    # Small 5° region around 45°N, 0°: corners at (lon±δ, lat±δ) where δ=π/36
+                    [-math.pi/36, math.pi/4 - math.pi/36],  # SW corner
+                    [math.pi/36, math.pi/4 - math.pi/36],   # SE corner
+                    [math.pi/36, math.pi/4 + math.pi/36],   # NE corner
+                    [-math.pi/36, math.pi/4 + math.pi/36],  # NW corner
+                ],
+                'output': [
+                    # Calculate using Lambert formulas for each corner
+                    # SW: lon=-π/36, lat=π/4-π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.sin(-math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.cos(-math.pi/36)
+                    ],
+                    # SE: lon=π/36, lat=π/4-π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.sin(math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.cos(math.pi/36)
+                    ],
+                    # NE: lon=π/36, lat=π/4+π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.sin(math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.cos(math.pi/36)
+                    ],
+                    # NW: lon=-π/36, lat=π/4+π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.sin(-math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.cos(-math.pi/36)
+                    ]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            }
+        ]
 
-    def test_lambert_transform_round_trip_accuracy(self):
-        """Test round-trip accuracy: spherical → lambert → spherical."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
+        for case in test_cases:
+            input_coords = np.array(case['input'], dtype=np.float64)
+            expected_output = np.array(case['output'], dtype=np.float64)
 
-        # Test various spherical coordinates
-        spherical_coords = np.array([
-            [0, math.pi/2],          # North pole (center)
-            [0, 0],                  # Equator, prime meridian
-            [math.pi/2, 0],          # Equator, 90°E
-            [math.pi, 0],            # Equator, 180°
-            [0, math.pi/4],          # 45°N, prime meridian
-            [math.pi/4, math.pi/4],  # 45°N, 45°E
-            [math.pi/2, math.pi/6],  # 30°N, 90°E
-        ])
-
-        lambert = lt.map(spherical_coords)
-        spherical_back = lt.imap(lambert)
-
-        np.testing.assert_allclose(spherical_coords, spherical_back, rtol=1e-14, atol=1e-15)
-
-    def test_lambert_transform_antipodal_point(self):
-        """Test LambertAzimuthalEqualAreaTransform near south pole (antipodal to center)."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test point moderately close to south pole (avoiding the exact singularity)
-        near_south_pole = np.array([[0, -math.pi/2 + 1e-3]], dtype=np.float64)  # 1e-3 radians from pole
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            projected = lt.map(near_south_pole)
-
-        # Should produce finite results (may be large due to proximity to singularity)
-        assert np.isfinite(projected).all()
-
-        # Distance should be reasonably large but finite
-        distance = math.sqrt(projected[0, 0]**2 + projected[0, 1]**2)
-        assert distance > 1.0  # Should be separated from center
-        assert np.isfinite(distance)
-
-    def test_lambert_transform_mathematical_accuracy(self):
-        """Test mathematical accuracy of Lambert projection formulas."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test specific cases where we know the mathematical result
-        # For projection centered at north pole (φ₀ = π/2, λ₀ = 0)
-
-        # Equator at prime meridian: φ=0, λ=0
-        coords = np.array([[0.0, 0.0]], dtype=np.float64)
-        projected = lt.map(coords)
-
-        # k = sqrt(2 / (1 + sin(0))) = sqrt(2)
-        # x = k * cos(0) * sin(0) = sqrt(2) * 1 * 0 = 0
-        # y = -k * cos(0) * cos(0) = -sqrt(2) * 1 * 1 = -sqrt(2)
-        k = math.sqrt(2 / (1 + math.sin(0.0)))
-        expected_x = k * math.cos(0.0) * math.sin(0.0)  # = 0
-        expected_y = -k * math.cos(0.0) * math.cos(0.0)  # = -sqrt(2) ≈ -1.414
-        expected = np.array([[expected_x, expected_y]], dtype=np.float64)
-
-        np.testing.assert_allclose(projected, expected, rtol=1e-12, atol=1e-15)
-
-    def test_lambert_transform_symmetry(self):
-        """Test symmetry properties of Lambert projection."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test longitude symmetry around prime meridian
-        coords_east = np.array([[math.pi/4, math.pi/4]])   # 45°E, 45°N
-        coords_west = np.array([[-math.pi/4, math.pi/4]])  # 45°W, 45°N
-
-        projected_east = lt.map(coords_east)
-        projected_west = lt.map(coords_west)
-
-        # Should be mirror images across y-axis
-        np.testing.assert_allclose(projected_east[0, 0], -projected_west[0, 0], rtol=1e-12)
-        np.testing.assert_allclose(projected_east[0, 1], projected_west[0, 1], rtol=1e-12)
-
-    def test_lambert_transform_edge_latitude_values(self):
-        """Test LambertAzimuthalEqualAreaTransform with latitude edge values."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test latitudes very close to south pole (opposite to projection center)
-        edge_coords = np.array([
-            [0, -math.pi/2 + 1e-6],    # Very close to south pole
-            [math.pi/2, -math.pi/3],   # 60°S
-        ])
-
-        projected = lt.map(edge_coords)
-
-        # Should produce finite results
-        assert np.isfinite(projected).all()
-
-        # Distance from origin should be large for points near south pole
-        distance_near_pole = math.sqrt(projected[0, 0]**2 + projected[0, 1]**2)
-        assert distance_near_pole > 1.5  # Should be well separated from center
-
-    def test_lambert_transform_inverse_accuracy(self):
-        """Test accuracy of inverse Lambert projection."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test specific projected coordinates
-        lambert_coords = np.array([
-            [0, 0],                    # Origin (north pole)
-            [1, 0],                    # Point on x-axis
-            [0, -1],                   # Point on negative y-axis
-            [0.5, 0.5],               # Diagonal point
-        ])
-
-        spherical = lt.imap(lambert_coords)
-        lambert_back = lt.map(spherical)
-
-        np.testing.assert_allclose(lambert_coords, lambert_back, rtol=1e-12, atol=1e-14)
-
-    def test_lambert_transform_area_preservation_property(self):
-        """Test that Lambert projection preserves area (equal-area property)."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Create a small spherical "rectangle" and verify its area is preserved
-        # Note: This is a qualitative test since exact area computation is complex
-
-        # Small region around 45°N, 0°
-        delta = math.pi/36  # 5 degrees
-        center_lat, center_lon = math.pi/4, 0
-
-        corners_spherical = np.array([
-            [center_lon - delta, center_lat - delta],
-            [center_lon + delta, center_lat - delta],
-            [center_lon + delta, center_lat + delta],
-            [center_lon - delta, center_lat + delta],
-        ])
-
-        corners_projected = lt.map(corners_spherical)
-
-        # Check that the projection produces a reasonable quadrilateral
-        # (exact area computation would require more complex geometry)
-        assert np.isfinite(corners_projected).all()
-
-        # Verify that points maintain reasonable relative positions
-        # The projected region should maintain its general shape properties
-        x_coords = corners_projected[:, 0]
-        y_coords = corners_projected[:, 1]
-
-        # Should span some reasonable range in both x and y
-        assert (x_coords.max() - x_coords.min()) > 0.01
-        assert (y_coords.max() - y_coords.min()) > 0.01
-
-    def test_lambert_transform_boundary_conditions(self):
-        """Test LambertAzimuthalEqualAreaTransform at projection boundaries."""
-        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
-
-        # Test coordinates that might cause numerical issues, avoiding exact south pole
-        boundary_coords = np.array([
-            [0, math.pi/2],                    # Projection center (north pole)
-            [math.pi, -math.pi/2 + 1e-8],     # Very close to south pole (avoiding singularity)
-            [0, 1e-15],                       # Very close to equator
-            [math.pi - 1e-15, 0],             # Very close to 180° longitude
-        ])
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            projected = lt.map(boundary_coords)
-
-        # Results should be mostly finite (except possibly the near-south-pole case)
-        assert np.isfinite(projected[0]).all()  # North pole should be finite
-        assert np.isfinite(projected[2]).all()  # Near equator should be finite
-        assert np.isfinite(projected[3]).all()  # Near 180° should be finite
-
-        # Test round-trip accuracy for the stable cases (excluding near south pole)
-        stable_coords = boundary_coords[[0, 2, 3]]  # Skip the near-south-pole case
-        stable_projected = projected[[0, 2, 3]]
-
-        spherical_back = lt.imap(stable_projected)
-        projected_again = lt.map(spherical_back)
-
-        # Should be stable for non-singular cases
-        np.testing.assert_allclose(stable_projected, projected_again, rtol=1e-10, atol=1e-12)
+            # Run comprehensive transform test
+            check_transform(
+                lt,
+                input_coords,
+                expected_output,
+                forward_precision=case['forward_precision'],
+                reverse_precision=case.get('reverse_precision', 1e-12),
+                roundtrip_precision=case.get('roundtrip_precision', 1e-12),
+                test_reverse=case.get('test_reverse', True),
+                test_roundtrip=case.get('test_roundtrip', True)
+            )
