@@ -48,7 +48,10 @@ HT = coorx.HomogeneousEmbeddedTransform
 DT = coorx.LensDistortionTransform
 QT = coorx.PerspectiveTransform
 BT = coorx.BilinearTransform
-T2 = coorx.Homography2DTransform
+H2D = coorx.Homography2DTransform
+ST3 = coorx.SphericalTransform
+MST = coorx.MercatorSphericalTransform
+LAT = coorx.LambertAzimuthalEqualAreaTransform
 
 
 def assert_composite_types(composite, types):
@@ -60,7 +63,8 @@ def assert_composite_objects(composite1, composite2):
 
 
 def test_pickling():
-    points = np.random.normal(size=(10, 3))
+    points_3d = np.random.normal(size=(10, 3))
+    points_2d = np.random.normal(size=(10, 2))
     transforms = [
         NT(dims=(3, 3)),
         TT(dims=(3, 3), offset=(1, 2, 3)),
@@ -83,9 +87,15 @@ def test_pickling():
         ),
         # DT(dims=(2, 2), coeff=(0.1, -0.05, 0.01, 0.0, 0.0)),
         # BT(dims=(2, 2)),
-        # T2(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0), (1, 1), (0, 2)]),
+        H2D(dims=(2, 2), src_quad=[(0, 0), (1, 0), (1, 1), (0, 1)], dst_quad=[(0, 0), (2, 0.2), (1.8, 1.8), (-0.2, 1.6)]),
+        ST3(dims=(3, 3)),
+        MST(dims=(2, 2)),
+        LAT(dims=(2, 2)),
     ]
     for tr in transforms:
+        # Select appropriate points based on transform input dimensionality
+        points = points_2d if tr.dims[0] == 2 else points_3d
+
         tr2 = pickle.loads(pickle.dumps(tr))
         assert tr == tr2
         mapped1 = tr.map(points)
@@ -791,3 +801,60 @@ class BilinearTest(unittest.TestCase):
         assert np.all(tr_inv.map(b) == tr.imap(b))
 
         return tr
+
+
+class Homography2DTest(unittest.TestCase):
+    def test_homography2d(self):
+        # identity
+        tr = self.check_mapping([[0, 0], [1, 0], [1, 1], [0, 1]], [[0, 0], [1, 0], [1, 1], [0, 1]])
+        assert np.allclose(tr.matrix(), np.eye(3), atol=1e-10)
+
+        # simple scaling (2x)
+        tr = self.check_mapping([[0, 0], [1, 0], [1, 1], [0, 1]], [[0, 0], [2, 0], [2, 2], [0, 2]])
+
+        # perspective transformation
+        tr = self.check_mapping(
+            [[0, 0], [1, 0], [1, 1], [0, 1]],
+            [[0, 0], [2, 0.2], [1.8, 1.8], [-0.2, 1.6]]
+        )
+
+        # rotation + perspective
+        tr = self.check_mapping(
+            [[0, 0], [1, 0], [1, 1], [0, 1]],
+            [[0.1, 0.2], [0.9, -0.1], [1.2, 0.8], [0.2, 1.1]]
+        )
+
+    def check_mapping(self, a, b):
+        a = np.asarray(a)
+        b = np.asarray(b)
+
+        tr = coorx.linear.Homography2DTransform()
+        tr.set_mapping(a, b)
+        c = tr.map(a)
+        assert c.shape == b.shape
+        assert np.allclose(c, b, atol=1e-10)
+
+        # Test inverse mapping
+        tr_inv = tr.inverse
+        d = tr_inv.map(b)
+        assert d.shape == a.shape
+        assert np.allclose(d, a, atol=1e-10)
+
+        # Test imap method
+        assert np.allclose(tr_inv.map(b), tr.imap(b), atol=1e-10)
+
+        return tr
+
+    def test_constructor_with_quads(self):
+        """Test constructor with src_quad and dst_quad parameters."""
+        src_quad = [(0, 0), (1, 0), (1, 1), (0, 1)]
+        dst_quad = [(0, 0), (2, 0.2), (1.8, 1.8), (-0.2, 1.6)]
+
+        tr = coorx.linear.Homography2DTransform(src_quad=src_quad, dst_quad=dst_quad)
+
+        # Test that the mapping was set correctly
+        src_points = np.array(src_quad)
+        dst_points = np.array(dst_quad)
+        mapped = tr.map(src_points)
+
+        assert np.allclose(mapped, dst_points, atol=1e-10)

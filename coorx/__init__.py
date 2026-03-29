@@ -15,7 +15,7 @@ from .linear import (
     BilinearTransform,
     Homography2DTransform,
 )
-from .nonlinear import LogTransform, PolarTransform, LensDistortionTransform
+from .nonlinear import LogTransform, PolarTransform, LensDistortionTransform, SphericalTransform, MercatorSphericalTransform, LambertAzimuthalEqualAreaTransform
 from .coordinates import Point, PointArray, Vector, VectorArray
 from .image import Image
 from .systems import CoordinateSystem, CoordinateSystemGraph
