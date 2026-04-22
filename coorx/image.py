@@ -45,6 +45,7 @@ import scipy
 from .coordinates import Point, PointArray
 from .linear import AffineTransform, TTransform, STTransform
 from .systems import CoordinateSystemGraph, CoordinateSystem
+from .util import affine_resample
 
 
 class Image:
@@ -292,3 +293,58 @@ class Image:
         tr.scale = [1.0 / step for step in steps]
         tr.offset = [-start / step for start, step in zip(starts, steps)]
         return tr
+
+    def resample(self, origin, vectors, shape, order=1, **kwds):
+        """Resample the image on a new grid defined by the given origin and vectors.
+
+        Parameters
+        ----------
+        origin : array-like | Point
+            The coordinates of the origin of the new grid in this image's pixel coordinate system.
+        vectors : array-like | VectorArray
+            The vectors defining the axes of the new grid in this image's pixel coordinate system.
+            Should be a 2D array of shape (spatial_ndim, spatial_ndim) where each row is a vector.
+        shape : tuple
+            The shape of the resampled image along each spatial axis.
+        order : int, optional
+            The order of the spline interpolation to use for resampling. Default is 1 (bilinear).
+        kwds : keyword arguments
+            Additional keyword arguments to pass to `affine_resample`.
+
+        Returns
+        -------
+        Image
+            A new Image object containing the resampled image and a transform mapping from the original image coordinates
+            to the resampled image coordinates.
+        """
+        if isinstance(origin, (Point, PointArray)):
+            origin = origin.mapped_to(self.system).coordinates
+        origin = np.asarray(origin, dtype=float)
+        vectors = np.asarray(vectors, dtype=float)
+        shape = tuple(shape)
+
+        output = affine_resample(
+            self.image,
+            shape=shape,
+            origin=origin,
+            vectors=vectors,
+            axes=list(self.spatial_to_image_axes),
+            order=order,
+            **kwds,
+        )
+
+        # output has spatial axes at positions 0..spatial_ndim-1
+        img2 = self.copy(image=output, axes=tuple(range(self.spatial_ndim)))
+
+        # Transform from original image coords to resampled image coords:
+        #   p_orig = origin + vectors.T @ p_new  =>  p_new = inv(vectors.T) @ (p_orig - origin)
+        mat = np.linalg.inv(vectors.T)
+        img2._parent_tr = AffineTransform(
+            matrix=mat,
+            offset=-mat @ origin,
+            dims=(self.spatial_ndim, self.spatial_ndim),
+            cs_graph=self.graph,
+            from_cs=self.system,
+            to_cs=img2.system,
+        )
+        return img2
