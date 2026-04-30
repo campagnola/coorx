@@ -129,6 +129,93 @@ class PolarTransform(Transform):
 #    # TODO
 
 
+class PetzvalCorrectionTransform(Transform):
+    """3-D transform that corrects Petzval field curvature in a rotationally symmetric optical path.
+
+    The Petzval focal surface lies at a depth offset that depends on the squared radial
+    distance from the optical axis.  The forward map adds that offset to z:
+
+        z' = z + Σᵢ kᵢ · r^(2i)    i = 1, 2, …, len(coeff)
+
+    where  r² = (x − cx)² + (y − cy)²  and (cx, cy) is the optical-axis centre.
+
+    Because x and y pass through unchanged, the inverse is exact and closed-form:
+
+        z  = z' − Σᵢ kᵢ · r^(2i)    (r computed from the same x, y)
+
+    Parameters
+    ----------
+    coeff : array-like of float
+        Polynomial coefficients [k₁, k₂, …].  k₁ multiplies r², k₂ multiplies r⁴, etc.
+        Units: (z-axis units) / (lateral-axis units)^(2i).
+    center : (float, float), optional
+        (cx, cy) position of the optical axis in the lateral plane.  Default (0, 0).
+    """
+
+    Linear = False
+    Orthogonal = False
+    NonScaling = False
+    Isometric = False
+    Equidimensional = True
+
+    parameter_spec = [
+        ArrayParameter("coeff", dtype=float, shape=None, default=None),
+        TupleParameter("center", dtype=float, default=lambda shape: (0.0, 0.0)),
+    ]
+
+    def __init__(self, coeff=None, center=(0.0, 0.0), **kwds):
+        kwds.setdefault("dims", (3, 3))
+        if kwds["dims"] != (3, 3):
+            raise ValueError("PetzvalCorrectionTransform only supports 3-D transforms")
+        if coeff is None:
+            coeff = [0.0]
+        super().__init__(coeff=coeff, center=center, **kwds)
+
+    @property
+    def coeff(self) -> np.ndarray:
+        """Even-power radial polynomial coefficients [k₁, k₂, …]."""
+        return self._state["coeff"]
+
+    def set_coeff(self, coeff):
+        self.set_params(coeff=coeff)
+
+    @property
+    def center(self) -> tuple:
+        """(cx, cy) position of the optical axis."""
+        return self._state["center"]
+
+    def set_center(self, center):
+        self.set_params(center=center)
+
+    def _r2(self, arr: np.ndarray) -> np.ndarray:
+        """Squared radial distance from the optical axis for each point in arr (N×3)."""
+        dx = arr[..., 0] - self.center[0]
+        dy = arr[..., 1] - self.center[1]
+        return dx * dx + dy * dy
+
+    def _z_offset(self, r2: np.ndarray) -> np.ndarray:
+        """Evaluate the Petzval polynomial: Σᵢ kᵢ · r^(2i)."""
+        offset = np.zeros_like(r2)
+        r2_power = r2  # starts at r²
+        for k in self.coeff:
+            offset += k * r2_power
+            r2_power = r2_power * r2
+        return offset
+
+    def _map(self, arr: np.ndarray) -> np.ndarray:
+        out = arr.copy() if arr.dtype.kind == "f" else arr.astype(np.float64)
+        out[..., 2] = arr[..., 2] + self._z_offset(self._r2(arr))
+        return out
+
+    def _imap(self, arr: np.ndarray) -> np.ndarray:
+        out = arr.copy() if arr.dtype.kind == "f" else arr.astype(np.float64)
+        out[..., 2] = arr[..., 2] - self._z_offset(self._r2(arr))
+        return out
+
+    def __repr__(self):
+        return f"<PetzvalCorrectionTransform coeff={list(self.coeff)} center={self.center}>"
+
+
 class LensDistortionTransform(Transform):
     """https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
 

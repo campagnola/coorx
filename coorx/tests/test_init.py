@@ -59,6 +59,7 @@ class InitTests(unittest.TestCase):
             kwargs = {
                 coorx.nonlinear.LogTransform: {'base': [2, 3, 5], 'dims': (3, 3)},
                 coorx.nonlinear.LensDistortionTransform: {'coeff': (0.1, 0.2, 0.3, 0.4, 0.5), 'dims': (2, 2)},
+                coorx.nonlinear.PetzvalCorrectionTransform: {'coeff': [0.1, 0.02], 'center': (0.0, 0.0), 'dims': (3, 3)},
                 coorx.util.AxisSelectionEmbeddedTransform: {'dims': (3, 3), 'axes': [0, 1], 'transform': coorx.NullTransform(dims=(2, 2))},
                 coorx.util.HomogeneousEmbeddedTransform: {'dims': (3, 3), 'transform': coorx.NullTransform(dims=(4, 4))},
                 coorx.linear.BilinearTransform: {'dims': (2, 2)},
