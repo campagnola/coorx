@@ -160,7 +160,7 @@ class PetzvalTransform(Transform):
 
     parameter_spec = [
         ArrayParameter("coeff", dtype=float, shape=(None,), default=None),
-        TupleParameter("center", dtype=float, default=lambda shape: (0.0, 0.0)),
+        TupleParameter("center", dtype=float, length=2, default=lambda shape: (0.0, 0.0)),
     ]
 
     def __init__(self, coeff=None, center=(0.0, 0.0), **kwds):
