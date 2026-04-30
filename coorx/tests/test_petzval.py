@@ -238,3 +238,38 @@ class TestPetzvalNumerics:
         result = t.map(pts)
         assert result.shape == (1, 3)
         assert np.isfinite(result).all()
+
+
+# ---------------------------------------------------------------------------
+# serialization round-trip
+# ---------------------------------------------------------------------------
+
+class TestPetzvalSerialization:
+    def test_save_restore_state(self):
+        """save_state / from_state must reproduce an identical transform."""
+        import coorx
+        t1 = PetzvalTransform(coeff=[0.2, 0.03], center=(1.5, -0.5))
+        state = t1.save_state()
+        t2 = coorx.create_transform(**state)
+        assert type(t2) is PetzvalTransform
+        assert t2.dims == t1.dims
+        np.testing.assert_array_equal(t2.coeff, t1.coeff)
+        np.testing.assert_array_equal(t2.center, t1.center)
+
+    def test_restored_transform_maps_identically(self):
+        """Restored transform must produce the same output as the original."""
+        import coorx
+        t1 = PetzvalTransform(coeff=[0.15, 0.02, 0.003], center=(0.5, -1.0))
+        t2 = coorx.create_transform(**t1.save_state())
+        pts = np.array([[1.0, 2.0, 3.0], [0.0, 0.0, 0.0], [-3.0, 4.0, -1.0]])
+        np.testing.assert_array_equal(t2.map(pts), t1.map(pts))
+        np.testing.assert_array_equal(t2.imap(pts), t1.imap(pts))
+
+    def test_state_contains_expected_keys(self):
+        t = PetzvalTransform(coeff=[0.1], center=(2.0, 3.0))
+        state = t.save_state()
+        assert "type" in state
+        assert state["type"] == "PetzvalTransform"
+        assert "coeff" in state
+        assert "center" in state
+        assert "dims" in state

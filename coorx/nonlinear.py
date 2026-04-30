@@ -163,10 +163,10 @@ class PetzvalTransform(Transform):
         TupleParameter("center", dtype=float, length=2, default=lambda shape: (0.0, 0.0)),
     ]
 
-    def _validate_dims(self, dims):
-        dims = super()._validate_dims(dims)
+    def _validate_dims(self, dims, **kwargs):
+        dims = super()._validate_dims(dims, **kwargs)
         if dims != (3, 3):
-            raise ValueError("PetzvalCorrectionTransform only supports 3-D transforms")
+            raise ValueError("PetzvalTransform only supports 3-D transforms")
         return dims
 
     def __init__(self, coeff=None, center=(0.0, 0.0), **kwds):
