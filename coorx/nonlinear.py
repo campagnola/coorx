@@ -129,7 +129,7 @@ class PolarTransform(Transform):
 #    # TODO
 
 
-class PetzvalCorrectionTransform(Transform):
+class PetzvalTransform(Transform):
     """3-D transform that corrects Petzval field curvature in a rotationally symmetric optical path.
 
     The Petzval focal surface lies at a depth offset that depends on the squared radial
