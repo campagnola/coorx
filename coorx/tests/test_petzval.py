@@ -1,4 +1,4 @@
-# Tests for PetzvalCorrectionTransform — red phase written before implementation.
+# Tests for PetzvalCorrectionTransform.
 # Physics: the Petzval focal surface satisfies z_offset(r) = Σ kᵢ·r^(2i),
 # where r² = (x-cx)² + (y-cy)² and all kᵢ are even-power coefficients.
 
