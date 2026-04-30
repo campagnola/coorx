@@ -159,7 +159,7 @@ class PetzvalTransform(Transform):
     Equidimensional = True
 
     parameter_spec = [
-        ArrayParameter("coeff", dtype=float, shape=None, default=None),
+        ArrayParameter("coeff", dtype=float, shape=(None,), default=None),
         TupleParameter("center", dtype=float, default=lambda shape: (0.0, 0.0)),
     ]
 
