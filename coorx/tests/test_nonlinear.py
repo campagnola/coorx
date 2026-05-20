@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 import coorx
-from coorx.nonlinear import LogTransform, PolarTransform, LensDistortionTransform
+from coorx.nonlinear import LogTransform, PolarTransform, LensDistortionTransform, SphericalTransform, MercatorSphericalTransform, LambertAzimuthalEqualAreaTransform
+from coorx.tests.util import check_transform, check_mapping
 
 
 class TestLogTransformEdgeCases:
@@ -549,6 +550,8 @@ class TestNonlinearTransformComposition:
             LogTransform(base=[2, 10], dims=(2, 2)),
             PolarTransform(dims=(2, 2)),
             LensDistortionTransform(coeff=(0.1, 0.05, 0.01, 0.01, 0.001)),
+            MercatorSphericalTransform(dims=(2, 2)),
+            LambertAzimuthalEqualAreaTransform(dims=(2, 2)),
         ]
 
         for transform in transforms:
@@ -629,21 +632,497 @@ class TestNonlinearTransformComposition:
     @pytest.mark.parametrize("precision", [np.float32, np.float64])
     def test_nonlinear_precision_handling(self, precision):
         """Test nonlinear transforms with different floating-point precisions."""
-        # Test with different precisions, use positive values suitable for log transform
-        coords = np.array([[1, 2], [3, 4]], dtype=precision)
 
-        transforms = [
-            LogTransform(base=[2, 10], dims=(2, 2)),
-            PolarTransform(dims=(2, 2)),
+        # Define test cases with transform, input coordinates, and expected precision
+        test_cases = [
+            # 2D Cartesian coordinate transforms
+            {
+                'transform': LogTransform(base=[2, 10], dims=(2, 2)),
+                'coords': [[1, 2], [3, 4]],
+                'rtol_float32': 1e-6,
+                'rtol_float64': 1e-12,
+            },
+            {
+                'transform': PolarTransform(dims=(2, 2)),
+                'coords': [[1, 2], [3, 4]],
+                'rtol_float32': 1e-6,
+                'rtol_float64': 1e-12,
+            },
+            # 2D spherical coordinate map projections (input: lon, lat in radians)
+            {
+                'transform': MercatorSphericalTransform(dims=(2, 2)),
+                'coords': [[0.5, 0.3], [1.0, -0.2]],  # lon, lat in radians
+                'rtol_float32': 1e-6,
+                'rtol_float64': 1e-12,
+            },
+            {
+                'transform': LambertAzimuthalEqualAreaTransform(dims=(2, 2)),
+                'coords': [[0.5, 0.3], [1.0, -0.2]],  # lon, lat in radians
+                'rtol_float32': 1e-6,
+                'rtol_float64': 1e-12,
+            },
         ]
 
-        for transform in transforms:
+        for case in test_cases:
+            transform = case['transform']
+            coords = np.array(case['coords'], dtype=precision)
+
+            # Get expected precision for this precision type
+            rtol = case['rtol_float32'] if precision == np.float32 else case['rtol_float64']
+
+            # Forward transform
             result = transform.map(coords)
 
             # Result should maintain input precision when possible
             assert result.dtype == precision or result.dtype == np.float64
 
-            # Round-trip test with appropriate tolerance for precision
-            rtol = 1e-5 if precision == np.float32 else 1e-12
+            # Round-trip test with expected precision
             back = transform.imap(result)
             np.testing.assert_allclose(coords, back, rtol=rtol)
+
+
+class TestSphericalTransformSimplified:
+    """Simplified test for SphericalTransform using utility functions."""
+
+    def test_spherical_transform_comprehensive(self):
+        """Comprehensive test of SphericalTransform with various coordinate sets."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Test cases: [input_coords, expected_output, kwargs]
+        test_cases = [
+            # Cardinal directions - Cartesian to Spherical
+            {
+                'input': [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0]],
+                'output': [[0.0, 0.0, 1.0], [math.pi, 0.0, 1.0], [math.pi/2, 0.0, 1.0], [-math.pi/2, 0.0, 1.0]],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Poles - Cartesian to Spherical (longitude arbitrary at poles)
+            {
+                'input': [[0.0, 0.0, 1.0], [0.0, 0.0, -1.0]],
+                'output': [[0.0, math.pi/2, 1.0], [0.0, -math.pi/2, 1.0]],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # All eight octants - comprehensive coverage
+            {
+                'input': [
+                    [1, 1, 1], [-1, 1, 1], [-1, -1, 1], [1, -1, 1],
+                    [1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]
+                ],
+                'output': [
+                    [math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],     # First octant
+                    [3*math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],   # Second octant
+                    [-3*math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],  # Third octant
+                    [-math.pi/4, math.atan2(1, math.sqrt(2)), math.sqrt(3)],    # Fourth octant
+                    [math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)],    # Fifth octant
+                    [3*math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)],  # Sixth octant
+                    [-3*math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)], # Seventh octant
+                    [-math.pi/4, math.atan2(-1, math.sqrt(2)), math.sqrt(3)]    # Eighth octant
+                ],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Various radii with same direction
+            {
+                'input': [[2, 3, 4], [0.2, 0.3, 0.4], [20, 30, 40]],
+                'output': [
+                    [math.atan2(3, 2), math.atan2(4, math.sqrt(2*2 + 3*3)), math.sqrt(2*2 + 3*3 + 4*4)],
+                    [math.atan2(0.3, 0.2), math.atan2(0.4, math.sqrt(0.2*0.2 + 0.3*0.3)), math.sqrt(0.2*0.2 + 0.3*0.3 + 0.4*0.4)],
+                    [math.atan2(30, 20), math.atan2(40, math.sqrt(20*20 + 30*30)), math.sqrt(20*20 + 30*30 + 40*40)]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
+
+            # Small coordinates for numerical stability
+            {
+                'input': [[0.1, 0.2, 0.3], [1e-3, 2e-3, 3e-3]],
+                'output': [
+                    [math.atan2(0.2, 0.1), math.atan2(0.3, math.sqrt(0.1*0.1 + 0.2*0.2)), math.sqrt(0.1*0.1 + 0.2*0.2 + 0.3*0.3)],
+                    [math.atan2(2e-3, 1e-3), math.atan2(3e-3, math.sqrt(1e-6 + 4e-6)), math.sqrt(1e-6 + 4e-6 + 9e-6)]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            },
+
+            # Large coordinates for extreme values
+            {
+                'input': [[1e3, 2e3, 3e3], [1e6, 0, 0]],
+                'output': [
+                    [math.atan2(2e3, 1e3), math.atan2(3e3, math.sqrt(1e6 + 4e6)), math.sqrt(1e6 + 4e6 + 9e6)],
+                    [0.0, 0.0, 1e6]
+                ],
+                'forward_precision': 1e-10,
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            }
+        ]
+
+        for case in test_cases:
+            input_coords = np.array(case['input'], dtype=np.float64)
+            expected_output = np.array(case['output'], dtype=np.float64)
+
+            # Run comprehensive transform test
+            check_transform(
+                st,
+                input_coords,
+                expected_output,
+                forward_precision=case['forward_precision'],
+                reverse_precision=case.get('reverse_precision', 1e-12),
+                roundtrip_precision=case.get('roundtrip_precision', 1e-12),
+                test_reverse=case.get('test_reverse', True),
+                test_roundtrip=case.get('test_roundtrip', True)
+            )
+
+    def test_spherical_transform_pole_consistency(self):
+        """Test that pole points with different longitudes map to same cartesian point."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # North pole with different longitudes
+        north_pole_coords = np.array([
+            [0, math.pi/2, 1], [math.pi/4, math.pi/2, 1],
+            [math.pi/2, math.pi/2, 1], [math.pi, math.pi/2, 1]
+        ], dtype=np.float64)
+
+        expected_north = np.array([[0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]], dtype=np.float64)
+        check_mapping(st.inverse, north_pole_coords, expected_north, precision=1e-14)
+
+        # South pole with different longitudes
+        south_pole_coords = np.array([
+            [0, -math.pi/2, 1], [math.pi/4, -math.pi/2, 1],
+            [math.pi/2, -math.pi/2, 1], [math.pi, -math.pi/2, 1]
+        ], dtype=np.float64)
+
+        expected_south = np.array([[0, 0, -1], [0, 0, -1], [0, 0, -1], [0, 0, -1]], dtype=np.float64)
+        check_mapping(st.inverse, south_pole_coords, expected_south, precision=1e-14)
+
+    def test_spherical_transform_origin_singularity(self):
+        """Test SphericalTransform behavior at origin singularity."""
+        st = SphericalTransform(dims=(3, 3))
+
+        # Origin maps to r=0 with undefined angles
+        origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float64)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            spherical = st.map(origin)
+
+        # Ensure spherical is a valid array
+        assert spherical is not None and hasattr(spherical, 'shape')
+        assert spherical.shape[1] >= 3  # Should have at least 3 columns
+
+        # r should be 0
+        assert spherical[0, 2] == 0
+        # lon and lat may be NaN or arbitrary values due to 0/0
+        assert np.isnan(spherical[0, 0]) or np.isfinite(spherical[0, 0])
+        assert np.isnan(spherical[0, 1]) or spherical[0, 1] == 0
+
+    def test_spherical_transform_as_affine_error(self):
+        """Test that SphericalTransform raises NotImplementedError for as_affine."""
+        st = SphericalTransform(dims=(3, 3))
+
+        with pytest.raises(NotImplementedError):
+            st.as_affine()
+
+    def test_spherical_transform_precision_handling(self):
+        """Test SphericalTransform with different floating-point precisions."""
+        for precision in [np.float32, np.float64]:
+            st = SphericalTransform(dims=(3, 3))
+
+            # Test coordinates and expected tolerances
+            coords = np.array([[1, 1, 1], [2, 2, 2]], dtype=precision)
+            rtol = 1e-6 if precision == np.float32 else 1e-12
+
+            # Forward transform
+            result = st.map(coords)
+
+            # Result should maintain input precision when possible
+            assert result.dtype == precision or result.dtype == np.float64
+
+            # Round-trip test with expected precision
+            back = st.imap(result)
+            np.testing.assert_allclose(coords, back, rtol=rtol)
+
+
+class TestMercatorSphericalTransformSimplified:
+    """Simplified test for MercatorSphericalTransform using utility functions."""
+
+    def test_mercator_transform_comprehensive(self):
+        """Comprehensive test of MercatorSphericalTransform with various coordinate sets."""
+        mt = MercatorSphericalTransform(dims=(2, 2))
+
+        # Test cases: [input_coords, expected_output, kwargs]
+        test_cases = [
+            # Equator points (latitude = 0)
+            {
+                'input': [[0, 0], [math.pi/2, 0], [math.pi, 0], [-math.pi/2, 0]],
+                'output': [[0, 0], [math.pi/2, 0], [math.pi, 0], [-math.pi/2, 0]],
+                'forward_precision': 1e-14,
+                'reverse_precision': 1e-14,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Mathematical accuracy test cases
+            {
+                'input': [[0.0, math.pi/4]],
+                'output': [[0.0, math.log(math.tan(math.pi/4 + math.pi/8))]],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
+
+            # General coordinates avoiding poles
+            {
+                'input': [[math.pi/4, math.pi/4], [math.pi/2, math.pi/6], [-math.pi/4, -math.pi/4]],
+                'output': [
+                    [math.pi/4, math.log(math.tan(math.pi/4 + math.pi/8))],  # x=π/4, y=log(tan(3π/8))
+                    [math.pi/2, math.log(math.tan(math.pi/4 + math.pi/12))], # x=π/2, y=log(tan(π/3))
+                    [-math.pi/4, math.log(math.tan(math.pi/4 - math.pi/8))]  # x=-π/4, y=log(tan(π/8))
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Moderate coordinates for inverse testing
+            {
+                'input': [[math.pi/2, 1.0], [-math.pi/4, -0.5]],
+                'output': [
+                    [math.pi/2, math.log(math.tan(math.pi/4 + 0.5))],    # x=π/2, y=log(tan(π/4 + 0.5))
+                    [-math.pi/4, math.log(math.tan(math.pi/4 - 0.25))]   # x=-π/4, y=log(tan(π/4 - 0.25))
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
+
+            # Near-pole coordinates (with relaxed precision)
+            {
+                'input': [[0, math.pi/2 - 1e-6], [0, -math.pi/2 + 1e-6]],
+                'output': [
+                    [0, math.log(math.tan(math.pi/4 + (math.pi/2 - 1e-6)/2))],  # x=0, y=log(tan(π/4 + lat/2))
+                    [0, math.log(math.tan(math.pi/4 + (-math.pi/2 + 1e-6)/2))]  # x=0, y=log(tan(π/4 + lat/2))
+                ],
+                'forward_precision': 1e-10,
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            },
+
+            # Longitude preservation test - longitude should be preserved exactly
+            {
+                'input': [[0, math.pi/6], [math.pi/4, math.pi/6], [math.pi/2, math.pi/6], [-math.pi/2, math.pi/6]],
+                'output': [
+                    [0, math.log(math.tan(math.pi/4 + math.pi/12))],        # x=0, y=log(tan(π/3))
+                    [math.pi/4, math.log(math.tan(math.pi/4 + math.pi/12))], # x=π/4, y=log(tan(π/3))
+                    [math.pi/2, math.log(math.tan(math.pi/4 + math.pi/12))], # x=π/2, y=log(tan(π/3))
+                    [-math.pi/2, math.log(math.tan(math.pi/4 + math.pi/12))] # x=-π/2, y=log(tan(π/3))
+                ],
+                'forward_precision': 1e-14,  # Longitude should be exact
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
+
+            # Pole clipping test - extreme latitudes should be clipped to finite values
+            # Note: This test only verifies forward direction, as clipping makes reverse/roundtrip non-meaningful
+            {
+                'input': [[0, math.pi/2], [0, -math.pi/2], [1.0, math.pi/2 + 0.1], [-1.0, -math.pi/2 - 0.1]],
+                'output': [
+                    # Due to clipping in implementation, extreme latitudes are clipped to finite values
+                    # These produce y ≈ ±14.508658
+                    [0, 14.508658],     # Clipped north pole
+                    [0, -14.508658],    # Clipped south pole
+                    [1.0, 14.508658],   # Beyond north pole (clipped to same value)
+                    [-1.0, -14.508658]  # Beyond south pole (clipped to same value)
+                ],
+                'forward_precision': 1e-5,   # Relaxed due to clipping behavior
+                'test_reverse': False,       # Skip reverse test due to clipping
+                'test_roundtrip': False      # Skip roundtrip test due to clipping
+            }
+        ]
+
+        for case in test_cases:
+            input_coords = np.array(case['input'], dtype=np.float64)
+            expected_output = np.array(case['output'], dtype=np.float64)
+
+            # Run comprehensive transform test
+            check_transform(
+                mt,
+                input_coords,
+                expected_output,
+                forward_precision=case['forward_precision'],
+                reverse_precision=case.get('reverse_precision', 1e-12),
+                roundtrip_precision=case.get('roundtrip_precision', 1e-12),
+                test_reverse=case.get('test_reverse', True),
+                test_roundtrip=case.get('test_roundtrip', True)
+            )
+
+
+class TestLambertAzimuthalEqualAreaTransformSimplified:
+    """Simplified test for LambertAzimuthalEqualAreaTransform using utility functions."""
+
+    def test_lambert_transform_comprehensive(self):
+        """Comprehensive test of LambertAzimuthalEqualAreaTransform with various coordinate sets."""
+        lt = LambertAzimuthalEqualAreaTransform(dims=(2, 2))
+
+        # Test cases using Lambert Azimuthal Equal Area projection formulas
+        # k = sqrt(2 / (1 + sin(lat))), x = k * cos(lat) * sin(lon), y = -k * cos(lat) * cos(lon)
+        test_cases = [
+            # Projection center (north pole maps to origin)
+            {
+                'input': [[0, math.pi/2]],  # North pole
+                'output': [[0, 0]],         # Maps to origin
+                'forward_precision': 1e-14,
+                'test_reverse': False,      # Skip reverse test (longitude undefined at poles)
+                'test_roundtrip': False     # Skip roundtrip test due to pole singularity
+            },
+
+            # Mathematical accuracy - equator at prime meridian
+            {
+                'input': [[0.0, 0.0]],  # Equator, prime meridian
+                'output': [[0.0, -math.sqrt(2)]],  # x=0, y=-sqrt(2)
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Equator points (should all have same distance sqrt(2) from origin)
+            {
+                'input': [[0, 0], [math.pi/2, 0], [math.pi, 0], [-math.pi/2, 0]],
+                'output': [
+                    [0, -math.sqrt(2)],           # lon=0: x=0, y=-sqrt(2)
+                    [math.sqrt(2), 0],            # lon=π/2: x=sqrt(2), y=0
+                    [0, math.sqrt(2)],            # lon=π: x=0, y=sqrt(2)
+                    [-math.sqrt(2), 0]            # lon=-π/2: x=-sqrt(2), y=0
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Round-trip test coordinates
+            {
+                'input': [[0, math.pi/4], [math.pi/4, math.pi/4], [math.pi/2, math.pi/6]],
+                'output': [
+                    # lat=π/4, lon=0: k=sqrt(2/(1+sin(π/4))), x=0, y=-k*cos(π/4)
+                    [0, -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4)],
+                    # lat=π/4, lon=π/4: k=sqrt(2/(1+sin(π/4))), x=k*cos(π/4)*sin(π/4), y=-k*cos²(π/4)
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ],
+                    # lat=π/6, lon=π/2: k=sqrt(2/(1+sin(π/6))), x=k*cos(π/6), y=0
+                    [math.sqrt(2 / (1 + math.sin(math.pi/6))) * math.cos(math.pi/6), 0]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-14,
+                'roundtrip_precision': 1e-14
+            },
+
+            # Symmetry test - east/west mirror images
+            {
+                'input': [[math.pi/4, math.pi/4], [-math.pi/4, math.pi/4]],  # 45°E and 45°W at 45°N
+                'output': [
+                    # 45°E, 45°N
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ],
+                    # 45°W, 45°N (mirror image - x negated, y same)
+                    [
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.sin(math.pi/4),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4))) * math.cos(math.pi/4) * math.cos(math.pi/4)
+                    ]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            },
+
+            # Boundary conditions (avoiding exact south pole singularity)
+            {
+                'input': [[0, 1e-15], [math.pi - 1e-15, 0]],  # Very close to equator, very close to 180°
+                'output': [
+                    # Very close to equator at prime meridian
+                    [0, -math.sqrt(2)],  # Essentially same as equator
+                    # Very close to 180° longitude at equator
+                    [0, math.sqrt(2)]    # Essentially same as lon=π
+                ],
+                'forward_precision': 1e-10,  # Relaxed for boundary conditions
+                'reverse_precision': 1e-10,
+                'roundtrip_precision': 1e-10
+            },
+
+            # Near-antipodal point (close to south pole)
+            {
+                'input': [[0, -math.pi/2 + 1e-3]],  # Close to south pole
+                'output': [
+                    # lat=-π/2+1e-3, lon=0: k=sqrt(2/(1+sin(-π/2+1e-3))), x=0, y=-k*cos(-π/2+1e-3)
+                    [0, -math.sqrt(2 / (1 + math.sin(-math.pi/2 + 1e-3))) * math.cos(-math.pi/2 + 1e-3)]
+                ],
+                'forward_precision': 1e-6,  # Relaxed for near-singularity
+                'reverse_precision': 1e-6,
+                'roundtrip_precision': 1e-6
+            },
+
+            # Area preservation test - small region corners
+            {
+                'input': [
+                    # Small 5° region around 45°N, 0°: corners at (lon±δ, lat±δ) where δ=π/36
+                    [-math.pi/36, math.pi/4 - math.pi/36],  # SW corner
+                    [math.pi/36, math.pi/4 - math.pi/36],   # SE corner
+                    [math.pi/36, math.pi/4 + math.pi/36],   # NE corner
+                    [-math.pi/36, math.pi/4 + math.pi/36],  # NW corner
+                ],
+                'output': [
+                    # Calculate using Lambert formulas for each corner
+                    # SW: lon=-π/36, lat=π/4-π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.sin(-math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.cos(-math.pi/36)
+                    ],
+                    # SE: lon=π/36, lat=π/4-π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.sin(math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 - math.pi/36))) * math.cos(math.pi/4 - math.pi/36) * math.cos(math.pi/36)
+                    ],
+                    # NE: lon=π/36, lat=π/4+π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.sin(math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.cos(math.pi/36)
+                    ],
+                    # NW: lon=-π/36, lat=π/4+π/36
+                    [
+                        math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.sin(-math.pi/36),
+                        -math.sqrt(2 / (1 + math.sin(math.pi/4 + math.pi/36))) * math.cos(math.pi/4 + math.pi/36) * math.cos(-math.pi/36)
+                    ]
+                ],
+                'forward_precision': 1e-12,
+                'reverse_precision': 1e-12,
+                'roundtrip_precision': 1e-12
+            }
+        ]
+
+        for case in test_cases:
+            input_coords = np.array(case['input'], dtype=np.float64)
+            expected_output = np.array(case['output'], dtype=np.float64)
+
+            # Run comprehensive transform test
+            check_transform(
+                lt,
+                input_coords,
+                expected_output,
+                forward_precision=case['forward_precision'],
+                reverse_precision=case.get('reverse_precision', 1e-12),
+                roundtrip_precision=case.get('roundtrip_precision', 1e-12),
+                test_reverse=case.get('test_reverse', True),
+                test_roundtrip=case.get('test_roundtrip', True)
+            )
