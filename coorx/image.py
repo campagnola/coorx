@@ -45,22 +45,52 @@ import scipy
 from .coordinates import Point, PointArray
 from .linear import AffineTransform, TTransform, STTransform
 from .systems import CoordinateSystemGraph, CoordinateSystem
+from .util import affine_resample
 
 
 class Image:
     """Wraps image data with a coordinate system and methods
     for transforming the image and mapping coordinates through the transforms.
 
+    Each Image is assigned a CoordinateSystem that corresponds to the pixel 
+    coordinates of the image. The axes of this coordinate system correspond to
+    the array axes of the imge, as specified by the `axes` argument to the constructor. 
+ 
     Parameters
     ----------
     image : ndarray
         The image data. Must be 2D or higher.
     axes : tuple, optional
         The axes of the image that correspond to spatial dimensions. Defaults to all axes.
+        This allows the image to have extra non-spatial dimensions (e.g. color channels, 
+        time points) that are ignored for coordinate mapping.
     system : str | CoordinateSystem | None
         Optional name of the coordinate system to attach to the image.
     graph : str | CoordinateSystemGraph | None
         Optional graph to use for the coordinate system.
+
+
+    Example
+    -------
+
+    .. code-block:: python
+
+        # Let's say we have a 100x100 RGB video (10 frames)
+        #   axes=(1, 2) means that we will track the coordinates of axes 1 and 2 (rows, cols)
+        #   of the image, and ignore axis 0 (time) and axis 3 (color channels) for coordinate mapping purposes.
+        img = Image(np.zeros((10, 100, 100, 3)), axes=(1, 2))
+
+        # Pick a point at row 20, column 50 in the original image
+        pt = img.point([20, 50])  # corresponds to img.data[:, 20, 50, :]
+
+        # rotate and crop the image
+        rotated = img.rotate(45)
+        cropped = rotated[10:-10, 10:-10]
+
+        # map the point through the transformations to get its coordinates in the cropped image
+        pt2 = pt.mapped_to(cropped.system)
+
+    
     """
 
     def __init__(self, image, axes=None, system=None, graph=None):
@@ -97,12 +127,12 @@ class Image:
         return tuple(self.image.shape[i] for i in self.spatial_to_image_axes)
 
     def point(self, coords):
-        """Return a Point object with the given (row, col) coordinates in the CS of this image."""
+        """Return a Point object with the given coordinates in the CS of this image."""
         coords = np.asarray(coords)
         return Point(coords, system=self.system)
 
     def point_array(self, coords):
-        """Return a PointArray object with the given (row, col) coordinates in the CS of this image."""
+        """Return a PointArray object with the given coordinates in the CS of this image."""
         coords = np.asarray(coords)
         return PointArray(coords, system=self.system)
 
@@ -114,10 +144,18 @@ class Image:
         angle : float
             The angle in degrees to rotate the image.
         axes : (int, int), optional
-            The two spatial axes involved in the rotation. Defaults to (0, 1). Beware: this is different from how
+            The two spatial axes (indices into the `axes` argument provided when the Image
+            was initialized) involved in the rotation. Defaults to (0, 1). 
+            Beware: this is different from how
             AffineTransform's rotations work, and different from how Image.__init__ axes work.
         kwds : keyword arguments
             Additional keyword arguments to pass to `scipy.ndimage.rotate`.
+
+        Returns
+        -------
+        Image
+            A new Image object containing the rotated image and a transform mapping from the original image coordinates
+            to the rotated image coordinates.
         """
         img = self.image
         rotated_img = scipy.ndimage.rotate(img, angle, axes=self.spatial_to_image_axes[list(axes)], **kwds)
@@ -128,6 +166,10 @@ class Image:
         return img2
 
     def __getitem__(self, item):
+        """Return a cropped version of the image corresponding to the given slice(s).
+
+        Slices should be provided as a tuple of slice objects, one for each *spatial* dimension.
+        """
         if not isinstance(item, tuple):
             item = (item,)
         if not all(isinstance(i, slice) for i in item):
@@ -144,6 +186,21 @@ class Image:
         return img2
 
     def zoom(self, factors, **kwds):
+        """Zoom the image by the given factors along each spatial axis.
+
+        Parameters
+        ----------
+        factors : float or array-like
+            The zoom factor(s) for each spatial axis. If a single float is given, the same factor is applied to all spatial axes.
+        kwds : keyword arguments
+            Additional keyword arguments to pass to `scipy.ndimage.zoom`.
+
+        Returns
+        -------
+        Image
+            A new Image object containing the zoomed image and a transform mapping from the original image coordinates
+            to the zoomed image coordinates.
+        """
         # fill in missing image axes with 1
         if np.isscalar(factors):
             factors = [factors] * self.spatial_ndim
@@ -162,6 +219,37 @@ class Image:
         tr.scale = factors
         img2._parent_tr = tr
         return img2
+
+    def crop_around(self, center, size, **kwds):
+        """Crop a region of the given size around the specified center point.
+
+        Parameters
+        ----------
+        center : array-like or Point
+            The center of the crop region, in this image's pixel coordinate system.
+            If a Point is given, it is mapped into this image's system automatically.
+        size : array-like or int
+            The total size of the cropped region in pixels along each spatial axis
+            (i.e. size/2 extends on each side of center).
+            If a single int is given, the same size is applied to all dimensions.
+            The actual size may be smaller if the crop would go outside the image boundaries.
+        """
+        if isinstance(center, (Point, PointArray)):
+            center = center.mapped_to(self.system).coordinates
+        center = np.asarray(center, dtype=float)
+
+        if np.isscalar(size):
+            size = [size] * self.spatial_ndim
+        size = np.asarray(size, dtype=float)
+
+        slices = []
+        for i, ax in enumerate(self.spatial_to_image_axes):
+            img_size = self.image.shape[ax]
+            start = max(0, int(np.floor(center[i] - size[i] / 2)))
+            stop = min(img_size, int(np.ceil(center[i] + size[i] / 2)))
+            slices.append(slice(start, stop))
+
+        return self[tuple(slices)]
 
     def copy(self, **updates):
         kwds = {'axes': self.spatial_to_image_axes, 'graph': self.graph}
@@ -191,5 +279,72 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        offset = [-crop[i].indices(img.shape[i])[0] for i in self.spatial_to_image_axes]
-        return TTransform(offset=offset, dims=(self.spatial_ndim, self.spatial_ndim), cs_graph=self.graph, **kwds)
+        indices = [crop[i].indices(img.shape[i]) for i in self.spatial_to_image_axes]
+        starts = [idx[0] for idx in indices]
+        steps = [idx[2] for idx in indices]
+        if all(s == 1 for s in steps):
+            return TTransform(
+                offset=[-start for start in starts],
+                dims=(self.spatial_ndim, self.spatial_ndim),
+                cs_graph=self.graph,
+                **kwds,
+            )
+        tr = STTransform(dims=(self.spatial_ndim, self.spatial_ndim), cs_graph=self.graph, **kwds)
+        tr.scale = [1.0 / step for step in steps]
+        tr.offset = [-start / step for start, step in zip(starts, steps)]
+        return tr
+
+    def resample(self, origin, vectors, shape, order=1, **kwds):
+        """Resample the image on a new grid defined by the given origin and vectors.
+
+        Parameters
+        ----------
+        origin : array-like | Point
+            The coordinates of the origin of the new grid in this image's pixel coordinate system.
+        vectors : array-like | VectorArray
+            The vectors defining the axes of the new grid in this image's pixel coordinate system.
+            Should be a 2D array of shape (spatial_ndim, spatial_ndim) where each row is a vector.
+        shape : tuple
+            The shape of the resampled image along each spatial axis.
+        order : int, optional
+            The order of the spline interpolation to use for resampling. Default is 1 (bilinear).
+        kwds : keyword arguments
+            Additional keyword arguments to pass to `affine_resample`.
+
+        Returns
+        -------
+        Image
+            A new Image object containing the resampled image and a transform mapping from the original image coordinates
+            to the resampled image coordinates.
+        """
+        if isinstance(origin, (Point, PointArray)):
+            origin = origin.mapped_to(self.system).coordinates
+        origin = np.asarray(origin, dtype=float)
+        vectors = np.asarray(vectors, dtype=float)
+        shape = tuple(shape)
+
+        output = affine_resample(
+            self.image,
+            shape=shape,
+            origin=origin,
+            vectors=vectors,
+            axes=list(self.spatial_to_image_axes),
+            order=order,
+            **kwds,
+        )
+
+        # output has spatial axes at positions 0..spatial_ndim-1
+        img2 = self.copy(image=output, axes=tuple(range(self.spatial_ndim)))
+
+        # Transform from original image coords to resampled image coords:
+        #   p_orig = origin + vectors.T @ p_new  =>  p_new = inv(vectors.T) @ (p_orig - origin)
+        mat = np.linalg.inv(vectors.T)
+        img2._parent_tr = AffineTransform(
+            matrix=mat,
+            offset=-mat @ origin,
+            dims=(self.spatial_ndim, self.spatial_ndim),
+            cs_graph=self.graph,
+            from_cs=self.system,
+            to_cs=img2.system,
+        )
+        return img2

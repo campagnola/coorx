@@ -843,6 +843,13 @@ class SRT3DTransform(Transform):
             m.zoom(self._state["scale"])
             self.set_from_affine(m)
 
+    @classmethod
+    def from_affine(cls, affine):
+        """Create an SRT3DTransform from an AffineTransform, if possible."""
+        obj = cls()
+        obj.set_from_affine(affine)
+        return obj
+
     def set_from_affine(self, tr):
         """
         Set this transform based on the elements of *m*

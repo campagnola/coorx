@@ -1,6 +1,3 @@
-# Tests for the Image class functionality including slicing validation
-# Covers the __getitem__ method and its slice validation requirements
-
 import pytest
 import numpy as np
 from coorx.image import Image
@@ -88,3 +85,99 @@ class TestImageSlicing:
         # Invalid 3D slicing with integers
         with pytest.raises(ValueError, match="Image.__getitem__ requires a tuple of slices"):
             img[2, slice(10, 20), slice(30, 40)]
+
+
+class TestImageSlicingStride:
+    """Tests for strided slices in Image.__getitem__."""
+
+    def test_stride_shape(self):
+        """Strided slice halves the spatial shape."""
+        img = Image(np.arange(100 * 100).reshape(100, 100))
+        strided = img[::2, ::2]
+        assert strided.spatial_shape == (50, 50)
+
+    def test_stride_point_mapping(self):
+        """A point in the original maps to (coord / step) in a stride-from-zero slice."""
+        img = Image(np.arange(100 * 100).reshape(100, 100))
+        strided = img[::2, ::2]
+        # pixel [40, 60] in original → [20, 30] in strided image
+        pt = img.point([40, 60]).mapped_to(strided.system)
+        np.testing.assert_array_almost_equal(pt.coordinates, [20, 30])
+
+    def test_stride_with_offset_point_mapping(self):
+        """A point maps correctly when the slice has both a start and a step."""
+        img = Image(np.arange(100 * 100).reshape(100, 100))
+        strided = img[10:90:2, 10:90:2]
+        # pixel [50, 50] in original → (50 - 10) / 2 = 20 in each axis
+        pt = img.point([50, 50]).mapped_to(strided.system)
+        np.testing.assert_array_almost_equal(pt.coordinates, [20, 20])
+
+
+class TestCropAround:
+    """Tests for Image.crop_around."""
+
+    def _make_img(self, shape=(100, 100)):
+        return Image(np.arange(np.prod(shape)).reshape(shape))
+
+    # --- shape / pixel content ---
+
+    def test_crop_center_shape_and_content(self):
+        """Interior crop (no boundary clamping) produces correct shape and data."""
+        img = self._make_img()
+        cropped = img.crop_around([50, 50], 40)
+        # start = floor(50 - 20) = 30, stop = ceil(50 + 20) = 70
+        assert cropped.spatial_shape == (40, 40)
+        np.testing.assert_array_equal(cropped.image, img.image[30:70, 30:70])
+
+    def test_crop_edge_shape_and_content(self):
+        """Crop near the edge clamps to image boundary and gives smaller result."""
+        img = self._make_img()
+        cropped = img.crop_around([5, 5], 40)
+        # start = max(0, floor(5 - 20)) = 0, stop = min(100, ceil(5 + 20)) = 25
+        assert cropped.spatial_shape == (25, 25)
+        np.testing.assert_array_equal(cropped.image, img.image[0:25, 0:25])
+
+    def test_crop_per_axis_size(self):
+        """Different sizes per axis are handled independently."""
+        img = self._make_img()
+        cropped = img.crop_around([50, 50], [20, 40])
+        # rows: 40-60 (20 px), cols: 30-70 (40 px)
+        assert cropped.spatial_shape == (20, 40)
+        np.testing.assert_array_equal(cropped.image, img.image[40:60, 30:70])
+
+    # --- coordinate mapping ---
+
+    def test_point_mapping_center_crop(self):
+        """Points in the original image map correctly into an interior crop."""
+        img = self._make_img()
+        cropped = img.crop_around([50, 50], 40)  # slices [30:70, 30:70]
+
+        # pixel [50, 50] in img → [50-30, 50-30] = [20, 20] in cropped
+        pt_in_cropped = img.point([50, 50]).mapped_to(cropped.system)
+        np.testing.assert_array_almost_equal(pt_in_cropped.coordinates, [20, 20])
+
+        # corner of the crop window maps to [0, 0]
+        pt_corner = img.point([30, 30]).mapped_to(cropped.system)
+        np.testing.assert_array_almost_equal(pt_corner.coordinates, [0, 0])
+
+    def test_point_mapping_edge_crop(self):
+        """Points map correctly when the crop is clamped to the image boundary."""
+        img = self._make_img()
+        cropped = img.crop_around([5, 5], 40)  # slices [0:25, 0:25]
+
+        # start == 0 so the coordinate offset is zero
+        pt = img.point([5, 5]).mapped_to(cropped.system)
+        np.testing.assert_array_almost_equal(pt.coordinates, [5, 5])
+
+        pt_origin = img.point([0, 0]).mapped_to(cropped.system)
+        np.testing.assert_array_almost_equal(pt_origin.coordinates, [0, 0])
+
+    # --- Point object as center ---
+
+    def test_point_object_as_center(self):
+        """crop_around accepts a Point object; it is mapped into the image's system."""
+        img = self._make_img()
+        center_pt = img.point([50, 50])
+        cropped = img.crop_around(center_pt, 40)
+        assert cropped.spatial_shape == (40, 40)
+        np.testing.assert_array_equal(cropped.image, img.image[30:70, 30:70])
