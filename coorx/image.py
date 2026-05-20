@@ -240,13 +240,13 @@ class Image:
 
         if np.isscalar(size):
             size = [size] * self.spatial_ndim
-        size = np.asarray(size, dtype=float)
+        size = np.asarray(size, dtype=int)
 
         slices = []
         for i, ax in enumerate(self.spatial_to_image_axes):
             img_size = self.image.shape[ax]
             start = max(0, int(np.floor(center[i] - size[i] / 2)))
-            stop = min(img_size, int(np.ceil(center[i] + size[i] / 2)))
+            stop = min(img_size, start+size[i], int(np.ceil(center[i] + size[i] / 2)))
             slices.append(slice(start, stop))
 
         return self[tuple(slices)]
