@@ -69,6 +69,17 @@ tr3 = CompositeTransform([tr2, tr1])
 print(tr3.map(coords))
 ```
 
+Local CI
+========
+
+To run GitHub Actions workflows locally with [act](https://github.com/nektos/act), first build the runner image once:
+
+```
+docker build -t coorx-act-runner -f .github/act-ubuntu.dockerfile .github/
+```
+
+Then run `act` as normal; `.actrc` maps `ubuntu-latest` to this image.
+
 Todo
 ====
 
