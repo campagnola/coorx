@@ -20,7 +20,7 @@ from .coordinates import Point, PointArray, Vector, VectorArray
 from .image import Image
 from .systems import CoordinateSystem, CoordinateSystemGraph
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 
 def transform_types():
