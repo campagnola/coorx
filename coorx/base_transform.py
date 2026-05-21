@@ -233,7 +233,24 @@ class Transform(object):
 
         Alternatively, any class may determine how to map itself by defining a _coorx_transform()
         method that accepts this transform as an argument.
+
+        Qt geometry types (QPointF, QVector3D) and lists thereof are also accepted when Qt is available.
         """
+        try:
+            from .qt import import_qt_gui, import_qt_core
+            QtGui = import_qt_gui()
+            QtCore = import_qt_core()
+            # Use exact type checks so subclasses with __len__ (e.g. pg.Vector) fall through
+            # to the existing __len__ fallback which can reconstruct the original type.
+            if type(obj) is QtCore.QPointF:
+                return self._prepare_and_map([obj.x(), obj.y()])
+            if type(obj) is QtGui.QVector3D:
+                return self._prepare_and_map([obj.x(), obj.y(), obj.z()])
+            if isinstance(obj, (list, tuple)) and len(obj) > 0 and type(obj[0]) in (QtCore.QPointF, QtGui.QVector3D):
+                return [self._prepare_and_map(o) for o in obj]
+        except ImportError:
+            pass
+
         if hasattr(obj, '_coorx_transform'):
             # let the object decide how to apply this transform
             return obj._coorx_transform(tr=self)
