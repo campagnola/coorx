@@ -181,3 +181,23 @@ class TestCropAround:
         cropped = img.crop_around(center_pt, 40)
         assert cropped.spatial_shape == (40, 40)
         np.testing.assert_array_equal(cropped.image, img.image[30:70, 30:70])
+
+    # --- odd-size / stop-overshoot regression ---
+
+    def test_odd_size_interior_shape(self):
+        """Odd size at an integer center must not produce one extra pixel.
+
+        With the old code, ceil(center + size/2) rounded up when size is odd,
+        giving stop - start = size + 1 instead of size.
+        """
+        img = self._make_img()
+        cropped = img.crop_around([50, 50], 11)
+        # start = floor(50 - 5.5) = 44, stop must be 55 (not 56)
+        assert cropped.spatial_shape == (11, 11)
+        np.testing.assert_array_equal(cropped.image, img.image[44:55, 44:55])
+
+    def test_odd_size_per_axis_shape(self):
+        """Per-axis odd sizes are each clamped to exactly the requested count."""
+        img = self._make_img()
+        cropped = img.crop_around([50, 50], [11, 13])
+        assert cropped.spatial_shape == (11, 13)

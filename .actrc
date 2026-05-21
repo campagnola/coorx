@@ -1,0 +1,2 @@
+-P ubuntu-latest=coorx-act-runner
+--pull=false
