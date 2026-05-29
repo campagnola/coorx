@@ -199,6 +199,93 @@ class VectorMapping(unittest.TestCase):
         self.assertEqual(mapped.z(), 3 * 4 + 7)
 
 
+try:
+    from coorx.qt import import_qt_gui, import_qt_core
+    _QtGui = import_qt_gui()
+    _QtCore = import_qt_core()
+    HAVE_QT_GUI = True
+except ImportError:
+    HAVE_QT_GUI = False
+
+
+class QtGeometryMappingTest(unittest.TestCase):
+    """Tests that Transform.map() handles Qt geometry types directly."""
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_qpointf(self):
+        tr = coorx.STTransform(scale=(2, 3), offset=(10, 20))
+        pt = _QtCore.QPointF(1.0, 2.0)
+        result = tr.map(pt)
+        np.testing.assert_allclose(result, [1 * 2 + 10, 2 * 3 + 20])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_qvector3d(self):
+        tr = coorx.STTransform(scale=(2, 3, 4), offset=(5, 6, 7))
+        pt = _QtGui.QVector3D(1.0, 2.0, 3.0)
+        result = tr.map(pt)
+        np.testing.assert_allclose(result, [1 * 2 + 5, 2 * 3 + 6, 3 * 4 + 7])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_list_of_qpointf(self):
+        tr = coorx.STTransform(scale=(2, 3), offset=(10, 20))
+        pts = [_QtCore.QPointF(1.0, 2.0), _QtCore.QPointF(3.0, 4.0)]
+        results = tr.map(pts)
+        assert len(results) == 2
+        np.testing.assert_allclose(results[0], [1 * 2 + 10, 2 * 3 + 20])
+        np.testing.assert_allclose(results[1], [3 * 2 + 10, 4 * 3 + 20])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_list_of_qvector3d(self):
+        tr = coorx.STTransform(scale=(2, 3, 4), offset=(5, 6, 7))
+        pts = [_QtGui.QVector3D(1.0, 2.0, 3.0), _QtGui.QVector3D(4.0, 5.0, 6.0)]
+        results = tr.map(pts)
+        assert len(results) == 2
+        np.testing.assert_allclose(results[0], [1 * 2 + 5, 2 * 3 + 6, 3 * 4 + 7])
+        np.testing.assert_allclose(results[1], [4 * 2 + 5, 5 * 3 + 6, 6 * 4 + 7])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_tuple_of_qpointf(self):
+        tr = coorx.STTransform(scale=(2, 3), offset=(10, 20))
+        pts = (_QtCore.QPointF(1.0, 2.0), _QtCore.QPointF(3.0, 4.0))
+        results = tr.map(pts)
+        assert len(results) == 2
+        np.testing.assert_allclose(results[0], [1 * 2 + 10, 2 * 3 + 20])
+        np.testing.assert_allclose(results[1], [3 * 2 + 10, 4 * 3 + 20])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_qpointf_with_affine(self):
+        tr = coorx.AffineTransform(dims=(2, 2))
+        tr.translate([5, 7])
+        pt = _QtCore.QPointF(1.0, 2.0)
+        result = tr.map(pt)
+        np.testing.assert_allclose(result, [6.0, 9.0])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_qpointf_with_composite(self):
+        # (t1 * t2)(x) = t1(t2(x)), so t2 is applied first
+        t1 = coorx.TTransform(offset=(1, 1))
+        t2 = coorx.STTransform(scale=(2, 2), offset=(0, 0))
+        tr = t1 * t2
+        pt = _QtCore.QPointF(3.0, 4.0)
+        result = tr.map(pt)
+        # t2 scales: (6, 8), then t1 adds offset: (7, 9)
+        np.testing.assert_allclose(result, [7.0, 9.0])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_qpointf_with_ttransform(self):
+        tr = coorx.TTransform(offset=(100, 200))
+        pt = _QtCore.QPointF(5.0, 6.0)
+        result = tr.map(pt)
+        np.testing.assert_allclose(result, [105.0, 206.0])
+
+    @unittest.skipUnless(HAVE_QT_GUI, "Qt GUI not available")
+    def test_map_empty_list_raises(self):
+        tr = coorx.STTransform(scale=(2, 3), offset=(10, 20))
+        # empty list has no Qt type to detect and 0 dims — base class raises TypeError
+        with self.assertRaises(TypeError):
+            tr.map([])
+
+
 class CompositeTransform(unittest.TestCase):
     def test_transform_composite(self):
         # Make dummy classes for easier distinguishing the transforms
