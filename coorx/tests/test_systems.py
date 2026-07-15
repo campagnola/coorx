@@ -270,9 +270,14 @@ def test_copy(type1, inverse1, inverse2):
         cs2_from_cs1.copy(from_cs="cs4")
     with raises(ValueError):
         cs2_from_cs1.copy(to_cs="cs5")
-    copy = cs2_from_cs1.copy(from_cs="cs4", to_cs="cs5")
-    assert str(copy.systems[0]) == "cs4"
-    assert str(copy.systems[1]) == "cs5"
+    with raises(ValueError):
+        # both endpoints already exist in the graph
+        cs2_from_cs1.copy(from_cs="cs1", to_cs="cs2")
+    new_from = f"cs4_{type1}_{inverse1}_{inverse2}"
+    new_to = f"cs5_{type1}_{inverse1}_{inverse2}"
+    copy = cs2_from_cs1.copy(from_cs=new_from, to_cs=new_to)
+    assert str(copy.systems[0]) == new_from
+    assert str(copy.systems[1]) == new_to
 
 
 def test_composite_copy():
@@ -522,3 +527,53 @@ def test_save_state_preserves_systems():
     assert restored.systems[0].graph is graph
     pts = np.array([[1.0, 2.0], [3.0, 4.0]])
     assert np.all(restored.map(pts) == tr.map(pts))
+
+
+def test_copy_cannot_clobber_graph():
+    graph = CoordinateSystemGraph.get_graph("copy_clobber_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+
+    with raises(ValueError):
+        tr.copy(from_cs="A", to_cs="B")
+    with raises(ValueError):
+        tr.as_affine(from_cs="A", to_cs="B")
+    with raises(ValueError):
+        tr.as_affine(from_cs="B", to_cs="A")
+
+    copy = tr.copy(from_cs="A", to_cs="B_frozen")
+    assert copy.systems[0] is graph.system("A")
+
+    tr.copy(system_names="_f1")
+    with raises(ValueError):
+        tr.copy(system_names="_f1")
+    with raises(ValueError):
+        tr.copy(system_names={"A": "A", "B": "B2"})
+
+    assert graph.transform("A", "B") is tr
+
+
+def test_composite_copy_cannot_clobber_graph():
+    graph = CoordinateSystemGraph.get_graph("comp_clobber_graph", create=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    b_to_c = AffineTransform(matrix=[[0, 1], [1, 0]], offset=[3, 4], from_cs="B", to_cs="C", cs_graph=graph)
+    chain = graph.transform("A", "C")
+
+    with raises(ValueError):
+        chain.copy(from_cs="A", to_cs="C", system_names="_f1")
+    with raises(ValueError):
+        chain.copy(system_names={"A": "A2", "B": "B", "C": "C2"})
+    # the failed copies must not have partially registered anything
+    assert set(graph.systems) == {"A", "B", "C"}
+
+    chain.copy(system_names="_f1")
+    with raises(ValueError):
+        chain.copy(system_names="_f1")
+
+    # pinning a single endpoint to an existing system is allowed, on either end
+    copy = chain.copy(from_cs="A", system_names="_f2")
+    assert copy.transforms[0].systems[0] is graph.system("A")
+    copy = chain.copy(to_cs="C", system_names="_f3")
+    assert copy.transforms[-1].systems[1] is graph.system("C")
+
+    assert graph.transform("A", "B") is a_to_b
+    assert graph.transform("B", "C") is b_to_c

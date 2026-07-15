@@ -89,7 +89,10 @@ class CompositeTransform(Transform):
             key raises ValueError); a str is appended to the original name as a suffix.
 
         Each sub-transform is copied with its resolved endpoint pair, so the entire
-        chain is registered as new graph edges.
+        chain is registered as new graph edges. The registered chain may never replace
+        or shadow existing graph edges: names derived via *system_names* must not
+        collide with existing systems, and at most one of *from_cs* / *to_cs* may be
+        an existing system (ValueError otherwise).
 
         Examples
         --------
@@ -106,7 +109,9 @@ class CompositeTransform(Transform):
         if resolved is None:
             copies = [t.copy() for t in self.transforms]
         else:
-            copies = [t.copy(from_cs=resolved[i], to_cs=resolved[i + 1]) for i, t in enumerate(self.transforms)]
+            graph = self._graph_for_new_systems(from_cs, to_cs)
+            self._check_derived_systems(resolved, from_cs, to_cs, graph)
+            copies = [t._copy_registered(resolved[i], resolved[i + 1], graph) for i, t in enumerate(self.transforms)]
         return CompositeTransform(copies, dynamic=self.dynamic)
 
     @property

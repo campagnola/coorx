@@ -358,13 +358,17 @@ class Transform(object):
 
         By default, the returned transform has no coordinate systems. If *from_cs* and
         *to_cs* are both given (str or CoordinateSystem), they are set on the result;
-        giving only one of the two raises ValueError.
+        giving only one of the two raises ValueError, as does giving two systems that
+        both already exist in the graph (the result may never replace or shadow an
+        existing graph edge).
         """
         if (from_cs is None) != (to_cs is None):
             raise ValueError("as_affine requires either both from_cs and to_cs or neither")
         affine = self._as_affine()
         if from_cs is not None:
-            affine.set_systems(from_cs, to_cs, self._graph_for_new_systems(from_cs, to_cs))
+            graph = self._graph_for_new_systems(from_cs, to_cs)
+            self._check_derived_systems([from_cs, to_cs], from_cs, to_cs, graph)
+            affine.set_systems(from_cs, to_cs, graph)
         return affine
 
     def _as_affine(self):
@@ -375,19 +379,46 @@ class Transform(object):
         raise NotImplementedError()
 
     def _graph_for_new_systems(self, from_cs, to_cs):
-        """Return the cs_graph argument to use when setting systems on a derived transform.
+        """Return the graph in which a derived transform's systems should be registered.
 
-        If *from_cs* or *to_cs* is a CoordinateSystem instance, its graph takes precedence
-        (set_systems handles the from_cs case itself); otherwise the graph of this
-        transform's own systems is used, falling back to the default graph.
+        If *from_cs* or *to_cs* is a CoordinateSystem instance, its graph takes precedence;
+        otherwise the graph of this transform's own systems is used, falling back to the
+        default graph.
         """
-        if isinstance(from_cs, CoordinateSystem):
-            return None
-        if isinstance(to_cs, CoordinateSystem):
-            return to_cs.graph
-        if self.systems[0] is not None:
-            return self.systems[0].graph
-        return None
+        for cs in (from_cs, to_cs):
+            if isinstance(cs, CoordinateSystem):
+                return cs.graph
+        for cs in self.systems:
+            if cs is not None:
+                return cs.graph
+        return CoordinateSystemGraph.get_graph(None)
+
+    @staticmethod
+    def _check_derived_systems(resolved, from_cs, to_cs, graph):
+        """Check that registering a derived transform with *resolved* systems cannot
+        modify existing graph structure.
+
+        Derived system names (those not explicitly given as from_cs/to_cs) must not
+        collide with systems already in *graph*, and at most one of the explicitly
+        given from_cs/to_cs may be an existing system; together these guarantee that
+        the registered copy introduces at least one new system and therefore can
+        never replace or shadow an existing graph edge.
+        """
+        def exists(s):
+            return isinstance(s, CoordinateSystem) or s in graph.systems
+
+        for i, s in enumerate(resolved):
+            explicit = (i == 0 and from_cs is not None) or (i == len(resolved) - 1 and to_cs is not None)
+            if not explicit and exists(s):
+                raise ValueError(
+                    f"Derived name for coordinate system '{s}' already exists in {graph}; "
+                    "derived system names must be new."
+                )
+        if from_cs is not None and to_cs is not None and exists(resolved[0]) and exists(resolved[-1]):
+            raise ValueError(
+                f"Both from_cs ('{resolved[0]}') and to_cs ('{resolved[-1]}') are existing coordinate "
+                f"systems in {graph}; at most one may already exist."
+            )
 
     @property
     def full_matrix(self) -> np.ndarray:
@@ -551,17 +582,32 @@ class Transform(object):
         registration; otherwise the copy is registered in the same graph as the
         original (or the default graph if the original has no systems).
 
+        The registered copy may never replace or shadow an existing graph edge:
+        names derived via *system_names* must not collide with existing systems, and
+        at most one of *from_cs* / *to_cs* may be an existing system (ValueError
+        otherwise).
+
         Examples
         --------
         tr.copy()                                  # no systems
         tr.copy(system_names='_frozen')            # 'a'->'b' becomes 'a_frozen'->'b_frozen'
         tr.copy(from_cs='global', system_names='_frame12')
         """
-        state = strip_systems_from_state(self.save_state())
-        new = self.from_state(state)
         resolved = self._resolve_copy_systems(list(self.systems), from_cs, to_cs, system_names)
-        if resolved is not None:
-            new.set_systems(resolved[0], resolved[-1], self._graph_for_new_systems(resolved[0], resolved[-1]))
+        if resolved is None:
+            return self.from_state(strip_systems_from_state(self.save_state()))
+        graph = self._graph_for_new_systems(from_cs, to_cs)
+        self._check_derived_systems(resolved, from_cs, to_cs, graph)
+        return self._copy_registered(resolved[0], resolved[-1], graph)
+
+    def _copy_registered(self, from_cs, to_cs, cs_graph):
+        """Return a copy with the given systems assigned.
+
+        Internal: callers are responsible for having validated the systems against
+        the graph (see _check_derived_systems).
+        """
+        new = self.from_state(strip_systems_from_state(self.save_state()))
+        new.set_systems(from_cs, to_cs, cs_graph)
         return new
 
     @staticmethod
@@ -672,6 +718,9 @@ class InverseTransform(Transform):
 
     def copy(self, from_cs=None, to_cs=None, system_names=None):
         return self._state['inverse'].copy(from_cs=to_cs, to_cs=from_cs, system_names=system_names).inverse
+
+    def _copy_registered(self, from_cs, to_cs, cs_graph):
+        return self._state['inverse']._copy_registered(to_cs, from_cs, cs_graph).inverse
 
     def set_params(self, inverse):
         if isinstance(inverse, Transform):
