@@ -6,7 +6,7 @@ import pytest
 from coorx import CompositeTransform
 from coorx import create_transform, Point
 from coorx.coordinates import PointArray
-from coorx.linear import STTransform
+from coorx.linear import AffineTransform, STTransform
 from coorx.systems import CoordinateSystemGraph
 from pytest import raises
 
@@ -221,11 +221,11 @@ def test_transform_mapping(type1, type2, inverse1, inverse2):
     assert str(explicitly_mapped.system) == "cs3"
 
     with contextlib.suppress(NotImplementedError):  # ignore non-affine transforms here
-        affine_mapped = cs3_from_cs2.as_affine().map(cs2_from_cs1.as_affine().map(point))
-        assert str(affine_mapped.system) == "cs3"
+        affine_mapped = cs3_from_cs2.as_affine().map(cs2_from_cs1.as_affine().map(point.coordinates))
+        assert np.allclose(affine_mapped, explicitly_mapped.coordinates, equal_nan=True)
 
-    mult_mapped = (cs3_from_cs2 * cs2_from_cs1).map(point)
-    assert str(mult_mapped.system) == "cs3"
+    mult_mapped = (cs3_from_cs2 * cs2_from_cs1).map(point.coordinates)
+    assert np.allclose(mult_mapped, explicitly_mapped.coordinates, equal_nan=True)
 
     composite_mapped = CompositeTransform([cs2_from_cs1, cs3_from_cs2]).map(point)
     assert str(composite_mapped.system) == "cs3"
@@ -244,12 +244,16 @@ def test_this_one_weird_situation():
     cs2_from_cs1 = create_transform("NullTransform", **{}, dims=(3, 3), systems=("cs1", "cs2"))
     cs3_from_cs2 = create_transform("SRT3DTransform", **PARAMS["SRT3DTransform"], dims=(3, 3), systems=("cs2", "cs3"))
     cs3_from_cs1 = cs3_from_cs2 * cs2_from_cs1
-    assert str(cs3_from_cs1.map(Point([1, 1, 1], "cs1")).system) == "cs3"
+    pt_cs1 = Point([1, 1, 1], "cs1")
+    expected = cs3_from_cs2.map(cs2_from_cs1.map(pt_cs1))
+    assert np.allclose(cs3_from_cs1.map(pt_cs1.coordinates), expected.coordinates)
     assert cs3_from_cs2.full_matrix.shape == (4, 4)  # just used to access it, really
 
     cs1_from_cs0 = create_transform("AffineTransform", **PARAMS["AffineTransform"], dims=(3, 3), systems=("cs0", "cs1"))
     cs3_from_cs0 = cs3_from_cs2 * cs2_from_cs1 * cs1_from_cs0
-    assert str(cs3_from_cs0.map(Point([1, 1, 1], "cs0")).system) == "cs3"
+    pt_cs0 = Point([1, 1, 1], "cs0")
+    expected = cs3_from_cs2.map(cs2_from_cs1.map(cs1_from_cs0.map(pt_cs0)))
+    assert np.allclose(cs3_from_cs0.map(pt_cs0.coordinates), expected.coordinates)
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
@@ -260,12 +264,12 @@ def test_copy(type1, inverse1, inverse2):
         cs2_from_cs1 = create_transform(type1, **PARAMS[type1], dims=(3, 3), systems=("cs2", "cs1")).inverse
     else:
         cs2_from_cs1 = create_transform(type1, **PARAMS[type1], dims=(3, 3), systems=("cs1", "cs2"))
-    copy = cs2_from_cs1.copy(from_cs="cs4")
-    assert str(copy.systems[0]) == "cs4"
-    assert str(copy.systems[1]) == "cs2"
-    copy = cs2_from_cs1.copy(to_cs="cs5")
-    assert str(copy.systems[0]) == "cs1"
-    assert str(copy.systems[1]) == "cs5"
+    copy = cs2_from_cs1.copy()
+    assert copy.systems == (None, None)
+    with raises(ValueError):
+        cs2_from_cs1.copy(from_cs="cs4")
+    with raises(ValueError):
+        cs2_from_cs1.copy(to_cs="cs5")
     copy = cs2_from_cs1.copy(from_cs="cs4", to_cs="cs5")
     assert str(copy.systems[0]) == "cs4"
     assert str(copy.systems[1]) == "cs5"
@@ -286,16 +290,16 @@ def test_as_affine_systems(type1):
     xform = create_transform(type1, **PARAMS[type1], dims=(3, 3), systems=("affine1", "affine2"))
     point = Point([1, 2, 3], "affine1")
     with contextlib.suppress(NotImplementedError):  # ignore non-affine transforms here
-        assert np.all(xform.as_affine().map(point) == xform.map(point))
-        assert xform.as_affine().systems == xform.systems
-        assert xform.inverse.as_affine().systems == xform.inverse.systems
-        assert np.allclose(xform.inverse.as_affine().map(xform.map(point)), point)
-        explicitly_looped = xform.inverse.as_affine().map(xform.as_affine().map(point))
-        assert np.allclose(explicitly_looped, point)
+        assert xform.as_affine().systems == (None, None)
+        assert xform.inverse.as_affine().systems == (None, None)
+        assert np.all(xform.as_affine().map(point.coordinates) == xform.map(point).coordinates)
+        assert np.allclose(xform.inverse.as_affine().map(xform.map(point).coordinates), point.coordinates)
+        explicitly_looped = xform.inverse.as_affine().map(xform.as_affine().map(point.coordinates))
+        assert np.allclose(explicitly_looped, point.coordinates)
         mult_loop = xform.inverse * xform
-        assert np.allclose(mult_loop.as_affine().map(point), point)
+        assert np.allclose(mult_loop.as_affine().map(point.coordinates), point.coordinates)
         comp_loop = CompositeTransform([xform, xform.inverse])
-        assert np.allclose(comp_loop.as_affine().map(point), point)
+        assert np.allclose(comp_loop.as_affine().map(point.coordinates), point.coordinates)
 
 
 @pytest.mark.parametrize("type1", PARAMS.keys())
@@ -365,3 +369,156 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
 
     with raises(TypeError):
         CompositeTransform([cs3_from_cs1, cs0_to_cs1])
+
+
+def test_copy_is_systemless():
+    graph = CoordinateSystemGraph.get_graph("copy_sysless_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+    copy = tr.copy()
+    assert copy.systems == (None, None)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert np.all(copy.map(pts) == tr.map(pts))
+    assert graph.transform("A", "B") is tr
+    assert set(graph.systems) == {"A", "B"}
+
+
+def test_as_affine_graph_registration():
+    graph = CoordinateSystemGraph.get_graph("as_affine_reg_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    affine = tr.as_affine()
+    assert affine.systems == (None, None)
+    assert np.allclose(affine.map(pts), tr.map(pts))
+    assert graph.transform("A", "B") is tr
+    assert set(graph.systems) == {"A", "B"}
+
+    with raises(ValueError):
+        tr.as_affine(from_cs="A2")
+    with raises(ValueError):
+        tr.as_affine(to_cs="B2")
+
+    affine = tr.as_affine(from_cs="A2", to_cs="B2")
+    assert str(affine.systems[0]) == "A2"
+    assert str(affine.systems[1]) == "B2"
+    assert affine.systems[0].graph is graph
+    assert graph.transform("A2", "B2") is affine
+
+
+def test_copy_graph_registration():
+    graph = CoordinateSystemGraph.get_graph("copy_reg_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+
+    copy = tr.copy(system_names="_c1")
+    assert str(copy.systems[0]) == "A_c1"
+    assert str(copy.systems[1]) == "B_c1"
+    assert copy.systems[0].graph is graph
+    assert graph.transform("A_c1", "B_c1") is copy
+
+    copy = tr.copy(system_names={"A": "in2", "B": "out2"})
+    assert str(copy.systems[0]) == "in2"
+    assert str(copy.systems[1]) == "out2"
+    assert graph.transform("in2", "out2") is copy
+
+    copy = tr.copy(from_cs="in3", to_cs="out3")
+    assert str(copy.systems[0]) == "in3"
+    assert str(copy.systems[1]) == "out3"
+    assert graph.transform("in3", "out3") is copy
+
+    with raises(ValueError):
+        tr.copy(system_names={"A": "in4"})
+    with raises(ValueError):
+        tr.copy(from_cs="in4")
+
+    assert graph.transform("A", "B") is tr
+
+
+def test_copy_of_systemless_transform():
+    default_graph = CoordinateSystemGraph.get_graph(None)
+    tr = STTransform(scale=[2, 3], offset=[1, 2])
+    assert tr.systems == (None, None)
+    copy = tr.copy(from_cs="sysless_copy_in", to_cs="sysless_copy_out")
+    assert str(copy.systems[0]) == "sysless_copy_in"
+    assert str(copy.systems[1]) == "sysless_copy_out"
+    assert copy.systems[0].graph is default_graph
+    assert default_graph.transform("sysless_copy_in", "sysless_copy_out") is copy
+
+
+def test_composite_copy_graph_registration():
+    graph = CoordinateSystemGraph.get_graph("comp_copy_graph", create=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    b_to_c = AffineTransform(matrix=[[0, 1], [1, 0]], offset=[3, 4], from_cs="B", to_cs="C", cs_graph=graph)
+    chain = graph.transform("A", "C")
+    assert isinstance(chain, CompositeTransform)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    copy = chain.copy()
+    assert all(t.systems == (None, None) for t in copy.transforms)
+    assert np.allclose(copy.map(pts), chain.map(pts))
+    assert graph.transform("A", "B") is a_to_b
+    assert graph.transform("B", "C") is b_to_c
+
+    copy = chain.copy(system_names="_f1")
+    systems = [copy.transforms[0].systems[0]] + [t.systems[1] for t in copy.transforms]
+    assert [str(s) for s in systems] == ["A_f1", "B_f1", "C_f1"]
+    assert np.allclose(copy.map(pts), chain.map(pts))
+    assert graph.transform("A_f1", "B_f1") is copy.transforms[0]
+    assert graph.transform("B_f1", "C_f1") is copy.transforms[1]
+
+    copy = chain.copy(from_cs="A", system_names="_f2")
+    assert copy.transforms[0].systems[0] is graph.system("A")
+    assert str(copy.transforms[0].systems[1]) == "B_f2"
+    assert str(copy.transforms[1].systems[1]) == "C_f2"
+
+    with raises(ValueError):
+        chain.copy(from_cs="A2")
+    with raises(ValueError):
+        chain.copy(system_names={"A": "A3", "C": "C3"})
+
+
+def test_mul_product_is_systemless():
+    graph = CoordinateSystemGraph.get_graph("mul_sysless_graph", create=True)
+    ab = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    bc = AffineTransform(matrix=[[0, 1], [1, 0]], offset=[3, 4], from_cs="B", to_cs="C", cs_graph=graph)
+    product = bc * ab
+    assert product.systems == (None, None)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert np.allclose(product.map(pts), bc.map(ab.map(pts)))
+    assert graph.transform("A", "B") is ab
+    assert graph.transform("B", "C") is bc
+    assert set(graph.systems) == {"A", "B", "C"}
+
+
+def test_inverse_derived_transforms_systemless():
+    graph = CoordinateSystemGraph.get_graph("inv_derived_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    inv_affine = tr.inverse.as_affine()
+    assert inv_affine.systems == (None, None)
+    assert np.allclose(inv_affine.map(tr.map(pts)), pts)
+
+    inv_copy = tr.inverse.copy()
+    assert inv_copy.systems == (None, None)
+    assert np.allclose(inv_copy.map(tr.map(pts)), pts)
+
+
+def test_systemless_transform_point_mapping():
+    graph = CoordinateSystemGraph.get_graph("sysless_pt_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+    copy = tr.copy()
+    pt = Point([1, 2], graph.system("A"))
+    with raises(TypeError, match=wrong_system):
+        copy.map(pt)
+    assert np.all(copy.map(pt.coordinates) == tr.map(pt).coordinates)
+
+
+def test_save_state_preserves_systems():
+    graph = CoordinateSystemGraph.get_graph("state_systems_graph", create=True)
+    tr = STTransform(scale=[2, 3], offset=[1, 2], from_cs="A", to_cs="B", cs_graph=graph)
+    restored = STTransform.from_state(tr.save_state())
+    assert str(restored.systems[0]) == "A"
+    assert str(restored.systems[1]) == "B"
+    assert restored.systems[0].graph is graph
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert np.all(restored.map(pts) == tr.map(pts))

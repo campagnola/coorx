@@ -37,12 +37,10 @@ class NullTransform(Transform):
         """
         return coords
 
-    def as_affine(self):
+    def _as_affine(self):
         return AffineTransform(
             matrix=np.eye(self.dims[0]),
             offset=np.zeros(self.dims[0]),
-            from_cs=self.systems[0],
-            to_cs=self.systems[1],
         )
 
     @property
@@ -57,7 +55,7 @@ class NullTransform(Transform):
         if isinstance(tr.inverse, CompositeTransform):
             return tr.inverse.__mul__(self.inverse).inverse
         self.validate_transform_for_mul(tr)
-        return tr.copy(from_cs=tr.systems[0], to_cs=self.systems[1])
+        return tr.copy()
 
     def __rmul__(self, tr):
         from coorx import CompositeTransform
@@ -67,7 +65,7 @@ class NullTransform(Transform):
         if isinstance(tr.inverse, CompositeTransform):
             return tr.inverse.__rmul__(self.inverse).inverse
         tr.validate_transform_for_mul(self)
-        return tr.copy(from_cs=self.systems[0], to_cs=tr.systems[1])
+        return tr.copy()
 
 
 class TransposeTransform(Transform):
@@ -106,12 +104,10 @@ class TransposeTransform(Transform):
     def params(self):
         return {'axis_order': self.axis_order}
 
-    def as_affine(self):
+    def _as_affine(self):
         return AffineTransform(
             matrix=np.eye(self.dims[0])[:, self.axis_order],
             offset=np.zeros(self.dims[0]),
-            from_cs=self.systems[0],
-            to_cs=self.systems[1],
         )
 
     def __rmul__(self, tr):
@@ -119,8 +115,6 @@ class TransposeTransform(Transform):
             tr.validate_transform_for_mul(self)
             return TransposeTransform(
                 axis_order=tuple(self._map(np.array(tr.axis_order))),
-                from_cs=self.systems[0],
-                to_cs=tr.systems[1],
             )
         return super().__rmul__(tr)
 
@@ -207,8 +201,8 @@ class TTransform(Transform):
         offset = np.asarray(offset)
         self.offset = self.offset + offset
 
-    def as_affine(self):
-        m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
+    def _as_affine(self):
+        m = AffineTransform(dims=self.dims)
         m.translate(self.offset)
         return m
 
@@ -216,14 +210,12 @@ class TTransform(Transform):
         return STTransform(
             offset=self.offset,
             scale=(1,) * self.dims[0],
-            from_cs=self.systems[0],
-            to_cs=self.systems[1],
         )
 
     def __mul__(self, tr):
         self.validate_transform_for_mul(tr)
         if isinstance(tr, TTransform):
-            return TTransform(self.offset + tr.offset, from_cs=tr.systems[0], to_cs=self.systems[1])
+            return TTransform(self.offset + tr.offset)
         elif isinstance(tr, STTransform):
             return self.as_st() * tr
         elif isinstance(tr, AffineTransform):
@@ -356,8 +348,8 @@ class STTransform(Transform):
             trans = self.scale * (1 - zoom) * center + self.offset
         self.set_params(scale=scale, offset=trans)
 
-    def as_affine(self):
-        m = AffineTransform(dims=self.dims, from_cs=self.systems[0], to_cs=self.systems[1])
+    def _as_affine(self):
+        m = AffineTransform(dims=self.dims)
         m.zoom(self.scale)
         m.translate(self.offset)
         return m
@@ -435,7 +427,7 @@ class STTransform(Transform):
         if isinstance(tr, STTransform):
             s = self.scale * tr.scale
             t = self.offset + (tr.offset * self.scale)
-            return STTransform(scale=s, offset=t, from_cs=tr.systems[0], to_cs=self.systems[1])
+            return STTransform(scale=s, offset=t)
         elif isinstance(tr, AffineTransform):
             return self.as_affine() * tr
         else:
@@ -558,12 +550,10 @@ class AffineTransform(Transform):
     def inv_offset(self):
         return -self._state["offset"]
 
-    def as_affine(self):
+    def _as_affine(self):
         return AffineTransform(
             matrix=self.matrix,
             offset=self.offset,
-            from_cs=self.systems[0],
-            to_cs=self.systems[1],
         )
 
     @property
@@ -665,9 +655,7 @@ class AffineTransform(Transform):
         self.validate_transform_for_mul(tr)
         if isinstance(tr, AffineTransform):
             m = np.dot(self.full_matrix, tr.full_matrix)
-            return AffineTransform(
-                matrix=m[:-1, :-1], offset=m[:-1, -1], from_cs=tr.systems[0], to_cs=self.systems[1]
-            )
+            return AffineTransform(matrix=m[:-1, :-1], offset=m[:-1, -1])
         return tr.__rmul__(self)
 
     def __eq__(self, tr):
@@ -692,14 +680,6 @@ class AffineTransform(Transform):
         offset = matrix[:-1, -1]
         matrix = matrix[:-1, :-1]
         return cls(matrix=matrix, offset=offset, *init_args, **init_kwargs)
-
-    def copy(self, from_cs=None, to_cs=None):
-        return AffineTransform(
-            matrix=self.matrix,
-            offset=self.offset,
-            from_cs=from_cs or self.systems[0],
-            to_cs=to_cs or self.systems[1],
-        )
 
 
 class SRT2DTransform:
@@ -1004,8 +984,8 @@ class SRT3DTransform(Transform):
         self.set_params(**params)
         return err_func(self, points1, points2)
 
-    def as_affine(self):
-        affine = AffineTransform(dims=(3, 3), from_cs=self.systems[0], to_cs=self.systems[1])
+    def _as_affine(self):
+        affine = AffineTransform(dims=(3, 3))
         affine.zoom(self._state["scale"])
         affine.rotate(self._state["angle"], self._state["axis"])
         affine.translate(self._state["offset"])
@@ -1086,7 +1066,7 @@ class PerspectiveTransform(Transform):
         out = self.affine.map(arr4)
         return out[:, :3] / out[:, 3:4]
 
-    def as_affine(self):
+    def _as_affine(self):
         # TODO is this correct?
         return self.affine.as_affine()
 

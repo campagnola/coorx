@@ -16,6 +16,20 @@ class DependentTransformError(Exception):
     pass
 
 
+def strip_systems_from_state(state):
+    """Return a copy of a transform state with all 'systems' keys recursively removed.
+
+    Nested transform states (e.g. InverseTransform's 'inverse' parameter or
+    PerspectiveTransform's 'affine' parameter) are stripped as well.
+    """
+    if isinstance(state, dict):
+        return {k: strip_systems_from_state(v) for k, v in state.items() if k != 'systems'}
+    elif isinstance(state, list):
+        return [strip_systems_from_state(v) for v in state]
+    else:
+        return state
+
+
 class Transform(object):
     """
     Transform is a base class that defines a pair of complementary
@@ -339,9 +353,41 @@ class Transform(object):
             cls._param_spec_dict = {p.name: p for p in cls.parameter_spec}
         return cls._param_spec_dict
 
-    def as_affine(self):
-        """Return an equivalent affine transform if possible."""
+    def as_affine(self, from_cs=None, to_cs=None):
+        """Return an equivalent affine transform if possible.
+
+        By default, the returned transform has no coordinate systems. If *from_cs* and
+        *to_cs* are both given (str or CoordinateSystem), they are set on the result;
+        giving only one of the two raises ValueError.
+        """
+        if (from_cs is None) != (to_cs is None):
+            raise ValueError("as_affine requires either both from_cs and to_cs or neither")
+        affine = self._as_affine()
+        if from_cs is not None:
+            affine.set_systems(from_cs, to_cs, self._graph_for_new_systems(from_cs, to_cs))
+        return affine
+
+    def _as_affine(self):
+        """Return an equivalent affine transform with no coordinate systems.
+
+        This method must be redefined in subclasses that support affine conversion.
+        """
         raise NotImplementedError()
+
+    def _graph_for_new_systems(self, from_cs, to_cs):
+        """Return the cs_graph argument to use when setting systems on a derived transform.
+
+        If *from_cs* or *to_cs* is a CoordinateSystem instance, its graph takes precedence
+        (set_systems handles the from_cs case itself); otherwise the graph of this
+        transform's own systems is used, falling back to the default graph.
+        """
+        if isinstance(from_cs, CoordinateSystem):
+            return None
+        if isinstance(to_cs, CoordinateSystem):
+            return to_cs.graph
+        if self.systems[0] is not None:
+            return self.systems[0].graph
+        return None
 
     @property
     def full_matrix(self) -> np.ndarray:
@@ -482,20 +528,76 @@ class Transform(object):
             self._systems = (None, None)
             self.set_systems(from_cs, to_cs, graph)
 
-    def copy(self, from_cs=None, to_cs=None):
-        """Return a copy of this transform."""
-        state = self.save_state()
-        if from_cs is not None or to_cs is not None:
-            from_cs = from_cs or self.systems[0]
-            to_cs = to_cs or self.systems[1]
-            graph = None
-            if from_cs is not None and not isinstance(from_cs, str):
-                graph = from_cs.graph.name
-            if graph is None and to_cs is not None and not isinstance(to_cs, str):
-                graph = to_cs.graph.name
-            state['systems'] = (from_cs, to_cs)
-            state['graph'] = graph
-        return self.from_state(state)
+    def copy(self, from_cs=None, to_cs=None, system_names=None):
+        """Return a copy of this transform.
+
+        By default, the copy has no coordinate systems and is not registered in any
+        coordinate system graph. To register the copy, its systems must be named
+        explicitly; if any of the arguments below is given, then names must resolve
+        for *all* of the copy's systems, otherwise ValueError is raised.
+
+        Parameters
+        ----------
+        from_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's input.
+        to_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's output.
+        system_names : dict | str | None
+            Names for systems not covered by *from_cs* / *to_cs*, derived from the
+            original systems' names: a dict maps original name to new name (a missing
+            key raises ValueError); a str is appended to the original name as a suffix.
+
+        If *from_cs* or *to_cs* is a CoordinateSystem instance, its graph is used for
+        registration; otherwise the copy is registered in the same graph as the
+        original (or the default graph if the original has no systems).
+
+        Examples
+        --------
+        tr.copy()                                  # no systems
+        tr.copy(system_names='_frozen')            # 'a'->'b' becomes 'a_frozen'->'b_frozen'
+        tr.copy(from_cs='global', system_names='_frame12')
+        """
+        state = strip_systems_from_state(self.save_state())
+        new = self.from_state(state)
+        resolved = self._resolve_copy_systems(list(self.systems), from_cs, to_cs, system_names)
+        if resolved is not None:
+            new.set_systems(resolved[0], resolved[-1], self._graph_for_new_systems(resolved[0], resolved[-1]))
+        return new
+
+    @staticmethod
+    def _resolve_copy_systems(systems, from_cs, to_cs, system_names):
+        """Resolve new coordinate systems for a copy of a transform.
+
+        *systems* is the ordered list of original CoordinateSystem|None instances
+        (length >= 2; first is the input system, last is the output system).
+        Returns a list of resolved systems (str or CoordinateSystem), or None if no
+        systems were requested (all three args are None).
+        """
+        if from_cs is None and to_cs is None and system_names is None:
+            return None
+        resolved = []
+        for i, cs in enumerate(systems):
+            if i == 0 and from_cs is not None:
+                resolved.append(from_cs)
+            elif i == len(systems) - 1 and to_cs is not None:
+                resolved.append(to_cs)
+            elif cs is None:
+                raise ValueError(
+                    f"Cannot derive a name for the copy's coordinate system at position {i}: the "
+                    "original transform has no system there; specify from_cs/to_cs."
+                )
+            elif isinstance(system_names, dict):
+                if cs.name not in system_names:
+                    raise ValueError(f"system_names has no entry for coordinate system '{cs.name}'")
+                resolved.append(system_names[cs.name])
+            elif isinstance(system_names, str):
+                resolved.append(cs.name + system_names)
+            else:
+                raise ValueError(
+                    f"No name given for the copy's coordinate system derived from '{cs.name}'; "
+                    "specify from_cs/to_cs or system_names."
+                )
+        return resolved
 
     def save_state(self):
         """Return serializable parameters that specify this transform. Distinct from __getstate__
@@ -538,6 +640,8 @@ class Transform(object):
         return True
 
     def validate_transform_for_mul(self, tr):
+        if tr.systems[1] is None or self.systems[0] is None:
+            return
         if tr.systems[1] != self.systems[0]:
             raise TypeError(
                 f"Cannot multiply transforms with different inner coordinate systems: {self.systems[0]} != {tr.systems[1]}"
@@ -559,17 +663,15 @@ class InverseTransform(Transform):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         raise DependentTransformError("Cannot set systems on a dependent inverse transform")
 
-    def as_affine(self):
+    def _as_affine(self):
         affine = self._state["inverse"].as_affine()
         return type(affine)(
             matrix=affine.inv_matrix,
             offset=affine.inv_matrix @ affine.inv_offset,
-            from_cs=self.systems[0],
-            to_cs=self.systems[1],
         )
 
-    def copy(self, from_cs=None, to_cs=None):
-        return self._state['inverse'].copy(from_cs=to_cs, to_cs=from_cs).inverse
+    def copy(self, from_cs=None, to_cs=None, system_names=None):
+        return self._state['inverse'].copy(from_cs=to_cs, to_cs=from_cs, system_names=system_names).inverse
 
     def set_params(self, inverse):
         if isinstance(inverse, Transform):
