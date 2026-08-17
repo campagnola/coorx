@@ -23,8 +23,12 @@ Basic use pattern:
     # map coordinates from the original image to the cropped image
     pt2 = img.point([row, col]).mapped_to(cropped.system)
 
-    # maybe add a physical coordinate system
-    frame_tr = Transform(from_cs='physical', to_cs=img.system)
+    # maybe add a physical coordinate system (here: 2 um per pixel). Attach the
+    # transform to the image's own graph so mapped_to() can find a path to it.
+    # Use a concrete transform (STTransform/AffineTransform/...), not the
+    # abstract Transform base class, and give it from_cs/to_cs so it registers.
+    STTransform(scale=[2.0, 2.0], from_cs=img.system, to_cs='physical',
+                cs_graph=img.graph)
     pt3 = cropped.point([row, col]).mapped_to('physical')
 
     
