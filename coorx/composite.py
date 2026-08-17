@@ -68,10 +68,51 @@ class CompositeTransform(Transform):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         raise DependentTransformError("Cannot set systems on a CompositeTransform")
 
-    def copy(self, from_cs=None, to_cs=None):
-        if from_cs is not None or to_cs is not None:
-            raise ValueError("Cannot set systems on a CompositeTransform")
-        return super().copy()
+    def copy(self, from_cs=None, to_cs=None, system_names=None):
+        """Return a copy of this transform chain.
+
+        By default, the copied sub-transforms have no coordinate systems and are not
+        registered in any coordinate system graph. To register the copy, systems must
+        be named explicitly for every point along the chain; if any of the arguments
+        below is given, then names must resolve for *all* of the chain's systems,
+        otherwise ValueError is raised.
+
+        Parameters
+        ----------
+        from_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's input.
+        to_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's output.
+        system_names : dict | str | None
+            Names for systems not covered by *from_cs* / *to_cs*, derived from the
+            original systems' names: a dict maps original name to new name (a missing
+            key raises ValueError); a str is appended to the original name as a suffix.
+
+        Each sub-transform is copied with its resolved endpoint pair, so the entire
+        chain is registered as new graph edges. The registered chain may never replace
+        or shadow existing graph edges: names derived via *system_names* must not
+        collide with existing systems, and at most one of *from_cs* / *to_cs* may be
+        an existing system (ValueError otherwise).
+
+        Examples
+        --------
+        chain.copy()                      # system-less copies of all sub-transforms
+        chain.copy(system_names='_f12')   # 'a'->'b'->'c' becomes 'a_f12'->'b_f12'->'c_f12'
+        chain.copy(from_cs='global', system_names='_frame12')
+        """
+        if len(self.transforms) == 0:
+            if from_cs is not None or to_cs is not None or system_names is not None:
+                raise ValueError("Cannot set systems on an empty CompositeTransform")
+            return CompositeTransform([], dynamic=self.dynamic)
+        systems = [self.transforms[0].systems[0]] + [t.systems[1] for t in self.transforms]
+        resolved = Transform._resolve_copy_systems(systems, from_cs, to_cs, system_names)
+        if resolved is None:
+            copies = [t.copy() for t in self.transforms]
+        else:
+            graph = self._graph_for_new_systems(from_cs, to_cs)
+            self._check_derived_systems(resolved, from_cs, to_cs, graph)
+            copies = [t._copy_registered(resolved[i], resolved[i + 1], graph) for i, t in enumerate(self.transforms)]
+        return CompositeTransform(copies, dynamic=self.dynamic)
 
     @property
     def dims(self):
@@ -85,6 +126,8 @@ class CompositeTransform(Transform):
 
         transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms or []]
         for i in range(len(transforms) - 1):
+            if transforms[i].systems[1] is None or transforms[i + 1].systems[0] is None:
+                continue
             if transforms[i].systems[1] != transforms[i + 1].systems[0]:
                 raise TypeError(
                     f"Coordinate systems of transform {transforms[i]} "
@@ -179,7 +222,7 @@ class CompositeTransform(Transform):
             coords = tr.imap(coords)
         return coords
 
-    def as_affine(self):
+    def _as_affine(self):
         ret = None
         for tr in self.transforms:
             if ret is None:
@@ -212,9 +255,7 @@ class CompositeTransform(Transform):
         tr : instance of Transform
             The transform to use.
         """
-        print("appending", tr)
         self.transforms.append(tr)
-        print("appended?", self.transforms)
         tr.add_change_callback(self._subtr_changed, keep_reference=False, duplicates='ignore')
         self._update()
 
