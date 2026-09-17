@@ -173,6 +173,7 @@ class Image:
         """Return a cropped version of the image corresponding to the given slice(s).
 
         Slices should be provided as a tuple of slice objects, one for each *spatial* dimension.
+        Trailing spatial dimensions may be omitted; non-spatial dimensions are never sliced.
         """
         if not isinstance(item, tuple):
             item = (item,)
@@ -180,12 +181,19 @@ class Image:
             raise ValueError(
                 f"Image.__getitem__ requires a tuple of slices, got {item}"
             )
-        if len(item) != self.spatial_ndim:
-            item = item + (slice(None),) * (self.spatial_ndim - len(item))
-        cropped_img = self.image[item]
+        if len(item) > self.spatial_ndim:
+            raise ValueError(
+                f"Image.__getitem__ accepts at most one slice per spatial dimension "
+                f"({self.spatial_ndim}), got {item}"
+            )
+        crop = item + (slice(None),) * (self.spatial_ndim - len(item))
+        index = [slice(None)] * self.image.ndim
+        for i, ax in enumerate(self.spatial_to_image_axes):
+            index[ax] = crop[i]
+        cropped_img = self.image[tuple(index)]
         img2 = self.copy(image=cropped_img)
         img2._parent_tr = self.make_crop_transform(
-            item, self.image, from_cs=self.system, to_cs=img2.system
+            crop, self.image, from_cs=self.system, to_cs=img2.system
         )
         return img2
 
@@ -283,7 +291,10 @@ class Image:
         return tr
 
     def make_crop_transform(self, crop, img, **kwds):
-        indices = [crop[i].indices(img.shape[i]) for i in self.spatial_to_image_axes]
+        """Return a transform mapping coordinates in *img* to coordinates in the
+        region selected by *crop*, a tuple of one slice per spatial dimension.
+        """
+        indices = [crop[i].indices(img.shape[ax]) for i, ax in enumerate(self.spatial_to_image_axes)]
         starts = [idx[0] for idx in indices]
         steps = [idx[2] for idx in indices]
         if all(s == 1 for s in steps):
