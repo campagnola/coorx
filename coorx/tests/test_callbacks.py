@@ -1,10 +1,12 @@
 """Test garbage collection behavior with weak/strong callback references."""
 
 import gc
+import time
 import unittest
 import weakref
 
 import coorx
+from coorx.events import CallbackRegistry
 
 
 class TestCallbackReferenceSemantics(unittest.TestCase):
@@ -776,6 +778,128 @@ class TestDuplicateCallbackHandling(unittest.TestCase):
         registry.add(callback, keep_reference=True, duplicates='allow')
         registry("test")
         self.assertEqual(call_count[0], 4)  # Called twice now
+
+
+class TestCallbackRegistryScaling(unittest.TestCase):
+    """Registry operations must not get slower as the subscriber count grows.
+
+    One long-lived transform may be observed by thousands of short-lived
+    subscribers. If a single add or removal costs O(n), then registering or
+    dropping a whole generation of subscribers costs O(n**2), and that cost is
+    paid by whichever thread happens to drop the last reference.
+    """
+
+    # LARGE is 4x SMALL, so linear scaling costs ~4x and quadratic ~16x.
+    SMALL = 500
+    LARGE = 2000
+    MAX_RATIO = 8.0
+
+    @staticmethod
+    def _measure(n):
+        """Register n weak callbacks, then drop them; return (add, die) seconds."""
+
+        class Listener:
+            def on_change(self, event):
+                pass
+
+        gc.disable()
+        try:
+            registry = CallbackRegistry()
+            listeners = [Listener() for _ in range(n)]
+
+            start = time.perf_counter()
+            for listener in listeners:
+                registry.add(listener.on_change, keep_reference=False, duplicates='ignore')
+            add_time = time.perf_counter() - start
+
+            # Dropping the last reference fires each weakref's cleanup callback.
+            start = time.perf_counter()
+            listeners.clear()
+            die_time = time.perf_counter() - start
+        finally:
+            gc.enable()
+        return add_time, die_time
+
+    @classmethod
+    def _best_of(cls, n, repeats=3):
+        """Take the fastest of several runs so an unlucky scheduler cannot fail us."""
+        runs = [cls._measure(n) for _ in range(repeats)]
+        return min(r[0] for r in runs), min(r[1] for r in runs)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.small_add, cls.small_die = cls._best_of(cls.SMALL)
+        cls.large_add, cls.large_die = cls._best_of(cls.LARGE)
+
+    def test_registration_scales_linearly(self):
+        """Registering a callback must not scan the callbacks already registered."""
+        ratio = self.large_add / self.small_add
+        self.assertLess(
+            ratio,
+            self.MAX_RATIO,
+            f"Registering {self.LARGE} callbacks took {ratio:.1f}x as long as "
+            f"registering {self.SMALL} (expected ~4x for linear scaling); "
+            f"add() is still O(n) per call",
+        )
+
+    def test_weakref_cleanup_scales_linearly(self):
+        """A dying subscriber must not walk the whole registry to unregister itself."""
+        ratio = self.large_die / self.small_die
+        self.assertLess(
+            ratio,
+            self.MAX_RATIO,
+            f"Collecting {self.LARGE} dead callbacks took {ratio:.1f}x as long as "
+            f"collecting {self.SMALL} (expected ~4x for linear scaling); "
+            f"removal is still O(n) per call",
+        )
+
+
+class TestCallbackRegistryEntryLifecycle(unittest.TestCase):
+    """Dead subscribers must leave nothing behind that affects later ones."""
+
+    class Listener:
+        def __init__(self):
+            self.calls = 0
+
+        def on_change(self, event):
+            self.calls += 1
+
+    def test_dead_weak_callback_leaves_no_entry(self):
+        """Collected callbacks must be dropped, not merely skipped when invoked."""
+        registry = CallbackRegistry()
+        listener = self.Listener()
+        registry.add(listener.on_change, keep_reference=False)
+        self.assertEqual(len(registry._callbacks), 1)
+
+        del listener
+        gc.collect()
+
+        self.assertEqual(
+            len(registry._callbacks), 0, "a collected callback left an entry behind"
+        )
+
+    def test_new_listener_reusing_a_dead_address_is_not_a_duplicate(self):
+        """CPython reuses freed addresses, so identity keys must not outlive their owner."""
+        for _ in range(50):
+            registry = CallbackRegistry()
+            first = self.Listener()
+            dead_address = id(first)
+            registry.add(first.on_change, keep_reference=False)
+
+            del first
+            gc.collect()
+
+            second = self.Listener()
+            if id(second) != dead_address:
+                continue
+
+            # The dead subscriber must not shadow the new one sharing its address.
+            registry.add(second.on_change, keep_reference=False, duplicates='error')
+            registry(None)
+            self.assertEqual(second.calls, 1)
+            return
+
+        self.skipTest("CPython never reused the freed listener's address")
 
 
 if __name__ == '__main__':
