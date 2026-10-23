@@ -3,6 +3,7 @@ import json
 import base64
 import io
 import os
+import tempfile
 
 import numpy as np
 from PIL import Image
@@ -209,13 +210,20 @@ def compare_outputs(expected_outputs, actual_outputs):
 
 
 def execute_notebook(notebook):
-    """Execute every cell of *notebook* in one kernel, recording outputs in place."""
+    """Execute every cell of *notebook* in one kernel, recording outputs in place.
+
+    The kernel gets a throwaway IPYTHONDIR so that startup scripts in the developer's
+    own IPython profile cannot run. Such scripts routinely register display formatters
+    (``rich.pretty.install()`` is a common one) that publish extra outputs in every
+    cell, which would then be compared against the outputs recorded in the notebook.
+    """
     executor = nbclient.NotebookClient(
         notebook,
         timeout=600,  # Increase timeout for longer-running notebooks
         allow_errors=True  # Don't stop on errors, check them later
     )
-    executor.execute()
+    with tempfile.TemporaryDirectory() as ipython_dir:
+        executor.execute(env={**os.environ, "IPYTHONDIR": ipython_dir})
 
 
 class PristineStateTest(pytest.Item):
