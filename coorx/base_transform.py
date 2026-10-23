@@ -494,6 +494,13 @@ class Transform(object):
         ChainTransform([A, B]). Subclasses may redefine this operation to
         return more optimized results.
 
+        Products are derived transforms: they claim no coordinate systems and are not
+        registered in any graph. An optimized product therefore cannot map a Point,
+        whereas the unoptimized CompositeTransform fallback can, because its
+        sub-transforms keep their own systems. Which of the two a multiplication
+        yields is an implementation detail of the operands, so code that maps Points
+        must build the chain explicitly rather than rely on a product carrying systems.
+
         To ensure that both operands have a chance to simplify the operation,
         all subclasses should follow the same procedure. For `A * B`:
 
@@ -696,6 +703,10 @@ class Transform(object):
         return True
 
     def validate_transform_for_mul(self, tr):
+        # A None system is a deliberate wildcard, not an oversight: derived transforms
+        # carry no systems and must still compose with canonical ones. The check this
+        # skips is deferred to map time, where mapping a Point through a system-less
+        # hop raises; mapping raw arrays never reports the mismatch at all.
         if tr.systems[1] is None or self.systems[0] is None:
             return
         if tr.systems[1] != self.systems[0]:

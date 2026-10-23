@@ -179,6 +179,9 @@ class CompositeTransform(Transform):
 
         transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms or []]
         for i in range(len(transforms) - 1):
+            # None is a deliberate wildcard here, as in Transform.validate_transform_for_mul:
+            # a system-less sub-transform joins any neighbour, and any mismatch it hides
+            # surfaces only when a Point is mapped through the chain.
             if transforms[i].systems[1] is None or transforms[i + 1].systems[0] is None:
                 continue
             if transforms[i].systems[1] != transforms[i + 1].systems[0]:
