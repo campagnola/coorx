@@ -208,6 +208,16 @@ def compare_outputs(expected_outputs, actual_outputs):
     return differences
 
 
+def execute_notebook(notebook):
+    """Execute every cell of *notebook* in one kernel, recording outputs in place."""
+    executor = nbclient.NotebookClient(
+        notebook,
+        timeout=600,  # Increase timeout for longer-running notebooks
+        allow_errors=True  # Don't stop on errors, check them later
+    )
+    executor.execute()
+
+
 class PristineStateTest(pytest.Item):
     """Test if the notebook is in a pristine state."""
 
@@ -263,15 +273,8 @@ class NotebookExecutionTest(pytest.Item):
                 cell.outputs = []
                 cell.execution_count = None
 
-        # Execute the entire notebook with a single kernel
-        executor = nbclient.NotebookClient(
-            test_notebook,
-            timeout=600,  # Increase timeout for longer-running notebooks
-            allow_errors=True  # Don't stop on errors, check them later
-        )
-
         try:
-            executor.execute()
+            execute_notebook(test_notebook)
         except Exception as e:
             raise ExecutionError("Notebook execution failed") from e
 
