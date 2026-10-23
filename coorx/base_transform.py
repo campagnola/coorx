@@ -610,6 +610,16 @@ class Transform(object):
         new.set_systems(from_cs, to_cs, cs_graph)
         return new
 
+    def _canonical_edge(self, from_cs, to_cs):
+        """Return (transform, from_cs, to_cs, inverted) naming the graph edge that
+        _copy_registered creates for this transform between *from_cs* and *to_cs*.
+
+        A dependent inverse reports its underlying forward transform and reversed
+        systems, so that a caller registering a whole chain can tell when two of its
+        sub-transforms would claim the same edge.
+        """
+        return self, from_cs, to_cs, False
+
     @staticmethod
     def _resolve_copy_systems(systems, from_cs, to_cs, system_names):
         """Resolve new coordinate systems for a copy of a transform.
@@ -719,8 +729,9 @@ class InverseTransform(Transform):
     def copy(self, from_cs=None, to_cs=None, system_names=None):
         return self._state['inverse'].copy(from_cs=to_cs, to_cs=from_cs, system_names=system_names).inverse
 
-    def _copy_registered(self, from_cs, to_cs, cs_graph):
-        return self._state['inverse']._copy_registered(to_cs, from_cs, cs_graph).inverse
+    def _canonical_edge(self, from_cs, to_cs):
+        tr, from_cs, to_cs, inverted = self._state['inverse']._canonical_edge(to_cs, from_cs)
+        return tr, from_cs, to_cs, not inverted
 
     def set_params(self, inverse):
         if isinstance(inverse, Transform):

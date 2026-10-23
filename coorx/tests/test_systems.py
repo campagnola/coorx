@@ -577,3 +577,56 @@ def test_composite_copy_cannot_clobber_graph():
 
     assert graph.transform("A", "B") is a_to_b
     assert graph.transform("B", "C") is b_to_c
+
+
+def test_composite_copy_round_trip_chain():
+    graph = CoordinateSystemGraph.get_graph("comp_roundtrip_graph", create=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    chain = CompositeTransform([a_to_b, a_to_b.inverse])
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    copy = chain.copy(system_names="_r")
+    # both hops share the single registered A_r -> B_r edge instead of overwriting it
+    assert graph.transform("A_r", "B_r") is copy.transforms[0]
+    assert copy.transforms[1].inverse is copy.transforms[0]
+    assert np.allclose(copy.map(pts), pts)
+
+    unique = CoordinateSystemGraph.get_graph("comp_roundtrip_unique", create=True, unique_transforms=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=unique)
+    copy = CompositeTransform([a_to_b, a_to_b.inverse]).copy(system_names="_u")
+    assert unique.transform("A_u", "B_u") is copy.transforms[0]
+
+
+def test_composite_copy_conflicting_edges():
+    graph = CoordinateSystemGraph.get_graph("comp_conflict_graph", create=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    other_a_to_b = STTransform(scale=[3, 3], offset=[0, 0], from_cs="A", to_cs="B", cs_graph=graph)
+    chain = CompositeTransform([a_to_b, a_to_b.inverse, other_a_to_b])
+
+    with raises(ValueError):
+        chain.copy(system_names="_c")
+    assert set(graph.systems) == {"A", "B"}
+
+
+def test_composite_copy_nested_chain():
+    graph = CoordinateSystemGraph.get_graph("comp_nested_graph", create=True)
+    a_to_b = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    b_to_c = AffineTransform(matrix=[[0, 1], [1, 0]], offset=[3, 4], from_cs="B", to_cs="C", cs_graph=graph)
+    c_to_d = STTransform(scale=[1, 5], offset=[0, 1], from_cs="C", to_cs="D", cs_graph=graph)
+    inner = CompositeTransform([a_to_b, b_to_c])
+    nested = CompositeTransform([inner, c_to_d])
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+
+    copy = nested.copy(system_names="_n")
+    systems = [copy.transforms[0].systems[0]] + [t.systems[1] for t in copy.transforms]
+    assert [str(s) for s in systems] == ["A_n", "B_n", "C_n", "D_n"]
+    assert np.allclose(copy.map(pts), nested.map(pts))
+    assert graph.transform("A_n", "B_n") is copy.transforms[0]
+    assert graph.transform("C_n", "D_n") is copy.transforms[2]
+
+    # an inverted nested chain is expanded the same way, reusing its forward edges
+    copy = CompositeTransform([inner, inner.inverse]).copy(system_names="_i")
+    systems = [copy.transforms[0].systems[0]] + [t.systems[1] for t in copy.transforms]
+    assert [str(s) for s in systems] == ["A_i", "B_i", "C_i", "B_i", "A_i"]
+    assert copy.transforms[3].inverse is copy.transforms[0]
+    assert np.allclose(copy.map(pts), pts)
