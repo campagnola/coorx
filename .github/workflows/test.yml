@@ -23,7 +23,11 @@ jobs:
     - name: Install python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest numpy scipy vispy pyqtgraph itk pyqt5 nbformat nbdime nbclient Pillow ipykernel matplotlib
+        # test_image.ipynb compares rendered figures pixel by pixel, so matplotlib is
+        # pinned: its layout metrics shift between releases, which moves every plot
+        # element a little and changes the tight-bbox canvas size. Re-record the
+        # notebook's outputs whenever this pin moves.
+        pip install pytest numpy scipy vispy pyqtgraph itk pyqt5 nbformat nbdime nbclient Pillow ipykernel matplotlib==3.10.7
         python -m ipykernel install --user
 
     - name: Run tests
