@@ -13,6 +13,10 @@ class CompositeTransform(Transform):
 
     transforms : list of Transform instances
         See ``transforms`` property.
+    systemless : bool
+        If True, this chain claims no coordinate systems of its own, whatever systems
+        its sub-transforms have. Transform products are built this way; see
+        ``Transform.__mul__``.
     """
 
     Linear = False
@@ -25,8 +29,9 @@ class CompositeTransform(Transform):
         TransformListParameter("transforms"),
     ]
 
-    def __init__(self, transforms=None, **kwargs):
+    def __init__(self, transforms=None, systemless=False, **kwargs):
         super().__init__(transforms=transforms, **kwargs)
+        self._state["systemless"] = systemless
 
     def _init_with_no_state(self):
         super()._init_with_no_state()
@@ -63,6 +68,8 @@ class CompositeTransform(Transform):
 
     @property
     def systems(self):
+        if self._state.get("systemless", False) or len(self.transforms) == 0:
+            return None, None
         return self.transforms[0].systems[0], self.transforms[-1].systems[1]
 
     def set_systems(self, from_cs, to_cs, cs_graph=None):
@@ -242,6 +249,12 @@ class CompositeTransform(Transform):
         return b
 
     def map(self, obj: Mappable):
+        if len(self.transforms) > 0 and hasattr(obj, "_coorx_transform"):
+            # Check the object against this chain's own systems, as every other transform
+            # does. Threading it hop by hop instead would let a system-less product label
+            # its result from the systems of its operands. An empty chain is the identity
+            # on every system, so it passes the object through untouched instead.
+            return obj._coorx_transform(tr=self)
         return self._map(obj)
 
     def _map(self, coords):
@@ -343,14 +356,14 @@ class CompositeTransform(Transform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(trs + self.transforms)
+        return CompositeTransform(trs + self.transforms, systemless=True)
 
     def __rmul__(self, tr):
         if isinstance(tr, CompositeTransform):
             trs = tr.transforms
         else:
             trs = [tr]
-        return CompositeTransform(self.transforms + trs)
+        return CompositeTransform(self.transforms + trs, systemless=True)
 
     def __eq__(self, b):
         if not isinstance(b, CompositeTransform):

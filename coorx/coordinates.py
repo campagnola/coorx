@@ -111,6 +111,10 @@ class PointArray:
             raise TypeError(
                 f"The transform {tr} maps from system {tr.systems[0]}, but this PointArray is defined in {self.system}"
             )
+        if self.system is not None and tr.systems[1] is None:
+            raise TypeError(
+                f"The transform {tr} maps to no coordinate system, so it cannot map a PointArray"
+            )
         # Map the raw coordinates
         mapped_coords = tr.map(self.coordinates)
         output_system = tr.systems[1]
