@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10
+
+### Breaking Changes
+- Derived transforms no longer carry coordinate systems. `copy()`, `as_affine()`, `as_st()` and the optimized `__mul__`/`__rmul__` products are system-less by default, where they previously inherited `from_cs`/`to_cs` and could silently overwrite canonical graph edges or add phantom shortcuts
+- Systems on a copy are opt-in: `copy(from_cs=..., to_cs=...)` or `copy(system_names=<dict or suffix>)`, resolved all-or-nothing with no auto-generated names
+- A registered copy must introduce at least one new coordinate system, so it can never replace or shadow an existing canonical edge; names that collide with the graph, or two existing systems given as both `from_cs` and `to_cs`, are rejected
+- `Image.__getitem__` applies its slices to spatial axes rather than the leading image axes, matching its documented behaviour. Passing more slices than there are spatial dimensions is now an error instead of being silently ignored
+- `CallbackRegistry` compares callbacks by identity rather than equality. This changes nothing for bound methods, which CPython already compares by identity, but differs for non-method callables defining `__eq__`
+
+### New features
+- `Transform.map()` accepts Qt geometry types directly — `QPointF`, `QVector3D`, and lists or tuples of them — via exact-type dispatch
+- `import_qt_core()` exposed from `coorx.qt` for consistent Qt access
+- `as_affine(from_cs=..., to_cs=...)` assigns systems to the result, backed by a new `_as_affine()` subclass hook
+- `CompositeTransform.copy()` resolves and registers a whole chain, so an entire path can be frozen as new edges
+
+### Changes
+- A `None` coordinate system acts as a wildcard in multiplication and composite chain validation, so system-less derived transforms still compose with canonical ones; the check it skips is deferred to map time
+- `CompositeTransform.copy()` flattens nested chains before resolving systems, so a chain containing a `CompositeTransform` can name its interior systems instead of raising
+
+### Fixes
+- `CompositeTransform.copy(system_names=...)` registers each canonical edge once. A chain visiting the same pair of systems twice — a transform together with its inverse — previously registered that edge twice, overwriting the frozen chain's own first edge
+- `make_crop_transform` pairs each spatial slice with its own image axis when measuring extents
+
+### Performance
+- `CallbackRegistry` operations are O(1) per callback rather than O(n). With 4000 weak subscribers on one transform, registering fell from 1.57s to 0.005s and collecting from 2.01s to 0.002s
+
+### Internal
+- Notebook tests run in a kernel isolated from the developer's IPython profile, so personal startup scripts cannot inject extra cell outputs
+- matplotlib is pinned in CI so the notebook's pixel-exact image comparisons are reproducible (see #61)
+
 ## [2.0.0] - 2026-01
 
 ### Breaking Changes

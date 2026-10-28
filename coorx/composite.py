@@ -1,6 +1,6 @@
 from ._types import Mappable
 
-from .base_transform import Transform, DependentTransformError
+from .base_transform import Transform, DependentTransformError, InverseTransform
 from .params import TransformListParameter
 
 
@@ -68,10 +68,104 @@ class CompositeTransform(Transform):
     def set_systems(self, from_cs, to_cs, cs_graph=None):
         raise DependentTransformError("Cannot set systems on a CompositeTransform")
 
-    def copy(self, from_cs=None, to_cs=None):
-        if from_cs is not None or to_cs is not None:
-            raise ValueError("Cannot set systems on a CompositeTransform")
-        return super().copy()
+    def copy(self, from_cs=None, to_cs=None, system_names=None):
+        """Return a copy of this transform chain.
+
+        By default, the copied sub-transforms have no coordinate systems and are not
+        registered in any coordinate system graph. To register the copy, systems must
+        be named explicitly for every point along the chain; if any of the arguments
+        below is given, then names must resolve for *all* of the chain's systems,
+        otherwise ValueError is raised.
+
+        Parameters
+        ----------
+        from_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's input.
+        to_cs : str | CoordinateSystem | None
+            Coordinate system to assign to the copy's output.
+        system_names : dict | str | None
+            Names for systems not covered by *from_cs* / *to_cs*, derived from the
+            original systems' names: a dict maps original name to new name (a missing
+            key raises ValueError); a str is appended to the original name as a suffix.
+
+        Each sub-transform is copied with its resolved endpoint pair, so the entire
+        chain is registered as new graph edges. The registered chain may never replace
+        or shadow existing graph edges: names derived via *system_names* must not
+        collide with existing systems, and at most one of *from_cs* / *to_cs* may be
+        an existing system (ValueError otherwise).
+
+        A registered copy is flattened: nested chains are expanded in place so that
+        their interior systems can be named too. A chain that visits the same pair of
+        systems twice (a transform and its inverse, say) registers that edge once and
+        shares it; if two *different* transforms would claim one edge, ValueError is
+        raised and nothing is registered.
+
+        Examples
+        --------
+        chain.copy()                      # system-less copies of all sub-transforms
+        chain.copy(system_names='_f12')   # 'a'->'b'->'c' becomes 'a_f12'->'b_f12'->'c_f12'
+        chain.copy(from_cs='global', system_names='_frame12')
+        """
+        if len(self.transforms) == 0:
+            if from_cs is not None or to_cs is not None or system_names is not None:
+                raise ValueError("Cannot set systems on an empty CompositeTransform")
+            return CompositeTransform([], dynamic=self.dynamic)
+        flat = self._flat_transforms()
+        systems = [flat[0].systems[0]] + [t.systems[1] for t in flat]
+        resolved = Transform._resolve_copy_systems(systems, from_cs, to_cs, system_names)
+        if resolved is None:
+            copies = [t.copy() for t in self.transforms]
+        else:
+            graph = self._graph_for_new_systems(from_cs, to_cs)
+            self._check_derived_systems(resolved, from_cs, to_cs, graph)
+            copies = self._register_chain_copies(flat, resolved, graph)
+        return CompositeTransform(copies, dynamic=self.dynamic)
+
+    def _flat_transforms(self):
+        """Return this chain's sub-transforms with nested chains expanded in place.
+
+        Registering a copy of a chain names every coordinate system along it, which
+        requires the systems interior to a nested chain to be visible here.
+        """
+        flat = []
+        for tr in self.transforms:
+            inner = tr.inverse if isinstance(tr, InverseTransform) else None
+            if isinstance(tr, CompositeTransform):
+                flat.extend(tr._flat_transforms())
+            elif isinstance(inner, CompositeTransform):
+                flat.extend(sub.inverse for sub in reversed(inner._flat_transforms()))
+            else:
+                flat.append(tr)
+        return flat
+
+    @staticmethod
+    def _register_chain_copies(transforms, resolved, graph):
+        """Return copies of *transforms* registered as canonical edges between
+        consecutive *resolved* systems.
+
+        A chain may visit the same pair of systems more than once, most often as a
+        transform together with its inverse; all such visits share the single edge
+        registered for that pair, rather than each overwriting the last. Two
+        *different* transforms claiming one edge cannot be registered at all, so that
+        case raises before anything is added to the graph.
+        """
+        plan = []
+        sources = {}
+        for i, tr in enumerate(transforms):
+            src, edge_from, edge_to, inverted = tr._canonical_edge(resolved[i], resolved[i + 1])
+            key = (str(edge_from), str(edge_to))
+            if sources.setdefault(key, src) is not src:
+                raise ValueError(
+                    "Cannot register this chain: two different transforms claim the edge "
+                    f"'{key[0]}' -> '{key[1]}'."
+                )
+            plan.append((key, src, edge_from, edge_to, inverted))
+
+        copies = {}
+        for key, src, edge_from, edge_to, _ in plan:
+            if key not in copies:
+                copies[key] = src._copy_registered(edge_from, edge_to, graph)
+        return [copies[key].inverse if inverted else copies[key] for key, _, _, _, inverted in plan]
 
     @property
     def dims(self):
@@ -85,6 +179,11 @@ class CompositeTransform(Transform):
 
         transforms = [t if isinstance(t, Transform) else create_transform(**t) for t in transforms or []]
         for i in range(len(transforms) - 1):
+            # None is a deliberate wildcard here, as in Transform.validate_transform_for_mul:
+            # a system-less sub-transform joins any neighbour, and any mismatch it hides
+            # surfaces only when a Point is mapped through the chain.
+            if transforms[i].systems[1] is None or transforms[i + 1].systems[0] is None:
+                continue
             if transforms[i].systems[1] != transforms[i + 1].systems[0]:
                 raise TypeError(
                     f"Coordinate systems of transform {transforms[i]} "
@@ -179,7 +278,7 @@ class CompositeTransform(Transform):
             coords = tr.imap(coords)
         return coords
 
-    def as_affine(self):
+    def _as_affine(self):
         ret = None
         for tr in self.transforms:
             if ret is None:
@@ -212,9 +311,7 @@ class CompositeTransform(Transform):
         tr : instance of Transform
             The transform to use.
         """
-        print("appending", tr)
         self.transforms.append(tr)
-        print("appended?", self.transforms)
         tr.add_change_callback(self._subtr_changed, keep_reference=False, duplicates='ignore')
         self._update()
 
