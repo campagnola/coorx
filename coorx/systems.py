@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import collections
+
 from ._types import CoordSysOrStr, GraphOrGraphName
 
 
 def __reload__(old):
     # when this module is reloaded, we want to preserve existing graphs
     CoordinateSystemGraph.all_graphs = old["CoordinateSystemGraph"].all_graphs
+    global default_cs_graph
+    default_cs_graph = old["default_cs_graph"]
+    for graph in CoordinateSystemGraph.all_graphs.values():
+        if not hasattr(graph, "_transforms_to"):
+            # existing graphs are still instances of the old class at this point
+            CoordinateSystemGraph._rebuild_reverse_index(graph)
 
 
 def get_coordinate_system(system: CoordSysOrStr, graph: GraphOrGraphName=None, ndim=None, create=False) -> 'CoordinateSystem':
@@ -73,6 +81,13 @@ class CoordinateSystemGraph:
         self.unique_transforms = unique_transforms
         self.systems = {}  # maps {system_name: CoordinateSystem}
         self.transforms = {}  # maps {cs1: {cs2: transform, ...}, ...}
+        self._transforms_to = {}  # reverse index of self.transforms: {cs2: {cs1: transform, ...}, ...}
+
+    def _rebuild_reverse_index(self):
+        self._transforms_to = {}
+        for from_cs, targets in self.transforms.items():
+            for to_cs, transform in targets.items():
+                self._transforms_to.setdefault(to_cs, {})[from_cs] = transform
 
     def __repr__(self):
         return f"<CoordinateSystemGraph {self.name}>"
@@ -113,6 +128,7 @@ class CoordinateSystemGraph:
 
         # record the new transform connection
         self.transforms.setdefault(cs[0], {})[cs[1]] = transform
+        self._transforms_to.setdefault(cs[1], {})[cs[0]] = transform
 
     def check_system(self, system: CoordSysOrStr, ndim: int|None=None, create: bool = False):
         """Check that a system exists with the given name and ndim.
@@ -170,33 +186,29 @@ class CoordinateSystemGraph:
         raise TypeError(f"No transform defined linking '{from_cs}' to '{to_cs}'")
 
     def transform_path(self, start, end) -> list:
-        """Return a list of transforms needed to map from start to end."""
+        """Return the shortest list of systems linking start to end (inclusive).
+
+        Transforms may be traversed in either direction.
+        """
         start, end = self.system(start), self.system(end)
         if start == end:
             return []
-        if found := self._find_path(start, end, set()):
-            return [start] + found
+        previous = {start: None}
+        queue = collections.deque([start])
+        while queue:
+            cs = queue.popleft()
+            for neighbors in (self.transforms.get(cs, {}), self._transforms_to.get(cs, {})):
+                for next_cs in neighbors:
+                    if next_cs in previous:
+                        continue
+                    previous[next_cs] = cs
+                    if next_cs == end:
+                        path = [end]
+                        while previous[path[-1]] is not None:
+                            path.append(previous[path[-1]])
+                        return path[::-1]
+                    queue.append(next_cs)
         raise TypeError(f"No transform path from {start} to {end}")
-
-    def _find_path(self, start, end, visited) -> list | None:
-        if start in visited:
-            return None
-        visited.add(start)
-        from_start = self.transforms.get(start, {})
-        if end in from_start:
-            return [end]
-        for next_cs in from_start:
-            path = self._find_path(next_cs, end, visited)
-            if path is not None:
-                return [next_cs] + path
-        to_start = {cs for cs in self.transforms if start in self.transforms[cs]}
-        if end in to_start:
-            return [end]
-        for next_cs in to_start:
-            path = self._find_path(next_cs, end, visited)
-            if path is not None:
-                return [next_cs] + path
-        return None
 
     def transform_chain(self, systems) -> 'CompositeTransform':
         from .composite import CompositeTransform

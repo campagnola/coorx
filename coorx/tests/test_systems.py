@@ -188,6 +188,28 @@ def test_coordinate_system_graph_transform():
         default_graph.transform(cs1, "nonexistent_cs")
 
 
+def test_transform_path_shortest():
+    graph = CoordinateSystemGraph(name="test_transform_path_shortest")
+    for a, b in [("a", "b"), ("b", "c"), ("c", "d"), ("a", "x"), ("d", "x")]:
+        STTransform(dims=(2, 2), from_cs=a, to_cs=b, cs_graph=graph)
+    assert [str(cs) for cs in graph.transform_path("a", "d")] == ["a", "x", "d"]
+    assert [str(cs) for cs in graph.transform_path("d", "a")] == ["d", "x", "a"]
+
+
+def test_transform_path_large_hub():
+    """Many chains feeding one hub, searched from the hub (all reverse edges)."""
+    graph = CoordinateSystemGraph(name="test_transform_path_large_hub")
+    n_chains = 3000
+    for i in range(n_chains):
+        STTransform(dims=(3, 3), from_cs=f"f{i}.xyz", to_cs="global", cs_graph=graph)
+        STTransform(dims=(3, 3), from_cs=f"f{i}.ijk", to_cs=f"f{i}.xyz", cs_graph=graph)
+        STTransform(dims=(3, 3), from_cs=f"f{i}.roi", to_cs=f"f{i}.ijk", cs_graph=graph)
+    target = f"f{n_chains // 2}.roi"
+    path = graph.transform_path("global", target)
+    assert [str(cs) for cs in path] == ["global", f"f{n_chains // 2}.xyz", f"f{n_chains // 2}.ijk", target]
+    assert str(graph.transform(target, "global").systems[1]) == "global"
+
+
 PARAMS = {
     "NullTransform": {},
     "TTransform": {"offset": (1, 1, 1)},
