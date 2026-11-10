@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking Changes
+- Every transform product is system-less, not only the optimized ones. `A * B` claims no coordinate systems whatever its operands have, so a product cannot map a `Point`; build the chain explicitly (`CompositeTransform`, or `CoordinateSystemGraph.transform`) to map labelled coordinates
+- `CompositeTransform` checks a `Point` against the chain's own coordinate systems rather than threading it through each sub-transform in turn. A chain that maps to no coordinate system now raises instead of returning an unlabelled `Point`
+
+### New features
+- `CompositeTransform(transforms, systemless=True)` builds a chain that claims no coordinate systems of its own
+
+### Fixes
+- `CompositeTransform([]).systems` returns `(None, None)` instead of raising `IndexError`
+
 ## [3.0.0] - 2026-10
 
 ### Breaking Changes

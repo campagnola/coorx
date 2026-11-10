@@ -495,11 +495,10 @@ class Transform(object):
         return more optimized results.
 
         Products are derived transforms: they claim no coordinate systems and are not
-        registered in any graph. An optimized product therefore cannot map a Point,
-        whereas the unoptimized CompositeTransform fallback can, because its
-        sub-transforms keep their own systems. Which of the two a multiplication
-        yields is an implementation detail of the operands, so code that maps Points
-        must build the chain explicitly rather than rely on a product carrying systems.
+        registered in any graph, whether or not the multiplication could be optimized.
+        A product therefore cannot map a Point; code that maps Points must build the
+        chain explicitly (CompositeTransform, or CoordinateSystemGraph.transform)
+        rather than multiply.
 
         To ensure that both operands have a chance to simplify the operation,
         all subclasses should follow the same procedure. For `A * B`:
@@ -533,7 +532,7 @@ class Transform(object):
     def __rmul__(self, tr):
         """tr * self"""
         tr.validate_transform_for_mul(self)
-        return CompositeTransform([self, tr])
+        return CompositeTransform([self, tr], systemless=True)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at 0x{id(self):x}>"

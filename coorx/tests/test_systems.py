@@ -6,7 +6,8 @@ import pytest
 from coorx import CompositeTransform
 from coorx import create_transform, Point
 from coorx.coordinates import PointArray
-from coorx.linear import AffineTransform, STTransform
+from coorx.linear import AffineTransform, NullTransform, STTransform
+from coorx.nonlinear import PolarTransform
 from coorx.systems import CoordinateSystemGraph
 from pytest import raises
 
@@ -354,8 +355,11 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     explicitly_mapped = cs4_from_cs3.map(cs3_from_cs1.map(pt_cs1))
     assert str(explicitly_mapped.system) == "cs4"
 
-    mult_mapped = (cs4_from_cs3 * cs3_from_cs1).map(pt_cs1)
-    assert str(mult_mapped.system) == "cs4"
+    product = cs4_from_cs3 * cs3_from_cs1
+    assert product.systems == (None, None)
+    with raises(TypeError, match=wrong_system):
+        product.map(pt_cs1)
+    assert np.allclose(product.map(pt_cs1.coordinates), explicitly_mapped.coordinates, equal_nan=True)
 
     composite_mapped = CompositeTransform([cs3_from_cs1, cs4_from_cs3]).map(pt_cs1)
     assert str(composite_mapped.system) == "cs4"
@@ -382,8 +386,11 @@ def test_composite_times_other(type1, inverse1, inverse_composite):
     explicitly_mapped = cs3_from_cs1.map(cs0_to_cs1.map(pt_cs0))
     assert str(explicitly_mapped.system) == "cs3"
 
-    mult_mapped = (cs3_from_cs1 * cs0_to_cs1).map(pt_cs0)
-    assert str(mult_mapped.system) == "cs3"
+    product = cs3_from_cs1 * cs0_to_cs1
+    assert product.systems == (None, None)
+    with raises(TypeError, match=wrong_system):
+        product.map(pt_cs0)
+    assert np.allclose(product.map(pt_cs0.coordinates), explicitly_mapped.coordinates, equal_nan=True)
 
     composite_mapped = CompositeTransform([cs0_to_cs1, cs3_from_cs1]).map(pt_cs0)
     assert str(composite_mapped.system) == "cs3"
@@ -652,3 +659,56 @@ def test_composite_copy_nested_chain():
     assert [str(s) for s in systems] == ["A_i", "B_i", "C_i", "B_i", "A_i"]
     assert copy.transforms[3].inverse is copy.transforms[0]
     assert np.allclose(copy.map(pts), pts)
+
+
+def test_composite_product_is_systemless():
+    graph = CoordinateSystemGraph.get_graph("composite_mul_sysless_graph", create=True)
+    ab = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    bc = PolarTransform(dims=2, from_cs="B", to_cs="C", cs_graph=graph)
+    product = bc * ab
+    assert isinstance(product, CompositeTransform)
+    assert product.systems == (None, None)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert np.allclose(product.map(pts), bc.map(ab.map(pts)))
+    with raises(TypeError, match=wrong_system):
+        product.map(Point([1.0, 2.0], graph.system("A")))
+    assert graph.transform("A", "B") is ab
+    assert graph.transform("B", "C") is bc
+
+
+def test_product_with_composite_operand_is_systemless():
+    graph = CoordinateSystemGraph.get_graph("composite_operand_graph", create=True)
+    ab = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    bc = PolarTransform(dims=2, from_cs="B", to_cs="C", cs_graph=graph)
+    cd = PolarTransform(dims=2, from_cs="C", to_cs="D", cs_graph=graph)
+    chain = graph.transform("A", "C")
+    assert chain.systems == (graph.system("A"), graph.system("C"))
+    pt_a = Point([1.0, 2.0], graph.system("A"))
+
+    for product in (cd * chain, chain * NullTransform(dims=2)):
+        assert product.systems == (None, None)
+        with raises(TypeError, match=wrong_system):
+            product.map(pt_a)
+
+    assert np.allclose((cd * chain).map(pt_a.coordinates), cd.map(bc.map(ab.map(pt_a.coordinates))))
+
+
+def test_chain_built_from_graph_still_maps_points():
+    graph = CoordinateSystemGraph.get_graph("chain_maps_points_graph", create=True)
+    ab = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    bc = PolarTransform(dims=2, from_cs="B", to_cs="C", cs_graph=graph)
+    chain = graph.transform("A", "C")
+    mapped = chain.map(Point([1.0, 2.0], graph.system("A")))
+    assert mapped.system is graph.system("C")
+    assert np.allclose(mapped.coordinates, bc.map(ab.map([1.0, 2.0])))
+
+
+def test_product_stays_systemless_through_serialization():
+    graph = CoordinateSystemGraph.get_graph("product_round_trip_graph", create=True)
+    ab = STTransform(scale=[2, 2], offset=[1, 1], from_cs="A", to_cs="B", cs_graph=graph)
+    bc = PolarTransform(dims=2, from_cs="B", to_cs="C", cs_graph=graph)
+    product = bc * ab
+    restored = create_transform(**product.save_state())
+    assert restored.systems == (None, None)
+    pts = np.array([[1.0, 2.0], [3.0, 4.0]])
+    assert np.allclose(restored.map(pts), product.map(pts))
